@@ -11,11 +11,10 @@ class ManagerDashboardScreen extends StatefulWidget {
 }
 
 class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
-  String currentView = 'Dashboard'; // 'Dashboard', 'NewOrder', 'ManageMenu', 'SalesReports'
+  String currentView = 'Dashboard';
   DocumentSnapshot? editingOrderDoc;
 
-  // Sales Reports Filter states (Day-wise / Month-wise)
-  String salesFilterMode = 'Today'; // 'Today', 'Specific Date', 'Month-wise'
+  String salesFilterMode = 'Today';
   DateTime selectedDate = DateTime.now();
   String selectedMonthYear = '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}';
 
@@ -25,6 +24,56 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
   List<Map<String, dynamic>> tempCart = [];
   String selectedSize = 'Medium';
+
+  void confirmAndToggleItem(BuildContext context, String docId, List currentItems, int itemIndex) {
+    var item = currentItems[itemIndex];
+    bool currentVal = item['isDone'] ?? false;
+    String actionText = currentVal ? "unmark" : "ready (done) mark";
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Item Status Confirmation'),
+        content: Text('Kya aap "${item['name']}" ko $actionText karna chahte hain?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: currentVal ? Colors.orange : Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _toggleItemDoneStatus(docId, currentItems, itemIndex);
+            },
+            child: const Text('Yes, Confirm'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _toggleItemDoneStatus(String docId, List currentItems, int itemIndex) async {
+    try {
+      List updatedItems = List.from(currentItems);
+      bool currentVal = updatedItems[itemIndex]['isDone'] ?? false;
+      updatedItems[itemIndex]['isDone'] = !currentVal;
+
+      bool allDone = updatedItems.every((item) => (item['isDone'] ?? false) == true);
+      String newStatus = allDone ? 'ready' : 'preparing';
+
+      await FirebaseFirestore.instance.collection('orders').doc(docId).update({
+        'items': updatedItems,
+        'status': newStatus,
+        'kitchenStatus': newStatus,
+      });
+    } catch (e) {
+      print("Error toggling item: $e");
+    }
+  }
 
   Future<void> _uploadMenuToFirebase(BuildContext context) async {
     try {
@@ -38,7 +87,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
         await collection.add(category);
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Poora menu successfully Firestore me upload ho gaya! 🍕')),
+        const SnackBar(content: Text('Poora menu successfully Firestore me upload ho gaya!')),
       );
       setState(() {});
     } catch (e) {
@@ -55,7 +104,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('📂 Add New Menu Category'),
+          title: const Text('Add New Menu Category'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -139,7 +188,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                 selectedCategory.toLowerCase().contains('speciality');
 
             return AlertDialog(
-              title: const Text('➕ Add New Menu Item'),
+              title: const Text('Add New Menu Item'),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -251,7 +300,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text('✏️ Edit / Delete: ${itemData['name']}'),
+          title: Text('Edit / Delete: ${itemData['name']}'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -263,7 +312,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                 const SizedBox(height: 12),
                 const Text('Description:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 const SizedBox(height: 4),
-                TextField(controller: editDescController, decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true)),
+                TextField(controller: editDescController, decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'Description', isDense: true)),
                 const SizedBox(height: 12),
                 if (isMultiPrice) ...[
                   const Text('Regular Price (₹):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
@@ -335,7 +384,34 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   }
 
   void updatePaymentStatus(String docId, String newPaymentStatus) async {
-    await FirebaseFirestore.instance.collection('orders').doc(docId).update({'paymentStatus': newPaymentStatus});
+    try {
+      await FirebaseFirestore.instance.collection('orders').doc(docId).update({'paymentStatus': newPaymentStatus});
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Payment status updated to $newPaymentStatus!')));
+    } catch (e) {
+      print("Error updating payment: $e");
+    }
+  }
+
+  void deleteOrder(String docId) async {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Order'),
+        content: const Text('Kya aap is order ko permanently delete karna chahte hain?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () async {
+              Navigator.pop(context);
+              await FirebaseFirestore.instance.collection('orders').doc(docId).delete();
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Order successfully delete ho gaya!')));
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _logout(BuildContext context) {
@@ -350,7 +426,11 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       if (doc != null) {
         nameController.text = doc.get('customerName') ?? '';
         List items = doc.get('items') ?? [];
-        tempCart = items.map((e) => Map<String, dynamic>.from(e)).toList();
+        tempCart = items.map((e) {
+          var m = Map<String, dynamic>.from(e);
+          m['isDone'] = true;
+          return m;
+        }).toList();
         currentView = 'NewOrder';
       } else {
         nameController.clear();
@@ -398,8 +478,9 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       var existingIndex = tempCart.indexWhere((element) => element['name'] == itemName && element['size'] == itemSize);
       if (existingIndex != -1) {
         tempCart[existingIndex]['qty'] += 1;
+        tempCart[existingIndex]['isDone'] = false;
       } else {
-        tempCart.add({'name': itemName, 'price': itemPrice, 'size': itemSize, 'qty': 1});
+        tempCart.add({'name': itemName, 'price': itemPrice, 'size': itemSize, 'qty': 1, 'isDone': false});
       }
     });
   }
@@ -407,6 +488,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   void updateQty(int index, int change) {
     setState(() {
       tempCart[index]['qty'] += change;
+      tempCart[index]['isDone'] = false;
       if (tempCart[index]['qty'] <= 0) tempCart.removeAt(index);
     });
   }
@@ -416,21 +498,28 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     if (name.isEmpty || tempCart.isEmpty) return;
 
     if (editingOrderDoc == null) {
+      List initialItems = tempCart.map((e) => {...e, 'isDone': false}).toList();
       await FirebaseFirestore.instance.collection('orders').add({
         'deviceId': 'counter_manager_${DateTime.now().millisecondsSinceEpoch}',
+        'customerName': name,
+        'items': initialItems,
+        'totalPrice': calcTempTotal,
+        'status': 'pending',
+        'kitchenStatus': 'pending',
+        'paymentStatus': 'pending',
+        'hasNewItemsAdded': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } else {
+      bool hasAnyNew = tempCart.any((e) => (e['isDone'] ?? false) == false);
+
+      await FirebaseFirestore.instance.collection('orders').doc(editingOrderDoc!.id).update({
         'customerName': name,
         'items': tempCart,
         'totalPrice': calcTempTotal,
         'status': 'pending',
         'kitchenStatus': 'pending',
-        'paymentStatus': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    } else {
-      await FirebaseFirestore.instance.collection('orders').doc(editingOrderDoc!.id).update({
-        'customerName': name,
-        'items': tempCart,
-        'totalPrice': calcTempTotal,
+        'hasNewItemsAdded': hasAnyNew,
       });
     }
 
@@ -444,10 +533,10 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    String appBarTitle = '📊 Manager Dashboard';
-    if (currentView == 'NewOrder') appBarTitle = '🛒 New Counter Order';
-    if (currentView == 'ManageMenu') appBarTitle = '📋 Manage Menu Items';
-    if (currentView == 'SalesReports') appBarTitle = '📈 Sales Reports & History';
+    String appBarTitle = 'Manager Dashboard';
+    if (currentView == 'NewOrder') appBarTitle = 'New Counter Order';
+    if (currentView == 'ManageMenu') appBarTitle = 'Manage Menu Items';
+    if (currentView == 'SalesReports') appBarTitle = 'Sales Reports & History';
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -506,10 +595,12 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     );
   }
 
-  // Dashboard sirf aaj ke din ke orders aur unki items saaf-saaf dikhayega
   Widget _buildDashboardBody() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('orders').orderBy('createdAt', descending: true).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('orders')
+          .orderBy('createdAt', descending: false)
+          .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         var allOrders = snapshot.data!.docs;
@@ -584,6 +675,13 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                         var orderDoc = todayOrders[index];
                         var orderData = orderDoc.data() as Map<String, dynamic>;
                         List items = orderData['items'] ?? [];
+                        String paymentStatus = orderData['paymentStatus'] ?? 'pending';
+                        String kitchenStatus = orderData['status'] ?? orderData['kitchenStatus'] ?? 'pending';
+
+                        Color statusColor = Colors.orange;
+                        if (kitchenStatus == 'preparing') statusColor = Colors.blue;
+                        if (kitchenStatus == 'ready') statusColor = Colors.green;
+                        if (kitchenStatus == 'completed') statusColor = Colors.grey;
 
                         return Card(
                           margin: const EdgeInsets.only(bottom: 12),
@@ -601,25 +699,71 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                                       orderData['customerName'] ?? 'Unknown',
                                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.brown),
                                     ),
-                                    IconButton(
-                                      icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
-                                      onPressed: () => prepareOrderForm(doc: orderDoc),
-                                      tooltip: 'Edit Order',
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: statusColor.withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: statusColor),
+                                          ),
+                                          child: Text(
+                                            'Status: ${kitchenStatus.toUpperCase()}',
+                                            style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 11),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        IconButton(
+                                          icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+                                          onPressed: () => prepareOrderForm(doc: orderDoc),
+                                          tooltip: 'Edit / Repeat Order',
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                                          onPressed: () => deleteOrder(orderDoc.id),
+                                          tooltip: 'Delete Order',
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
                                 const Divider(height: 16),
-                                const Text('Ordered Items:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
+                                const Text('Ordered Items (Tap to toggle ready):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
                                 const SizedBox(height: 6),
-                                ...items.map<Widget>((item) {
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 2.0),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text('• ${item['name']} (${item['size'] ?? 'Standard'})', style: const TextStyle(fontSize: 13)),
-                                        Text('₹${item['price']} x ${item['qty']}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                                      ],
+                                ...items.asMap().entries.map<Widget>((entry) {
+                                  int itemIdx = entry.key;
+                                  var item = entry.value;
+                                  bool isDone = item['isDone'] ?? false;
+
+                                  return InkWell(
+                                    onTap: () => confirmAndToggleItem(context, orderDoc.id, items, itemIdx),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                isDone ? Icons.check_box : Icons.check_box_outline_blank,
+                                                color: isDone ? Colors.green : Colors.grey,
+                                                size: 20,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                '${item['name']} (${item['size'] ?? 'Standard'})',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: isDone ? FontWeight.bold : FontWeight.normal,
+                                                  color: isDone ? Colors.green[800] : Colors.black,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          Text('₹${item['price']} x ${item['qty']}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                                        ],
+                                      ),
                                     ),
                                   );
                                 }).toList(),
@@ -627,7 +771,30 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text('Status: ${orderData['paymentStatus'] ?? 'pending'}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange)),
+                                    Row(
+                                      children: [
+                                        const Text('Payment: ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                        paymentStatus == 'paid_cash'
+                                            ? const Chip(label: Text('Paid (Cash)', style: TextStyle(fontSize: 11, color: Colors.white)), backgroundColor: Colors.green, visualDensity: VisualDensity.compact)
+                                            : paymentStatus == 'paid_upi'
+                                                ? const Chip(label: Text('Paid (UPI)', style: TextStyle(fontSize: 11, color: Colors.white)), backgroundColor: Colors.purple, visualDensity: VisualDensity.compact)
+                                                : Row(
+                                                    children: [
+                                                      ElevatedButton(
+                                                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, minimumSize: const Size(60, 28)),
+                                                        onPressed: () => updatePaymentStatus(orderDoc.id, 'paid_cash'),
+                                                        child: const Text('Cash', style: TextStyle(fontSize: 11)),
+                                                      ),
+                                                      const SizedBox(width: 4),
+                                                      ElevatedButton(
+                                                        style: ElevatedButton.styleFrom(backgroundColor: Colors.purple, foregroundColor: Colors.white, minimumSize: const Size(60, 28)),
+                                                        onPressed: () => updatePaymentStatus(orderDoc.id, 'paid_upi'),
+                                                        child: const Text('UPI', style: TextStyle(fontSize: 11)),
+                                                      ),
+                                                    ],
+                                                  ),
+                                      ],
+                                    ),
                                     Text('Total: ₹${orderData['totalPrice']}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.green)),
                                   ],
                                 ),
@@ -646,7 +813,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
   Widget _buildSalesReportsBody() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('orders').orderBy('createdAt', descending: true).snapshots(),
+      stream: FirebaseFirestore.instance.collection('orders').orderBy('createdAt', descending: false).snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         var allOrders = snapshot.data!.docs;
@@ -700,7 +867,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('📅 Select Sales Filter:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.brown, fontSize: 14)),
+                      const Text('Select Sales Filter:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.brown, fontSize: 14)),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
                         value: salesFilterMode,
@@ -776,7 +943,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('💰 Total Sales Summary:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.brown)),
+                      const Text('Total Sales Summary:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.brown)),
                       const Divider(height: 20),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1043,7 +1210,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 45)),
                 onPressed: saveOrderToFirebase,
-                child: const Text('Place Counter Order 🚀', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                child: const Text('Place / Update Order', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ],
           ),

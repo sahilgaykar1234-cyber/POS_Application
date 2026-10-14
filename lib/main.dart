@@ -41,63 +41,82 @@ class PosApp extends StatelessWidget {
   }
 }
 
-// 1. Staff Login & Home Screen
 class StaffLoginHomeScreen extends StatelessWidget {
   const StaffLoginHomeScreen({super.key});
 
-  void _showPasswordDialog(BuildContext context, String role) {
+  static void showPasswordDialog(BuildContext context) {
     final TextEditingController passwordController = TextEditingController();
+    String selectedRole = 'Captain';
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('🔑 $role Login'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Enter password for $role:'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'Enter password',
-                isDense: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) => AlertDialog(
+          title: const Text('🔑 Staff Portal Login'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Select Role:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<String>(
+                value: selectedRole,
+                decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+                items: const [
+                  DropdownMenuItem(value: 'Captain', child: Text('Captain (Kitchen)')),
+                  DropdownMenuItem(value: 'Manager', child: Text('Manager (Admin)')),
+                ],
+                onChanged: (val) {
+                  setStateDialog(() {
+                    selectedRole = val!;
+                  });
+                },
               ),
+              const SizedBox(height: 12),
+              const Text('Enter Password:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  hintText: 'Enter password',
+                  isDense: true,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white),
+              onPressed: () {
+                String pass = passwordController.text.trim();
+                if (selectedRole == 'Captain' && pass == '123') {
+                  Navigator.pop(context);
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => const CaptainDashboardScreen()),
+                  );
+                } else if (selectedRole == 'Manager' && pass == '456') {
+                  Navigator.pop(context);
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ManagerDashboardScreen()),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Galat password hai bhai!')),
+                  );
+                }
+              },
+              child: const Text('Login'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white),
-            onPressed: () {
-              String pass = passwordController.text.trim();
-              if (role == 'Captain' && pass == 'captain123') {
-                Navigator.pop(context);
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => const CaptainDashboardScreen()),
-                );
-              } else if (role == 'Manager' && pass == 'manager123') {
-                Navigator.pop(context);
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ManagerDashboardScreen()),
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Galat password hai bhai!')),
-                );
-              }
-            },
-            child: const Text('Login'),
-          ),
-        ],
       ),
     );
   }
@@ -126,20 +145,9 @@ class StaffLoginHomeScreen extends StatelessWidget {
                 height: 50,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange, foregroundColor: Colors.white),
-                  onPressed: () => _showPasswordDialog(context, 'Captain'),
-                  icon: const Icon(Icons.kitchen),
-                  label: const Text('Captain (Kitchen) Login', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.brown, foregroundColor: Colors.white),
-                  onPressed: () => _showPasswordDialog(context, 'Manager'),
-                  icon: const Icon(Icons.admin_panel_settings),
-                  label: const Text('Manager (Admin) Login', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  onPressed: () => showPasswordDialog(context),
+                  icon: const Icon(Icons.lock),
+                  label: const Text('Staff Login (Captain / Manager)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
@@ -150,7 +158,6 @@ class StaffLoginHomeScreen extends StatelessWidget {
   }
 }
 
-// 2. Customer Ordering & Cart Screen
 class CustomerCartScreen extends StatefulWidget {
   const CustomerCartScreen({super.key});
 
@@ -163,7 +170,6 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
   String? activeOrderId; 
   late String deviceId;
   
-  // Using ValueNotifier for cart so menu section never rebuilds when cart updates!
   final ValueNotifier<List<Map<String, dynamic>>> cartNotifier = ValueNotifier([]);
   late Future<QuerySnapshot> _menuFuture;
 
@@ -180,7 +186,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
       final querySnapshot = await FirebaseFirestore.instance
           .collection('orders')
           .where('deviceId', isEqualTo: deviceId)
-          .where('status', whereIn: ['pending', 'preparing'])
+          .where('status', whereIn: ['pending', 'preparing', 'ready'])
           .get();
 
       if (querySnapshot.docs.isNotEmpty) {
@@ -210,9 +216,10 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
         'price': price,
         'size': size,
         'qty': 1,
+        'isDone': false,
       });
     }
-    cartNotifier.value = updatedCart; // Only updates cart UI, menu remains untouched!
+    cartNotifier.value = updatedCart;
   }
 
   void _handleItemTap(Map<String, dynamic> item) {
@@ -284,7 +291,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
       final querySnapshot = await FirebaseFirestore.instance
           .collection('orders')
           .where('deviceId', isEqualTo: deviceId)
-          .where('status', whereIn: ['pending', 'preparing'])
+          .where('status', whereIn: ['pending', 'preparing', 'ready'])
           .get();
 
       if (querySnapshot.docs.isNotEmpty) {
@@ -292,13 +299,20 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
         activeOrderId = existingDoc.id;
         
         List existingItems = List.from(existingDoc.get('items') ?? []);
+        
+        for (var exItem in existingItems) {
+          exItem['isDone'] = true;
+        }
+
         double existingTotal = (existingDoc.get('totalPrice') ?? 0.0).toDouble();
 
         for (var newItem in cartNotifier.value) {
           var found = existingItems.firstWhere((element) => element['name'] == newItem['name'] && element['size'] == newItem['size'], orElse: () => null);
           if (found != null) {
             found['qty'] += newItem['qty'];
+            found['isDone'] = false;
           } else {
+            newItem['isDone'] = false;
             existingItems.add(newItem);
           }
         }
@@ -309,16 +323,22 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
           'customerName': customerName,
           'items': existingItems,
           'totalPrice': updatedTotal,
+          'status': 'pending',
+          'kitchenStatus': 'pending',
+          'hasNewItemsAdded': true,
+          'lastUpdatedAt': FieldValue.serverTimestamp(), // Re-order hone par queue me peeche chala jayega
         });
       } else {
+        List initialItems = cartNotifier.value.map((e) => {...e, 'isDone': false}).toList();
         DocumentReference docRef = await FirebaseFirestore.instance.collection('orders').add({
           'deviceId': deviceId,
           'customerName': customerName,
-          'items': List.from(cartNotifier.value),
+          'items': initialItems,
           'totalPrice': totalCartPrice,
           'status': 'pending',
           'kitchenStatus': 'pending',
           'paymentStatus': 'pending',
+          'hasNewItemsAdded': false,
           'createdAt': FieldValue.serverTimestamp(),
         });
         activeOrderId = docRef.id;
@@ -328,7 +348,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Order Placed / Updated! 🍕'),
-          content: Text('$customerName, aapka order successfully save ho gaya hai.'),
+          content: Text('$customerName, aapka order successfully queue me update ho gaya hai.'),
           actions: [
             TextButton(
               onPressed: () {
@@ -345,7 +365,6 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
     }
   }
 
-  // Static Menu Section loaded via FutureBuilder so it never flickers or reloads on cart updates
   Widget _buildMenuSection() {
     return FutureBuilder<QuerySnapshot>(
       future: _menuFuture,
@@ -356,7 +375,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Padding(
             padding: EdgeInsets.all(20.0),
-            child: Text('Menu upload nahi hua hai abhi. Manager panel se upload karein.', style: TextStyle(color: Colors.grey)),
+            child: Text('Menu upload nahi hua hai abhi.', style: TextStyle(color: Colors.grey)),
           );
         }
 
@@ -393,7 +412,6 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
                   itemCount: items.length,
                   itemBuilder: (context, itemIndex) {
                     final item = items[itemIndex];
-
                     var regP = item['regularPrice'];
                     var medP = item['mediumPrice'];
                     var stdP = item['price'];
@@ -403,10 +421,8 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
                       priceDisplay = 'Reg: ₹$regP | Med: ₹$medP';
                     } else if (stdP != null) {
                       priceDisplay = '₹$stdP';
-                    } else if (regP != null) {
-                      priceDisplay = '₹$regP';
                     } else {
-                      priceDisplay = '₹0';
+                      priceDisplay = '₹${regP ?? 0}';
                     }
 
                     return InkWell(
@@ -416,7 +432,6 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
                           color: Colors.white,
                           border: Border.all(color: Colors.orange.shade200),
                           borderRadius: BorderRadius.circular(12),
-                          boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 4, spreadRadius: 1)],
                         ),
                         padding: const EdgeInsets.all(10),
                         child: Column(
@@ -430,10 +445,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 4),
-                            Text(
-                              priceDisplay,
-                              style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12),
-                            ),
+                            Text(priceDisplay, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
                             const Spacer(),
                             const Align(
                               alignment: Alignment.bottomRight,
@@ -454,7 +466,6 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
     );
   }
 
-  // Cart Section wrapped in ValueListenableBuilder so only cart updates, not the menu
   Widget _buildCartSection() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -490,15 +501,13 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
               if (cart.isEmpty) {
                 return const Padding(
                   padding: EdgeInsets.symmetric(vertical: 20.0),
-                  child: Center(child: Text('Cart is empty.\nTap menu items to add.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey))),
+                  child: Center(child: Text('Cart is empty.', style: TextStyle(color: Colors.grey))),
                 );
               }
-              
               double totalCartPrice = 0;
               for (var item in cart) {
                 totalCartPrice += (item['price'] * item['qty']);
               }
-
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -520,18 +529,11 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
                               IconButton(
                                 icon: const Icon(Icons.remove_circle_outline, color: Colors.red, size: 18),
                                 onPressed: () => updateCartQty(index, -1),
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
                               ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                                child: Text('${cartItem['qty']}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                              ),
+                              Text('${cartItem['qty']}', style: const TextStyle(fontWeight: FontWeight.bold)),
                               IconButton(
                                 icon: const Icon(Icons.add_circle_outline, color: Colors.green, size: 18),
                                 onPressed: () => updateCartQty(index, 1),
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
                               ),
                             ],
                           ),
@@ -571,6 +573,13 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
       appBar: AppBar(
         title: const Text('🍕 Surat Pizza Menu', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.orange[800],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.admin_panel_settings, color: Colors.white),
+            tooltip: 'Staff Login',
+            onPressed: () => StaffLoginHomeScreen.showPasswordDialog(context),
+          ),
+        ],
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
