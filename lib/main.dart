@@ -162,12 +162,16 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
   final TextEditingController nameController = TextEditingController();
   String? activeOrderId; 
   late String deviceId;
-  final List<Map<String, dynamic>> cart = [];
+  
+  // Using ValueNotifier for cart so menu section never rebuilds when cart updates!
+  final ValueNotifier<List<Map<String, dynamic>>> cartNotifier = ValueNotifier([]);
+  late Future<QuerySnapshot> _menuFuture;
 
   @override
   void initState() {
     super.initState();
     deviceId = 'device_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(9999)}';
+    _menuFuture = FirebaseFirestore.instance.collection('menu_categories').get();
     _checkForActiveOrder();
   }
 
@@ -192,19 +196,23 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
   }
 
   void addToCart(Map<String, dynamic> item, String size, double price) {
-    setState(() {
-      var existingIndex = cart.indexWhere((element) => element['name'] == item['name'] && element['size'] == size);
-      if (existingIndex != -1) {
-        cart[existingIndex]['qty'] += 1;
-      } else {
-        cart.add({
-          'name': item['name'],
-          'price': price,
-          'size': size,
-          'qty': 1,
-        });
-      }
-    });
+    List<Map<String, dynamic>> updatedCart = List.from(cartNotifier.value);
+    var existingIndex = updatedCart.indexWhere((element) => element['name'] == item['name'] && element['size'] == size);
+    
+    if (existingIndex != -1) {
+      updatedCart[existingIndex] = {
+        ...updatedCart[existingIndex],
+        'qty': updatedCart[existingIndex]['qty'] + 1,
+      };
+    } else {
+      updatedCart.add({
+        'name': item['name'],
+        'price': price,
+        'size': size,
+        'qty': 1,
+      });
+    }
+    cartNotifier.value = updatedCart; // Only updates cart UI, menu remains untouched!
   }
 
   void _handleItemTap(Map<String, dynamic> item) {
@@ -212,7 +220,6 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
     var medP = item['mediumPrice'];
     var stdP = item['price'];
 
-    // Agar item me Regular aur Medium dono prices available hain, toh size selection popup kholo
     if (regP != null && medP != null) {
       showDialog(
         context: context,
@@ -243,27 +250,18 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
         ),
       );
     } else {
-      // Single price item hai toh direct add kar do
       double finalPrice = (stdP ?? regP ?? 0.0).toDouble();
       addToCart(item, 'Standard', finalPrice);
     }
   }
 
   void updateCartQty(int index, int change) {
-    setState(() {
-      cart[index]['qty'] += change;
-      if (cart[index]['qty'] <= 0) {
-        cart.removeAt(index);
-      }
-    });
-  }
-
-  double get totalCartPrice {
-    double total = 0;
-    for (var item in cart) {
-      total += (item['price'] * item['qty']);
+    List<Map<String, dynamic>> updatedCart = List.from(cartNotifier.value);
+    updatedCart[index]['qty'] += change;
+    if (updatedCart[index]['qty'] <= 0) {
+      updatedCart.removeAt(index);
     }
-    return total;
+    cartNotifier.value = updatedCart;
   }
 
   void placeOrUpdateOrder() async {
@@ -272,12 +270,17 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pehle apna naam toh likhiye bhai!')));
       return;
     }
-    if (cart.isEmpty) {
+    if (cartNotifier.value.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cart khali hai! Kam se kam ek item toh add karo.')));
       return;
     }
 
     try {
+      double totalCartPrice = 0;
+      for (var item in cartNotifier.value) {
+        totalCartPrice += (item['price'] * item['qty']);
+      }
+
       final querySnapshot = await FirebaseFirestore.instance
           .collection('orders')
           .where('deviceId', isEqualTo: deviceId)
@@ -291,7 +294,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
         List existingItems = List.from(existingDoc.get('items') ?? []);
         double existingTotal = (existingDoc.get('totalPrice') ?? 0.0).toDouble();
 
-        for (var newItem in cart) {
+        for (var newItem in cartNotifier.value) {
           var found = existingItems.firstWhere((element) => element['name'] == newItem['name'] && element['size'] == newItem['size'], orElse: () => null);
           if (found != null) {
             found['qty'] += newItem['qty'];
@@ -311,7 +314,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
         DocumentReference docRef = await FirebaseFirestore.instance.collection('orders').add({
           'deviceId': deviceId,
           'customerName': customerName,
-          'items': List.from(cart),
+          'items': List.from(cartNotifier.value),
           'totalPrice': totalCartPrice,
           'status': 'pending',
           'kitchenStatus': 'pending',
@@ -330,7 +333,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
-                setState(() { cart.clear(); });
+                cartNotifier.value = [];
               },
               child: const Text('OK'),
             ),
@@ -342,12 +345,13 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
     }
   }
 
+  // Static Menu Section loaded via FutureBuilder so it never flickers or reloads on cart updates
   Widget _buildMenuSection() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('menu_categories').snapshots(),
+    return FutureBuilder<QuerySnapshot>(
+      future: _menuFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: Padding(padding: EdgeInsets.all(40.0), child: CircularProgressIndicator()));
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Padding(
@@ -450,6 +454,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
     );
   }
 
+  // Cart Section wrapped in ValueListenableBuilder so only cart updates, not the menu
   Widget _buildCartSection() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -479,64 +484,81 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
           const SizedBox(height: 12),
           const Text('Selected Items:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           const SizedBox(height: 6),
-          cart.isEmpty
-              ? const Padding(
+          ValueListenableBuilder<List<Map<String, dynamic>>>(
+            valueListenable: cartNotifier,
+            builder: (context, cart, child) {
+              if (cart.isEmpty) {
+                return const Padding(
                   padding: EdgeInsets.symmetric(vertical: 20.0),
                   child: Center(child: Text('Cart is empty.\nTap menu items to add.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey))),
-                )
-              : ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: cart.length,
-                  itemBuilder: (context, index) {
-                    final cartItem = cart[index];
-                    return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      child: ListTile(
-                        dense: true,
-                        title: Text('${cartItem['name']} (${cartItem['size']})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                        subtitle: Text('₹${cartItem['price']} x ${cartItem['qty']}'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.remove_circle_outline, color: Colors.red, size: 18),
-                              onPressed: () => updateCartQty(index, -1),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                              child: Text('${cartItem['qty']}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.add_circle_outline, color: Colors.green, size: 18),
-                              onPressed: () => updateCartQty(index, 1),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                            ),
-                          ],
+                );
+              }
+              
+              double totalCartPrice = 0;
+              for (var item in cart) {
+                totalCartPrice += (item['price'] * item['qty']);
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: cart.length,
+                    itemBuilder: (context, index) {
+                      final cartItem = cart[index];
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        child: ListTile(
+                          dense: true,
+                          title: Text('${cartItem['name']} (${cartItem['size']})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          subtitle: Text('₹${cartItem['price']} x ${cartItem['qty']}'),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.remove_circle_outline, color: Colors.red, size: 18),
+                                onPressed: () => updateCartQty(index, -1),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                                child: Text('${cartItem['qty']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.add_circle_outline, color: Colors.green, size: 18),
+                                onPressed: () => updateCartQty(index, 1),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-          const Divider(),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Total Bill:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              Text('₹$totalCartPrice', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], padding: const EdgeInsets.symmetric(vertical: 12)),
-              onPressed: placeOrUpdateOrder,
-              child: const Text('Place Order / Add to Running 🚀', style: TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
+                      );
+                    },
+                  ),
+                  const Divider(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Total Bill:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text('₹$totalCartPrice', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], padding: const EdgeInsets.symmetric(vertical: 12)),
+                      onPressed: placeOrUpdateOrder,
+                      child: const Text('Place Order / Add to Running 🚀', style: TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
