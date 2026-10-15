@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
-
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
 
 import 'captain_dashboard.dart';
 import 'manager_dashboard.dart';
@@ -209,7 +207,7 @@ class CustomerCartScreen extends StatefulWidget {
 class _CustomerCartScreenState extends State<CustomerCartScreen> {
   final TextEditingController nameController = TextEditingController();
   String? activeOrderId;
-  late String deviceId;
+  String deviceId = '';
   String selectedCategory = 'All';
   bool hasExistingOrder = false;
 
@@ -259,23 +257,25 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
     _menuFuture = FirebaseFirestore.instance.collection('menu_categories').get();
   }
 
-  // Device ID ko Browser Storage me save rakhna taaki close/open karne par wahi mile
-  void _initPersistentDeviceId() {
-    if (kIsWeb) {
-      String? savedId = html.window.localStorage['flamy_wood_device_id'];
-      if (savedId == null || savedId.isEmpty) {
-        savedId = 'device_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(99999)}';
-        html.window.localStorage['flamy_wood_device_id'] = savedId;
-      }
-      deviceId = savedId;
-    } else {
-      deviceId = 'device_${DateTime.now().millisecondsSinceEpoch}';
+  // Cross-platform Persistent Device ID (Android, iOS, Web sab jagah kaam karega)
+  Future<void> _initPersistentDeviceId() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? savedId = prefs.getString('flamy_wood_device_id');
+    if (savedId == null || savedId.isEmpty) {
+      savedId = 'device_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(99999)}';
+      await prefs.setString('flamy_wood_device_id', savedId);
     }
-    _checkForActiveOrder();
+    if (mounted) {
+      setState(() {
+        deviceId = savedId!;
+      });
+      _checkForActiveOrder();
+    }
   }
 
   // Check karna ki kya aaj ka koi unsettled order chal raha hai
   Future<void> _checkForActiveOrder() async {
+    if (deviceId.isEmpty) return;
     try {
       DateTime now = DateTime.now();
       DateTime startOfToday = DateTime(now.year, now.month, now.day);
@@ -289,16 +289,20 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
 
       if (querySnapshot.docs.isNotEmpty) {
         var doc = querySnapshot.docs.first;
-        setState(() {
-          activeOrderId = doc.id;
-          nameController.text = doc.get('customerName') ?? '';
-          hasExistingOrder = true;
-        });
+        if (mounted) {
+          setState(() {
+            activeOrderId = doc.id;
+            nameController.text = doc.get('customerName') ?? '';
+            hasExistingOrder = true;
+          });
+        }
       } else {
-        setState(() {
-          activeOrderId = null;
-          hasExistingOrder = false;
-        });
+        if (mounted) {
+          setState(() {
+            activeOrderId = null;
+            hasExistingOrder = false;
+          });
+        }
       }
     } catch (e) {
       debugPrint("Error checking active order: $e");
@@ -514,14 +518,10 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE65C00), foregroundColor: Colors.white),
                 onPressed: () {
                   Navigator.pop(ctx);
-                  if (kIsWeb) {
-                    html.window.location.reload();
-                  } else {
-                    setState(() {
-                      cartNotifier.value = [];
-                      _checkForActiveOrder();
-                    });
-                  }
+                  setState(() {
+                    cartNotifier.value = [];
+                    _checkForActiveOrder();
+                  });
                 },
                 child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
