@@ -22,6 +22,11 @@ void main() async {
     ),
   );
 
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+    cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+  );
+
   runApp(const PosApp());
 }
 
@@ -49,7 +54,6 @@ class PosApp extends StatelessWidget {
   }
 }
 
-// --- FLAMY WOOD EXACT ORIGINAL LOGO ---
 class FlamyWoodOvenLogo extends StatelessWidget {
   final double size;
   const FlamyWoodOvenLogo({super.key, this.size = 50});
@@ -98,38 +102,41 @@ class StaffLoginHomeScreen extends StatelessWidget {
       builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) => AlertDialog(
           backgroundColor: const Color(0xFF231E1B),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text('🔥 Staff Portal Login', style: TextStyle(color: Color(0xFFF7B731))),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Select Role:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white70)),
-              const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
-                value: selectedRole,
-                dropdownColor: const Color(0xFF2C2622),
-                decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
-                items: const [
-                  DropdownMenuItem(value: 'Captain', child: Text('Captain (Kitchen)')),
-                  DropdownMenuItem(value: 'Manager', child: Text('Manager (Admin)')),
-                ],
-                onChanged: (val) {
-                  setStateDialog(() => selectedRole = val!);
-                },
-              ),
-              const SizedBox(height: 12),
-              const Text('Enter Password:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white70)),
-              const SizedBox(height: 6),
-              TextField(
-                controller: passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  hintText: 'Enter password',
-                  isDense: true,
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Select Role:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white70)),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  value: selectedRole,
+                  dropdownColor: const Color(0xFF2C2622),
+                  decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+                  items: const [
+                    DropdownMenuItem(value: 'Captain', child: Text('Captain (Kitchen)')),
+                    DropdownMenuItem(value: 'Manager', child: Text('Manager (Admin)')),
+                  ],
+                  onChanged: (val) {
+                    setStateDialog(() => selectedRole = val!);
+                  },
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                const Text('Enter Password:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white70)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: 'Enter password',
+                    isDense: true,
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -137,7 +144,11 @@ class StaffLoginHomeScreen extends StatelessWidget {
               child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE65C00), foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE65C00),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              ),
               onPressed: () {
                 String pass = passwordController.text.trim();
                 if (selectedRole == 'Captain' && pass == '123') {
@@ -206,15 +217,15 @@ class CustomerCartScreen extends StatefulWidget {
 
 class _CustomerCartScreenState extends State<CustomerCartScreen> {
   final TextEditingController nameController = TextEditingController();
+  final TextEditingController specialRequestController = TextEditingController();
   String? activeOrderId;
   String deviceId = '';
   String selectedCategory = 'All';
   bool hasExistingOrder = false;
 
   final ValueNotifier<List<Map<String, dynamic>>> cartNotifier = ValueNotifier([]);
-  late Future<QuerySnapshot> _menuFuture;
+  late Future<List<Map<String, dynamic>>> _menuFuture;
 
-  // Strict 7 Jain Pizzas (Blue J)
   static const Set<String> _jainPizzas = {
     'simply margerita',
     'sweet corn delight',
@@ -225,7 +236,6 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
     'spicy retreat',
   };
 
-  // Strict Chilli mapping as per original menu
   static const Map<String, int> _spicyLevels = {
     'farm villa': 1,
     'all veg pizza': 1,
@@ -254,10 +264,24 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
   void initState() {
     super.initState();
     _initPersistentDeviceId();
-    _menuFuture = FirebaseFirestore.instance.collection('menu_categories').get();
+    _menuFuture = _fetchFastCachedMenu();
   }
 
-  // Cross-platform Persistent Device ID (Android, iOS, Web sab jagah safe chalega)
+  Future<List<Map<String, dynamic>>> _fetchFastCachedMenu() async {
+    try {
+      final cachedSnapshot = await FirebaseFirestore.instance
+          .collection('menu_categories')
+          .get(const GetOptions(source: Source.cache));
+
+      if (cachedSnapshot.docs.isNotEmpty) {
+        return cachedSnapshot.docs.map((d) => d.data()).toList();
+      }
+    } catch (_) {}
+
+    final serverSnapshot = await FirebaseFirestore.instance.collection('menu_categories').get();
+    return serverSnapshot.docs.map((d) => d.data()).toList();
+  }
+
   Future<void> _initPersistentDeviceId() async {
     final prefs = await SharedPreferences.getInstance();
     String? savedId = prefs.getString('flamy_wood_device_id');
@@ -273,7 +297,6 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
     }
   }
 
-  // Single-field query + In-memory filter (Kabhi composite index nahi mangega)
   Future<void> _checkForActiveOrder() async {
     if (deviceId.isEmpty) return;
     try {
@@ -292,10 +315,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
           bool isActiveStatus = status == 'pending' || status == 'preparing' || status == 'ready';
 
           Timestamp? createdAt = data['createdAt'] as Timestamp?;
-          bool isToday = false;
-          if (createdAt != null) {
-            isToday = createdAt.toDate().isAfter(startOfToday);
-          }
+          bool isToday = createdAt != null && createdAt.toDate().isAfter(startOfToday);
           return isActiveStatus && isToday;
         }).toList();
 
@@ -305,6 +325,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
             setState(() {
               activeOrderId = doc.id;
               nameController.text = doc.get('customerName') ?? '';
+              specialRequestController.text = doc.get('specialRequest') ?? '';
               hasExistingOrder = true;
             });
           }
@@ -340,7 +361,10 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
 
   void addToCart(Map<String, dynamic> item, String size, double price) {
     List<Map<String, dynamic>> updatedCart = List.from(cartNotifier.value);
-    var existingIndex = updatedCart.indexWhere((element) => element['name'] == item['name'] && element['size'] == size);
+
+    var existingIndex = updatedCart.indexWhere((element) {
+      return element['name'] == item['name'] && element['size'] == size;
+    });
 
     if (existingIndex != -1) {
       updatedCart[existingIndex] = {
@@ -379,7 +403,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Select Size: ${item['name']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFFF7B731))),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               ListTile(
                 tileColor: const Color(0xFF26211D),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -422,33 +446,68 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
     cartNotifier.value = updatedCart;
   }
 
-  void placeOrUpdateOrder() async {
+  void placeOrUpdateOrder() {
     String customerName = nameController.text.trim();
+    String specialNote = specialRequestController.text.trim();
+
     if (customerName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pehle apna Table No / Naam enter kijiye!')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pehle Table No / Customer Name enter karein!')));
       return;
     }
     if (cartNotifier.value.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cart khali hai! Kam se kam ek item select kijiye.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Kam se kam ek item select karein!')));
       return;
     }
 
-    try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Center(child: CircularProgressIndicator(color: Color(0xFFE65C00))),
-      );
+    final itemsToSubmit = List<Map<String, dynamic>>.from(cartNotifier.value);
+    cartNotifier.value = [];
 
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1A17),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const FlamyWoodOvenLogo(size: 65),
+            const SizedBox(height: 14),
+            const Text('Order Sent To Kitchen! 🔥', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFFF7B731))),
+            const SizedBox(height: 8),
+            Text('$customerName, aapka order kitchen queue me update ho gaya hai.', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+          ],
+        ),
+        actions: [
+          Center(
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE65C00), foregroundColor: Colors.white),
+              onPressed: () {
+                Navigator.pop(ctx);
+                setState(() {
+                  hasExistingOrder = true;
+                });
+              },
+              child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    _executeFirestoreOrderSync(customerName, specialNote, itemsToSubmit);
+  }
+
+  Future<void> _executeFirestoreOrderSync(String customerName, String specialNote, List<Map<String, dynamic>> items) async {
+    try {
       double totalCartPrice = 0;
-      for (var item in cartNotifier.value) {
+      for (var item in items) {
         totalCartPrice += (_toDouble(item['price']) * (item['qty'] as int));
       }
 
       DateTime now = DateTime.now();
       DateTime startOfToday = DateTime(now.year, now.month, now.day);
 
-      // Simple single-field query to avoid index errors
       final querySnapshot = await FirebaseFirestore.instance
           .collection('orders')
           .where('deviceId', isEqualTo: deviceId)
@@ -470,22 +529,16 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
 
       if (existingDoc != null) {
         activeOrderId = existingDoc.id;
-
         List existingItems = List.from(existingDoc.get('items') ?? []);
-        for (var exItem in existingItems) {
-          exItem['isDone'] = true;
-        }
-
         double existingTotal = _toDouble(existingDoc.get('totalPrice'));
 
-        for (var newItem in cartNotifier.value) {
+        for (var newItem in items) {
           var found = existingItems.firstWhere(
             (element) => element['name'] == newItem['name'] && element['size'] == newItem['size'],
             orElse: () => null,
           );
           if (found != null) {
             found['qty'] = (found['qty'] as int) + (newItem['qty'] as int);
-            found['isDone'] = false;
           } else {
             newItem['isDone'] = false;
             existingItems.add(newItem);
@@ -496,6 +549,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
 
         await FirebaseFirestore.instance.collection('orders').doc(activeOrderId).update({
           'customerName': customerName,
+          'specialRequest': specialNote,
           'items': existingItems,
           'totalPrice': updatedTotal,
           'status': 'pending',
@@ -504,10 +558,11 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
           'lastUpdatedAt': FieldValue.serverTimestamp(),
         });
       } else {
-        List initialItems = cartNotifier.value.map((e) => {...e, 'isDone': false}).toList();
+        List initialItems = items.map((e) => {...e, 'isDone': false}).toList();
         DocumentReference docRef = await FirebaseFirestore.instance.collection('orders').add({
           'deviceId': deviceId,
           'customerName': customerName,
+          'specialRequest': specialNote,
           'items': initialItems,
           'totalPrice': totalCartPrice,
           'status': 'pending',
@@ -518,47 +573,8 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
         });
         activeOrderId = docRef.id;
       }
-
-      if (!mounted) return;
-      Navigator.pop(context);
-
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF1E1A17),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const FlamyWoodOvenLogo(size: 65),
-              const SizedBox(height: 14),
-              const Text('Order Sent To Kitchen! 🔥', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFFF7B731))),
-              const SizedBox(height: 8),
-              Text('$customerName, aapka order kitchen queue me update ho gaya hai.', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-            ],
-          ),
-          actions: [
-            Center(
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE65C00), foregroundColor: Colors.white),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  setState(() {
-                    cartNotifier.value = [];
-                    _checkForActiveOrder();
-                  });
-                },
-                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ],
-        ),
-      );
     } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      debugPrint("Background sync error: $e");
     }
   }
 
@@ -630,18 +646,17 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
   }
 
   Widget _buildMenuSection() {
-    return FutureBuilder<QuerySnapshot>(
+    return FutureBuilder<List<Map<String, dynamic>>>(
       future: _menuFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: Padding(padding: EdgeInsets.all(40.0), child: CircularProgressIndicator(color: Color(0xFFE65C00))));
         }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const Center(child: Padding(padding: EdgeInsets.all(20.0), child: Text('Menu upload nahi hua hai abhi.')));
         }
 
-        var categoryDocs = snapshot.data!.docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
-
+        var categoryDocs = snapshot.data!;
         var filteredCategories = selectedCategory == 'All'
             ? categoryDocs
             : categoryDocs.where((c) => (c['categoryName']?.toString() ?? '') == selectedCategory).toList();
@@ -749,21 +764,6 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                if (isJain) ...[
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF0091EA),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: const Text(
-                                      'J',
-                                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                ],
-
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -776,6 +776,20 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
                                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
                                             ),
                                           ),
+                                          if (isJain) ...[
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF0091EA),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: const Text(
+                                                'J',
+                                                style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900),
+                                              ),
+                                            ),
+                                          ],
                                           if (spicyLevel > 0) ...[
                                             const SizedBox(width: 6),
                                             Text(
@@ -866,10 +880,12 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
             ],
           ),
           const Divider(color: Color(0xFF2C2520), height: 20),
+
           TextField(
             controller: nameController,
             enabled: !hasExistingOrder,
             style: const TextStyle(color: Colors.white),
+            scrollPadding: const EdgeInsets.only(bottom: 120),
             decoration: InputDecoration(
               labelText: 'Table No / Customer Name',
               labelStyle: const TextStyle(color: Colors.white60),
@@ -880,6 +896,26 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
               isDense: true,
             ),
           ),
+          const SizedBox(height: 10),
+
+          // Simple Cooking Notes / Special Instructions Box
+          TextField(
+            controller: specialRequestController,
+            style: const TextStyle(color: Colors.white, fontSize: 13),
+            maxLines: 2,
+            decoration: InputDecoration(
+              labelText: 'Cooking Instructions / Notes (Optional)',
+              hintText: 'e.g., extra crispy base, less spicy, Jain prep, no onion...',
+              hintStyle: const TextStyle(color: Colors.white24, fontSize: 11),
+              labelStyle: const TextStyle(color: Color(0xFFF7B731), fontSize: 12),
+              prefixIcon: const Icon(Icons.note_alt_outlined, color: Color(0xFFF7B731), size: 18),
+              filled: true,
+              fillColor: const Color(0xFF231E1B),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+              isDense: true,
+            ),
+          ),
+
           if (hasExistingOrder) ...[
             const SizedBox(height: 8),
             Container(
@@ -929,6 +965,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
                     separatorBuilder: (_, __) => const Divider(color: Color(0xFF26211E), height: 10),
                     itemBuilder: (context, index) {
                       final cartItem = cart[index];
+
                       return Row(
                         children: [
                           Expanded(
@@ -1005,6 +1042,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF141211),
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('FLAMY WOOD', style: TextStyle(color: Color(0xFFF7B731), fontWeight: FontWeight.w900, letterSpacing: 1.5)),
         backgroundColor: const Color(0xFF1E1A17),
@@ -1017,42 +1055,49 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          _buildTopBrandHeader(),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                bool isMobile = constraints.maxWidth < 900;
-                if (isMobile) {
-                  return SingleChildScrollView(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildMenuSection(),
-                        const SizedBox(height: 20),
-                        _buildCartSection(),
-                      ],
-                    ),
-                  );
-                } else {
-                  return Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(flex: 3, child: SingleChildScrollView(child: _buildMenuSection())),
-                        const SizedBox(width: 20),
-                        Expanded(flex: 2, child: SingleChildScrollView(child: _buildCartSection())),
-                      ],
-                    ),
-                  );
-                }
-              },
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildTopBrandHeader(),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  bool isMobile = constraints.maxWidth < 900;
+                  if (isMobile) {
+                    return SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(
+                        12.0,
+                        12.0,
+                        12.0,
+                        MediaQuery.of(context).viewInsets.bottom + 20.0,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildMenuSection(),
+                          const SizedBox(height: 20),
+                          _buildCartSection(),
+                        ],
+                      ),
+                    );
+                  } else {
+                    return Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 3, child: SingleChildScrollView(child: _buildMenuSection())),
+                          const SizedBox(width: 20),
+                          Expanded(flex: 2, child: SingleChildScrollView(child: _buildCartSection())),
+                        ],
+                      ),
+                    );
+                  }
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

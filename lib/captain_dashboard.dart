@@ -91,7 +91,7 @@ class CaptainDashboardScreen extends StatelessWidget {
               Navigator.pop(context);
               Navigator.pushAndRemoveUntil(
                 context,
-                MaterialPageRoute(builder: (context) => const StaffLoginHomeScreen()),
+                MaterialPageRoute(builder: (context) => const CustomerCartScreen()),
                 (route) => false,
               );
             },
@@ -104,7 +104,6 @@ class CaptainDashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Aaj ke din ka exact midnight timestamp (00:00:00)
     DateTime now = DateTime.now();
     DateTime startOfToday = DateTime(now.year, now.month, now.day);
 
@@ -113,9 +112,21 @@ class CaptainDashboardScreen extends StatelessWidget {
       appBar: AppBar(
         title: Row(
           children: const [
-            Icon(Icons.local_fire_department, color: Color(0xFFE65C00), size: 24),
-            SizedBox(width: 8),
-            Text('FLAMY WOOD • Kitchen Queue', style: TextStyle(color: Color(0xFFF7B731), fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+            // Original Flamy Wood Oven Logo
+            FlamyWoodOvenLogo(size: 32),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'FLAMY WOOD',
+                style: TextStyle(
+                  color: Color(0xFFF7B731),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         backgroundColor: const Color(0xFF1E1A17),
@@ -127,18 +138,15 @@ class CaptainDashboardScreen extends StatelessWidget {
             tooltip: 'Logout',
             onPressed: () => _logout(context),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
         ],
       ),
       body: Container(
         color: const Color(0xFF141211),
         child: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('orders')
-              .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfToday))
-              .snapshots(),
+          stream: FirebaseFirestore.instance.collection('orders').snapshots(),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
+            if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
               return const Center(child: CircularProgressIndicator(color: Color(0xFFE65C00)));
             }
 
@@ -148,11 +156,14 @@ class CaptainDashboardScreen extends StatelessWidget {
               );
             }
 
-            // Sirf wahi orders jo aaj ke hain aur completed nahi hue hain
             final orders = snapshot.data!.docs.where((doc) {
               final data = doc.data() as Map<String, dynamic>;
               String status = data['status'] ?? 'pending';
-              return status != 'completed';
+              if (status == 'completed') return false;
+
+              Timestamp? t = data['createdAt'] as Timestamp?;
+              if (t == null) return false;
+              return t.toDate().isAfter(startOfToday);
             }).toList();
 
             if (orders.isEmpty) {
@@ -189,19 +200,18 @@ class CaptainDashboardScreen extends StatelessWidget {
             });
 
             return ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               itemCount: orders.length,
               itemBuilder: (context, index) {
                 final orderDoc = orders[index];
                 final orderData = orderDoc.data() as Map<String, dynamic>;
 
                 final String customerName = orderData['customerName'] ?? 'Unknown';
+                final String specialRequest = orderData['specialRequest'] ?? '';
                 final double totalPrice = (orderData['totalPrice'] ?? 0.0).toDouble();
                 final String status = orderData['status'] ?? 'pending';
                 final List items = orderData['items'] ?? [];
                 final bool hasNewItems = orderData['hasNewItemsAdded'] ?? false;
-
-                bool hasAlreadyDoneItems = items.any((e) => (e['isDone'] ?? false) == true);
 
                 Color statusColor = const Color(0xFFE65C00);
                 if (status == 'preparing') statusColor = Colors.amber;
@@ -226,55 +236,63 @@ class CaptainDashboardScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
+  children: [
+    // Flamy Wood Brand Oven Logo (Card Avatar)
+    Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: hasNewItems ? Colors.purpleAccent : const Color(0xFFE65C00),
+          width: 1.5,
+        ),
+      ),
+      child: const FlamyWoodOvenLogo(size: 38),
+    ),
+    const SizedBox(width: 10),
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Order #${index + 1} • $customerName',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+        if (hasNewItems)
+          const Text(
+            'REPEAT ORDER / NEW ITEMS!',
+            style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 11),
+          ),
+      ],
+    ),
+  ],
+),
+
+                        // SPECIAL COOKING REQUEST BANNER
+                        if (specialRequest.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF3B2A15),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFF7B731)),
+                            ),
+                            child: Row(
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: hasNewItems ? Colors.purple.withOpacity(0.2) : const Color(0xFFE65C00).withOpacity(0.2),
-                                    border: Border.all(color: hasNewItems ? Colors.purpleAccent : const Color(0xFFE65C00)),
+                                const Icon(Icons.warning_amber_rounded, color: Color(0xFFF7B731), size: 16),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Special Note: $specialRequest',
+                                    style: const TextStyle(color: Color(0xFFF7B731), fontWeight: FontWeight.bold, fontSize: 12),
                                   ),
-                                  child: Icon(
-                                    hasNewItems ? Icons.notification_important : Icons.local_fire_department,
-                                    color: hasNewItems ? Colors.purpleAccent : const Color(0xFFE65C00),
-                                    size: 20,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Queue #${index + 1} • $customerName',
-                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                                    ),
-                                    if (hasNewItems)
-                                      const Text(
-                                        'REPEAT ORDER / NEW ITEMS!',
-                                        style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 11),
-                                      ),
-                                  ],
                                 ),
                               ],
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: statusColor.withOpacity(0.18),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: statusColor),
-                              ),
-                              child: Text(
-                                status.toUpperCase(),
-                                style: TextStyle(color: statusColor, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const Divider(color: Color(0xFF2E2621), height: 22),
+                          ),
+                        ],
+
+                        const Divider(color: Color(0xFF2E2621), height: 20),
                         const Text(
                           'ITEMS ORDERED (TAP ITEM TO MARK READY):',
                           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white54, fontSize: 11, letterSpacing: 0.8),
@@ -284,7 +302,7 @@ class CaptainDashboardScreen extends StatelessWidget {
                           int itemIdx = entry.key;
                           var item = entry.value;
                           bool isDone = item['isDone'] ?? false;
-                          bool isNewInRepeat = !isDone && (hasAlreadyDoneItems || hasNewItems);
+                          List toppings = item['toppings'] ?? [];
 
                           return InkWell(
                             onTap: () => confirmAndToggleCaptainItem(context, orderDoc.id, items, itemIdx),
@@ -301,22 +319,32 @@ class CaptainDashboardScreen extends StatelessWidget {
                                   Row(
                                     children: [
                                       Icon(
-                                        isDone
-                                            ? Icons.check_circle_rounded
-                                            : (isNewInRepeat ? Icons.fiber_new_rounded : Icons.radio_button_unchecked_rounded),
-                                        color: isDone ? Colors.greenAccent : (isNewInRepeat ? Colors.purpleAccent : Colors.white38),
+                                        isDone ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                                        color: isDone ? Colors.greenAccent : Colors.white38,
                                         size: 20,
                                       ),
                                       const SizedBox(width: 10),
-                                      Text(
-                                        '${item['name']} (${item['size']})',
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          color: isDone ? Colors.greenAccent : (isNewInRepeat ? Colors.purpleAccent : Colors.white),
-                                          fontWeight: isDone || isNewInRepeat ? FontWeight.bold : FontWeight.w600,
-                                          decoration: isDone ? TextDecoration.lineThrough : null,
-                                          decorationColor: Colors.greenAccent,
-                                        ),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '${item['name']} (${item['size'] ?? 'Standard'})',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: isDone ? Colors.greenAccent : Colors.white,
+                                              fontWeight: isDone ? FontWeight.bold : FontWeight.w600,
+                                              decoration: isDone ? TextDecoration.lineThrough : null,
+                                              decorationColor: Colors.greenAccent,
+                                            ),
+                                          ),
+                                          if (toppings.isNotEmpty) ...[
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              '+ ${toppings.join(', ')}',
+                                              style: const TextStyle(color: Color(0xFFF7B731), fontSize: 11, fontStyle: FontStyle.italic),
+                                            ),
+                                          ],
+                                        ],
                                       ),
                                     ],
                                   ),
@@ -329,7 +357,7 @@ class CaptainDashboardScreen extends StatelessWidget {
                             ),
                           );
                         }),
-                        const Divider(color: Color(0xFF2E2621), height: 22),
+                        const Divider(color: Color(0xFF2E2621), height: 20),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -345,11 +373,11 @@ class CaptainDashboardScreen extends StatelessWidget {
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFFE65C00),
                                       foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                     ),
                                     icon: const Icon(Icons.fireplace, size: 18),
-                                    label: const Text('Start Preparing', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    label: const Text('Start Preparing', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                   ),
                                 if (status == 'preparing')
                                   ElevatedButton.icon(
@@ -357,11 +385,11 @@ class CaptainDashboardScreen extends StatelessWidget {
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.green,
                                       foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                     ),
                                     icon: const Icon(Icons.check_circle, size: 18),
-                                    label: const Text('Mark Ready', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    label: const Text('Mark Ready', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                   ),
                                 if (status == 'ready')
                                   Container(
@@ -373,7 +401,7 @@ class CaptainDashboardScreen extends StatelessWidget {
                                     ),
                                     child: const Text(
                                       'Order Ready to Serve 🔥',
-                                      style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13),
+                                      style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12),
                                     ),
                                   ),
                               ],
