@@ -257,7 +257,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
     _menuFuture = FirebaseFirestore.instance.collection('menu_categories').get();
   }
 
-  // Cross-platform Persistent Device ID (Android, iOS, Web sab jagah kaam karega)
+  // Cross-platform Persistent Device ID (Android, iOS, Web sab jagah safe chalega)
   Future<void> _initPersistentDeviceId() async {
     final prefs = await SharedPreferences.getInstance();
     String? savedId = prefs.getString('flamy_wood_device_id');
@@ -273,7 +273,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
     }
   }
 
-  // Check karna ki kya aaj ka koi unsettled order chal raha hai
+  // Single-field query + In-memory filter (Kabhi composite index nahi mangega)
   Future<void> _checkForActiveOrder() async {
     if (deviceId.isEmpty) return;
     try {
@@ -283,26 +283,40 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
       final querySnapshot = await FirebaseFirestore.instance
           .collection('orders')
           .where('deviceId', isEqualTo: deviceId)
-          .where('status', whereIn: ['pending', 'preparing', 'ready'])
-          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfToday))
           .get();
 
       if (querySnapshot.docs.isNotEmpty) {
-        var doc = querySnapshot.docs.first;
-        if (mounted) {
-          setState(() {
-            activeOrderId = doc.id;
-            nameController.text = doc.get('customerName') ?? '';
-            hasExistingOrder = true;
-          });
+        var activeDocs = querySnapshot.docs.where((doc) {
+          var data = doc.data();
+          String status = data['status']?.toString() ?? '';
+          bool isActiveStatus = status == 'pending' || status == 'preparing' || status == 'ready';
+
+          Timestamp? createdAt = data['createdAt'] as Timestamp?;
+          bool isToday = false;
+          if (createdAt != null) {
+            isToday = createdAt.toDate().isAfter(startOfToday);
+          }
+          return isActiveStatus && isToday;
+        }).toList();
+
+        if (activeDocs.isNotEmpty) {
+          var doc = activeDocs.first;
+          if (mounted) {
+            setState(() {
+              activeOrderId = doc.id;
+              nameController.text = doc.get('customerName') ?? '';
+              hasExistingOrder = true;
+            });
+          }
+          return;
         }
-      } else {
-        if (mounted) {
-          setState(() {
-            activeOrderId = null;
-            hasExistingOrder = false;
-          });
-        }
+      }
+
+      if (mounted) {
+        setState(() {
+          activeOrderId = null;
+          hasExistingOrder = false;
+        });
       }
     } catch (e) {
       debugPrint("Error checking active order: $e");
@@ -434,15 +448,27 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
       DateTime now = DateTime.now();
       DateTime startOfToday = DateTime(now.year, now.month, now.day);
 
+      // Simple single-field query to avoid index errors
       final querySnapshot = await FirebaseFirestore.instance
           .collection('orders')
           .where('deviceId', isEqualTo: deviceId)
-          .where('status', whereIn: ['pending', 'preparing', 'ready'])
-          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfToday))
           .get();
 
-      if (querySnapshot.docs.isNotEmpty) {
-        var existingDoc = querySnapshot.docs.first;
+      DocumentSnapshot? existingDoc;
+      for (var doc in querySnapshot.docs) {
+        var data = doc.data();
+        String status = data['status']?.toString() ?? '';
+        bool isActiveStatus = status == 'pending' || status == 'preparing' || status == 'ready';
+        Timestamp? createdAt = data['createdAt'] as Timestamp?;
+        bool isToday = createdAt != null && createdAt.toDate().isAfter(startOfToday);
+
+        if (isActiveStatus && isToday) {
+          existingDoc = doc;
+          break;
+        }
+      }
+
+      if (existingDoc != null) {
         activeOrderId = existingDoc.id;
 
         List existingItems = List.from(existingDoc.get('items') ?? []);
