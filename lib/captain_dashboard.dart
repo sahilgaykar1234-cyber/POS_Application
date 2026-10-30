@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'menu_data.dart';
 
-class CaptainScreen extends StatefulWidget {
-  const CaptainScreen({super.key});
+class CaptainDashboardScreen extends StatefulWidget {
+  const CaptainDashboardScreen({super.key});
 
   @override
-  State<CaptainScreen> createState() => _CaptainScreenState();
+  State<CaptainDashboardScreen> createState() => _CaptainDashboardScreenState();
 }
 
-class _CaptainScreenState extends State<CaptainScreen> {
-  String selectedFilter = 'All'; // 'All', 'Ordered', 'Preparing', 'Ready / Pay', 'Completed'
+class _CaptainDashboardScreenState extends State<CaptainDashboardScreen> {
+  String selectedFilter = 'All'; // 'All', 'Ordered', 'Preparing', 'Ready / Pay'
   final TextEditingController searchController = TextEditingController();
   String searchQuery = '';
 
@@ -166,7 +166,7 @@ class _CaptainScreenState extends State<CaptainScreen> {
         'totalPrice': subtotal,
         'subtotal': subtotal,
         'hasGst': false,
-        'status': 'pending', // Ordered
+        'status': 'pending',
         'kitchenStatus': 'pending',
         'paymentStatus': 'pending',
         'hasNewItemsAdded': false,
@@ -327,7 +327,6 @@ class _CaptainScreenState extends State<CaptainScreen> {
               ),
               const Divider(color: Color(0xFF2C2520)),
 
-              // Items List
               ...items.map<Widget>((item) => Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4.0),
                 child: Row(
@@ -349,12 +348,10 @@ class _CaptainScreenState extends State<CaptainScreen> {
               ),
               const SizedBox(height: 16),
 
-              // CAPTAIN ACTION BUTTONS (LIFECYCLE STATUS UPDATES)
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  // 1. Move Ordered -> Preparing
                   if (status == 'pending')
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade800, foregroundColor: Colors.white),
@@ -366,7 +363,6 @@ class _CaptainScreenState extends State<CaptainScreen> {
                       label: const Text('Start Prep (Cooking)'),
                     ),
 
-                  // 2. Move Preparing -> Food Ready / Table Pay
                   if (status == 'preparing')
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent.shade700, foregroundColor: Colors.white),
@@ -378,7 +374,6 @@ class _CaptainScreenState extends State<CaptainScreen> {
                       label: const Text('Food Ready / Table Pay'),
                     ),
 
-                  // 3. Quick Payment Mode Marking
                   if (paymentStatus != 'paid_cash' && paymentStatus != 'paid_upi') ...[
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(foregroundColor: Colors.green, side: const BorderSide(color: Colors.green)),
@@ -400,7 +395,6 @@ class _CaptainScreenState extends State<CaptainScreen> {
                     ),
                   ],
 
-                  // 4. Complete & Free Table
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700, foregroundColor: Colors.white),
                     onPressed: () {
@@ -411,7 +405,6 @@ class _CaptainScreenState extends State<CaptainScreen> {
                     label: const Text('Done & Free Table'),
                   ),
 
-                  // 5. Edit / Add More Items
                   TextButton.icon(
                     style: TextButton.styleFrom(foregroundColor: const Color(0xFFF7B731)),
                     onPressed: () {
@@ -504,7 +497,6 @@ class _CaptainScreenState extends State<CaptainScreen> {
 
           return Column(
             children: [
-              // Search Bar
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 color: const Color(0xFF221D1A),
@@ -524,7 +516,6 @@ class _CaptainScreenState extends State<CaptainScreen> {
                 ),
               ),
 
-              // Filter Tabs Row
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -553,7 +544,6 @@ class _CaptainScreenState extends State<CaptainScreen> {
                 ),
               ),
 
-              // Legend Indicators
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 color: const Color(0xFF141211),
@@ -572,7 +562,6 @@ class _CaptainScreenState extends State<CaptainScreen> {
                 ),
               ),
 
-              // Tables Grid
               Expanded(
                 child: _buildCaptainTablesGrid(tableOrderMap, activeVirtualOrders),
               ),
@@ -626,11 +615,11 @@ class _CaptainScreenState extends State<CaptainScreen> {
       if (selectedFilter == 'All') {
         visibleTables.add(i);
       } else if (selectedFilter == 'Ordered') {
-        if (isOccupied && (orderDoc.get('status') == 'pending')) visibleTables.add(i);
+        if (isOccupied && (orderDoc.get(['status']) == 'pending')) visibleTables.add(i);
       } else if (selectedFilter == 'Preparing') {
-        if (isOccupied && (orderDoc.get('status') == 'preparing')) visibleTables.add(i);
+        if (isOccupied && (orderDoc.get(['status']) == 'preparing')) visibleTables.add(i);
       } else if (selectedFilter == 'Ready / Pay') {
-        if (isOccupied && (orderDoc.get('status') == 'ready')) visibleTables.add(i);
+        if (isOccupied && (orderDoc.get(['status']) == 'ready')) visibleTables.add(i);
       }
     }
 
@@ -666,7 +655,6 @@ class _CaptainScreenState extends State<CaptainScreen> {
           ),
           itemCount: totalItems,
           itemBuilder: (context, index) {
-            // 1. Regular Physical Tables
             if (index < visibleTables.length) {
               int tableNumber = visibleTables[index];
               DocumentSnapshot? orderDoc = tableOrderMap[tableNumber];
@@ -735,7 +723,6 @@ class _CaptainScreenState extends State<CaptainScreen> {
               );
             }
 
-            // 2. Active Virtual Tables (Auto-removed once completed)
             int vIndex = index - visibleTables.length;
             DocumentSnapshot vDoc = visibleVirtuals[vIndex];
             var vData = vDoc.data() as Map<String, dynamic>;
@@ -803,7 +790,6 @@ class _CaptainScreenState extends State<CaptainScreen> {
     );
   }
 
-  // Captain Order Taking Screen (Streamlined for phone & tablet)
   Widget _buildCaptainOrderTakingView() {
     return Scaffold(
       backgroundColor: const Color(0xFF141211),
@@ -865,7 +851,6 @@ class _CaptainScreenState extends State<CaptainScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Size Selector
                 Row(
                   children: [
                     const Text('Size:', style: TextStyle(color: Color(0xFFF7B731), fontWeight: FontWeight.bold)),
@@ -887,7 +872,6 @@ class _CaptainScreenState extends State<CaptainScreen> {
                 ),
                 const SizedBox(height: 10),
 
-                // Menu Search
                 TextField(
                   controller: menuSearchController,
                   style: const TextStyle(color: Colors.white),
@@ -901,7 +885,6 @@ class _CaptainScreenState extends State<CaptainScreen> {
                 ),
                 const Divider(color: Color(0xFF2C2520), height: 24),
 
-                // Menu List
                 ...liveCategories.map((cat) {
                   String catName = cat['categoryName'] ?? '';
                   List items = cat['items'] ?? [];
@@ -943,7 +926,6 @@ class _CaptainScreenState extends State<CaptainScreen> {
 
                 const Divider(color: Color(0xFF2C2520), height: 24),
 
-                // Cart Summary
                 const Text('Selected Items in Order:', style: TextStyle(color: Color(0xFFF7B731), fontWeight: FontWeight.bold, fontSize: 14)),
                 const SizedBox(height: 6),
                 tempCart.isEmpty
