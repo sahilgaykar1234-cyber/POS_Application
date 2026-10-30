@@ -1,421 +1,1008 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'main.dart';
+import 'menu_data.dart';
 
-class CaptainDashboardScreen extends StatelessWidget {
-  const CaptainDashboardScreen({super.key});
+class CaptainScreen extends StatefulWidget {
+  const CaptainScreen({super.key});
 
-  void updateOrderStatus(String docId, String newStatus) async {
+  @override
+  State<CaptainScreen> createState() => _CaptainScreenState();
+}
+
+class _CaptainScreenState extends State<CaptainScreen> {
+  String selectedFilter = 'All'; // 'All', 'Ordered', 'Preparing', 'Ready / Pay', 'Completed'
+  final TextEditingController searchController = TextEditingController();
+  String searchQuery = '';
+
+  int totalTablesCount = 12;
+
+  // New Order / Edit Order State
+  DocumentSnapshot? editingOrderDoc;
+  bool isTakingOrder = false;
+  final TextEditingController tableNoController = TextEditingController();
+  final TextEditingController customerNameController = TextEditingController();
+  final TextEditingController customerPhoneController = TextEditingController();
+  final TextEditingController specialRequestController = TextEditingController();
+  final TextEditingController menuSearchController = TextEditingController();
+  String menuSearchQuery = '';
+
+  List tempCart = [];
+  String selectedSize = 'Medium';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTableCount();
+  }
+
+  Future<void> _loadTableCount() async {
     try {
-      Map<String, dynamic> updateData = {
-        'status': newStatus,
-        'kitchenStatus': newStatus,
-      };
-      if (newStatus == 'ready') {
-        updateData['hasNewItemsAdded'] = false;
+      var doc = await FirebaseFirestore.instance.collection('settings').doc('business_settings').get();
+      if (doc.exists && doc.data() != null) {
+        var d = doc.data()!;
+        if (mounted) {
+          setState(() {
+            int parsed = int.tryParse((d['numberOfTables'] ?? '12').toString()) ?? 12;
+            totalTablesCount = parsed > 0 ? parsed : 12;
+          });
+        }
       }
-      await FirebaseFirestore.instance.collection('orders').doc(docId).update(updateData);
     } catch (e) {
-      debugPrint("Error updating status: $e");
+      debugPrint("Error loading table count: $e");
     }
   }
 
-  void confirmAndToggleCaptainItem(BuildContext context, String docId, List currentItems, int itemIndex) {
-    var item = currentItems[itemIndex];
-    bool currentVal = item['isDone'] ?? false;
-    String actionText = currentVal ? "unmark" : "ready mark";
+  Future<void> updateOrderStatus(String docId, String newStatus) async {
+    try {
+      await FirebaseFirestore.instance.collection('orders').doc(docId).update({
+        'status': newStatus,
+        'kitchenStatus': newStatus,
+        if (newStatus == 'completed') 'completedAt': FieldValue.serverTimestamp(),
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Status updated to: ${newStatus.toUpperCase()}'),
+            backgroundColor: const Color(0xFFE65C00),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Status update error: $e");
+    }
+  }
+
+  Future<void> updatePaymentStatus(String docId, String paymentMode) async {
+    try {
+      await FirebaseFirestore.instance.collection('orders').doc(docId).update({
+        'paymentStatus': paymentMode,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Payment marked as: ${paymentMode.replaceAll('paid_', '').toUpperCase()}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Payment update error: $e");
+    }
+  }
+
+  String _formatCustomerDisplayName(String rawName, String? tableNo) {
+    String clean = rawName.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim();
+    String t = (tableNo ?? '').trim();
+    if (t.isNotEmpty && int.tryParse(t) != null) {
+      t = 'Table $t';
+    }
+    if (clean.isNotEmpty && t.isNotEmpty) {
+      return '$clean ($t)';
+    } else if (clean.isNotEmpty) {
+      return clean;
+    } else if (t.isNotEmpty) {
+      return t;
+    }
+    return 'Dine-In Customer';
+  }
+
+  void prepareOrderForm({DocumentSnapshot? doc, String? prefilledTable}) {
+    setState(() {
+      editingOrderDoc = doc;
+      menuSearchQuery = '';
+      menuSearchController.clear();
+
+      if (doc != null) {
+        var data = doc.data() as Map<String, dynamic>;
+        String rawTable = data['tableNo'] ?? '';
+        String rawName = data['customerName'] ?? '';
+        String cleanName = rawName.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim();
+
+        tableNoController.text = rawTable.isNotEmpty ? rawTable : (rawName.toLowerCase().startsWith('table') ? rawName : '');
+        customerNameController.text = cleanName.toLowerCase().startsWith('table') ? '' : cleanName;
+        customerPhoneController.text = data['customerPhone'] ?? '';
+        specialRequestController.text = data['specialRequest'] ?? '';
+        List items = data['items'] ?? [];
+        tempCart = items.map((e) => Map<String, dynamic>.from(e)).toList();
+      } else {
+        tableNoController.text = prefilledTable ?? '';
+        customerNameController.clear();
+        customerPhoneController.clear();
+        specialRequestController.clear();
+        tempCart.clear();
+      }
+      isTakingOrder = true;
+    });
+  }
+
+  void saveOrder() async {
+    String tableText = tableNoController.text.trim();
+    String custName = customerNameController.text.trim();
+    String custPhone = customerPhoneController.text.trim();
+    String note = specialRequestController.text.trim();
+
+    if (tempCart.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Kam se kam ek item add karein!')));
+      return;
+    }
+
+    String finalDisplayName = _formatCustomerDisplayName(custName, tableText);
+    double subtotal = 0;
+    for (var it in tempCart) {
+      subtotal += ((it['price'] ?? 0.0) * (it['qty'] ?? 1));
+    }
+
+    if (editingOrderDoc == null) {
+      await FirebaseFirestore.instance.collection('orders').add({
+        'deviceId': 'captain_portal_${DateTime.now().millisecondsSinceEpoch}',
+        'customerName': finalDisplayName,
+        'tableNo': tableText,
+        'customerPhone': custPhone,
+        'orderType': 'Dine-In',
+        'specialRequest': note,
+        'items': tempCart.map((e) => {...e, 'isDone': false}).toList(),
+        'totalPrice': subtotal,
+        'subtotal': subtotal,
+        'hasGst': false,
+        'status': 'pending', // Ordered
+        'kitchenStatus': 'pending',
+        'paymentStatus': 'pending',
+        'hasNewItemsAdded': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } else {
+      await FirebaseFirestore.instance.collection('orders').doc(editingOrderDoc!.id).update({
+        'customerName': finalDisplayName,
+        'tableNo': tableText,
+        'customerPhone': custPhone,
+        'specialRequest': note,
+        'items': tempCart,
+        'totalPrice': subtotal,
+        'subtotal': subtotal,
+        'hasNewItemsAdded': true,
+      });
+    }
+
+    setState(() {
+      isTakingOrder = false;
+      editingOrderDoc = null;
+      tableNoController.clear();
+      customerNameController.clear();
+      customerPhoneController.clear();
+      specialRequestController.clear();
+      tempCart.clear();
+    });
+  }
+
+  void addToCart(Map<String, dynamic> item, String catName) {
+    setState(() {
+      String name = item['name'];
+      double regP = (item['regularPrice'] ?? item['price'] ?? 0.0).toDouble();
+      double medP = (item['mediumPrice'] ?? regP).toDouble();
+
+      bool isMulti = catName.toLowerCase().contains('pizza') || catName.toLowerCase().contains('fries');
+      double price = isMulti ? (selectedSize == 'Regular' ? regP : medP) : regP;
+      String size = isMulti ? selectedSize : 'Standard';
+
+      int existing = tempCart.indexWhere((e) => e['name'] == name && e['size'] == size);
+      if (existing != -1) {
+        tempCart[existing]['qty'] += 1;
+      } else {
+        tempCart.add({
+          'name': name,
+          'price': price,
+          'size': size,
+          'qty': 1,
+          'isDone': false,
+        });
+      }
+    });
+  }
+
+  void _showAddVirtualTableDialog(BuildContext context) {
+    final TextEditingController virtualNameController = TextEditingController();
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1A17),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Item Status', style: TextStyle(color: Color(0xFFF7B731), fontWeight: FontWeight.bold)),
-        content: Text('Kya aap "${item['name']}" ko $actionText karna chahte hain?', style: const TextStyle(color: Colors.white70)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Colors.purpleAccent, width: 1.5),
+        ),
+        title: Row(
+          children: const [
+            Icon(Icons.storefront_rounded, color: Colors.purpleAccent, size: 22),
+            SizedBox(width: 8),
+            Text('Add Virtual Table', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Customer doosri shop par baitha hai toh waha ka reference naam dalein:',
+              style: TextStyle(color: Colors.white54, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: virtualNameController,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Virtual Spot / Shop Name',
+                hintText: 'e.g. Sharma Tea, Salon, Shop 4',
+                prefixIcon: Icon(Icons.location_on_outlined, color: Colors.purpleAccent),
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
-          ElevatedButton(
+          ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: currentVal ? Colors.orange : Colors.green,
+              backgroundColor: Colors.purpleAccent.shade700,
               foregroundColor: Colors.white,
             ),
             onPressed: () {
+              String name = virtualNameController.text.trim();
+              if (name.isEmpty) name = 'V-${DateTime.now().minute}';
               Navigator.pop(ctx);
-              _toggleCaptainItemDone(docId, currentItems, itemIndex);
+              prepareOrderForm(prefilledTable: name);
             },
-            child: const Text('Confirm'),
+            icon: const Icon(Icons.add_shopping_cart, size: 16),
+            label: const Text('Take Order', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
 
-  void _toggleCaptainItemDone(String docId, List currentItems, int itemIndex) async {
-    try {
-      List updatedItems = List.from(currentItems);
-      bool currentVal = updatedItems[itemIndex]['isDone'] ?? false;
-      updatedItems[itemIndex]['isDone'] = !currentVal;
+  void _showCaptainTableModal(BuildContext context, DocumentSnapshot orderDoc) {
+    var data = orderDoc.data() as Map<String, dynamic>;
+    String docId = orderDoc.id;
+    String status = (data['status'] ?? 'pending').toString().toLowerCase();
+    String paymentStatus = (data['paymentStatus'] ?? 'pending').toString().toLowerCase();
+    List items = data['items'] ?? [];
+    double total = (data['totalPrice'] ?? 0.0).toDouble();
 
-      bool allDone = updatedItems.every((item) => (item['isDone'] ?? false) == true);
-      String newStatus = allDone ? 'ready' : 'preparing';
-
-      await FirebaseFirestore.instance.collection('orders').doc(docId).update({
-        'items': updatedItems,
-        'status': newStatus,
-        'kitchenStatus': newStatus,
-      });
-    } catch (e) {
-      debugPrint("Error toggling captain item: $e");
-    }
-  }
-
-  void _logout(BuildContext context) {
-    showDialog(
+    showModalBottomSheet(
+      backgroundColor: const Color(0xFF1E1A17),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1A17),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Logout', style: TextStyle(color: Color(0xFFF7B731), fontWeight: FontWeight.bold)),
-        content: const Text('Captain dashboard se logout karna hai?', style: TextStyle(color: Colors.white70)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: const EdgeInsets.all(18.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          data['customerName'] ?? 'Table Order',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFFF7B731)),
+                        ),
+                        if (data['customerPhone'] != null && data['customerPhone'].toString().isNotEmpty)
+                          Text('Phone: ${data['customerPhone']}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  IconButton(icon: const Icon(Icons.close, color: Colors.grey), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const Divider(color: Color(0xFF2C2520)),
+
+              // Items List
+              ...items.map<Widget>((item) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('${item['name']} (${item['size'] ?? 'Std'})', style: const TextStyle(color: Colors.white, fontSize: 13)),
+                    Text('₹${item['price']} x ${item['qty']}', style: const TextStyle(color: Color(0xFFF7B731), fontWeight: FontWeight.bold, fontSize: 13)),
+                  ],
+                ),
+              )),
+              const Divider(color: Color(0xFF2C2520)),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Total Bill:', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                  Text('₹${total.toInt()}', style: const TextStyle(color: Colors.greenAccent, fontSize: 18, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // CAPTAIN ACTION BUTTONS (LIFECYCLE STATUS UPDATES)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  // 1. Move Ordered -> Preparing
+                  if (status == 'pending')
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade800, foregroundColor: Colors.white),
+                      onPressed: () {
+                        updateOrderStatus(docId, 'preparing');
+                        Navigator.pop(ctx);
+                      },
+                      icon: const Icon(Icons.fireplace_rounded, size: 16),
+                      label: const Text('Start Prep (Cooking)'),
+                    ),
+
+                  // 2. Move Preparing -> Food Ready / Table Pay
+                  if (status == 'preparing')
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent.shade700, foregroundColor: Colors.white),
+                      onPressed: () {
+                        updateOrderStatus(docId, 'ready');
+                        Navigator.pop(ctx);
+                      },
+                      icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
+                      label: const Text('Food Ready / Table Pay'),
+                    ),
+
+                  // 3. Quick Payment Mode Marking
+                  if (paymentStatus != 'paid_cash' && paymentStatus != 'paid_upi') ...[
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(foregroundColor: Colors.green, side: const BorderSide(color: Colors.green)),
+                      onPressed: () {
+                        updatePaymentStatus(docId, 'paid_cash');
+                        Navigator.pop(ctx);
+                      },
+                      icon: const Icon(Icons.money_rounded, size: 16),
+                      label: const Text('Cash Paid'),
+                    ),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFFE65C00), side: const BorderSide(color: Color(0xFFE65C00))),
+                      onPressed: () {
+                        updatePaymentStatus(docId, 'paid_upi');
+                        Navigator.pop(ctx);
+                      },
+                      icon: const Icon(Icons.qr_code_rounded, size: 16),
+                      label: const Text('UPI Paid'),
+                    ),
+                  ],
+
+                  // 4. Complete & Free Table
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700, foregroundColor: Colors.white),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      updateOrderStatus(docId, 'completed');
+                    },
+                    icon: const Icon(Icons.done_all_rounded, size: 16),
+                    label: const Text('Done & Free Table'),
+                  ),
+
+                  // 5. Edit / Add More Items
+                  TextButton.icon(
+                    style: TextButton.styleFrom(foregroundColor: const Color(0xFFF7B731)),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      prepareOrderForm(doc: orderDoc);
+                    },
+                    icon: const Icon(Icons.edit_note_rounded, size: 18),
+                    label: const Text('Add Items'),
+                  ),
+                ],
+              ),
+            ],
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE65C00), foregroundColor: Colors.white),
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (context) => const CustomerCartScreen()),
-                (route) => false,
-              );
-            },
-            child: const Text('Logout'),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (isTakingOrder) {
+      return _buildCaptainOrderTakingView();
+    }
+
     DateTime now = DateTime.now();
     DateTime startOfToday = DateTime(now.year, now.month, now.day);
 
     return Scaffold(
       backgroundColor: const Color(0xFF141211),
       appBar: AppBar(
-        title: Row(
-          children: const [
-            // Original Flamy Wood Oven Logo
-            FlamyWoodOvenLogo(size: 32),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'FLAMY WOOD',
-                style: TextStyle(
-                  color: Color(0xFFF7B731),
-                  fontWeight: FontWeight.w900,
-                  fontSize: 15,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: const Color(0xFF1E1A17),
+        backgroundColor: const Color(0xFF7A431D),
         elevation: 0,
-        automaticallyImplyLeading: false,
+        title: const Text('Captain Service Portal', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout, color: Color(0xFFE65C00)),
-            tooltip: 'Logout',
-            onPressed: () => _logout(context),
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+            tooltip: 'Refresh Tables',
+            onPressed: () => setState(() {}),
           ),
-          const SizedBox(width: 4),
         ],
       ),
-      body: Container(
-        color: const Color(0xFF141211),
-        child: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('orders').snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator(color: Color(0xFFE65C00)));
-            }
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: Colors.purpleAccent.shade700,
+        foregroundColor: Colors.white,
+        elevation: 6,
+        icon: const Icon(Icons.add_business_rounded, size: 20),
+        label: const Text('Add Virtual Table', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        onPressed: () => _showAddVirtualTableDialog(context),
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('orders').snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator(color: Color(0xFFE65C00)));
+          }
 
-            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-              return const Center(
-                child: Text('Aaj ke din me koi active order nahi hai queue me!', style: TextStyle(fontSize: 16, color: Colors.white38)),
-              );
-            }
+          var allDocs = snapshot.data!.docs;
+          var todayOrders = allDocs.where((doc) {
+            var data = doc.data() as Map<String, dynamic>;
+            Timestamp? t = data['createdAt'] as Timestamp?;
+            if (t == null) return false;
+            return t.toDate().isAfter(startOfToday);
+          }).toList();
 
-            final orders = snapshot.data!.docs.where((doc) {
-              final data = doc.data() as Map<String, dynamic>;
-              String status = data['status'] ?? 'pending';
-              if (status == 'completed') return false;
+          Map<int, DocumentSnapshot> tableOrderMap = {};
+          List<DocumentSnapshot> activeVirtualOrders = [];
 
-              Timestamp? t = data['createdAt'] as Timestamp?;
-              if (t == null) return false;
-              return t.toDate().isAfter(startOfToday);
-            }).toList();
+          for (var doc in todayOrders) {
+            var data = doc.data() as Map<String, dynamic>;
+            String status = (data['status'] ?? 'pending').toString().toLowerCase();
 
-            if (orders.isEmpty) {
-              return const Center(
-                child: Text('Sabhi active orders ready / completed hain! 🔥', style: TextStyle(fontSize: 16, color: Colors.white38)),
-              );
-            }
+            if (status != 'completed') {
+              String customer = (data['customerName'] ?? '').toString().toLowerCase();
+              String tNo = (data['tableNo'] ?? '').toString().trim();
 
-            orders.sort((a, b) {
-              var dataA = a.data() as Map<String, dynamic>;
-              var dataB = b.data() as Map<String, dynamic>;
-
-              int getPriority(Map<String, dynamic> data) {
-                String s = data['status'] ?? 'pending';
-                bool isRepeat = data['hasNewItemsAdded'] ?? false;
-                if (s == 'preparing') return 1;
-                if (s == 'pending' && !isRepeat) return 2;
-                if (s == 'pending' && isRepeat) return 3;
-                if (s == 'ready') return 4;
-                return 5;
+              bool matched = false;
+              for (int i = 1; i <= totalTablesCount; i++) {
+                if (customer.contains('table $i') || tNo == '$i' || tNo.toLowerCase() == 'table $i') {
+                  tableOrderMap[i] = doc;
+                  matched = true;
+                  break;
+                }
               }
 
-              int pA = getPriority(dataA);
-              int pB = getPriority(dataB);
-
-              if (pA != pB) return pA.compareTo(pB);
-
-              Timestamp? timeA = dataA['createdAt'] as Timestamp?;
-              Timestamp? timeB = dataB['createdAt'] as Timestamp?;
-              if (timeA != null && timeB != null) {
-                return timeA.compareTo(timeB);
+              if (!matched && tNo.isNotEmpty) {
+                activeVirtualOrders.add(doc);
               }
-              return 0;
-            });
+            }
+          }
 
-            return ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              itemCount: orders.length,
-              itemBuilder: (context, index) {
-                final orderDoc = orders[index];
-                final orderData = orderDoc.data() as Map<String, dynamic>;
-
-                final String customerName = orderData['customerName'] ?? 'Unknown';
-                final String specialRequest = orderData['specialRequest'] ?? '';
-                final double totalPrice = (orderData['totalPrice'] ?? 0.0).toDouble();
-                final String status = orderData['status'] ?? 'pending';
-                final List items = orderData['items'] ?? [];
-                final bool hasNewItems = orderData['hasNewItemsAdded'] ?? false;
-
-                Color statusColor = const Color(0xFFE65C00);
-                if (status == 'preparing') statusColor = Colors.amber;
-                if (status == 'ready') statusColor = Colors.green;
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1C1816),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: hasNewItems ? Colors.purpleAccent : const Color(0xFF2E2621),
-                      width: hasNewItems ? 2 : 1,
-                    ),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
-                    ],
+          return Column(
+            children: [
+              // Search Bar
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                color: const Color(0xFF221D1A),
+                child: TextField(
+                  controller: searchController,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'Search table, spot, item, phone...',
+                    hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+                    prefixIcon: const Icon(Icons.search, color: Colors.white54, size: 18),
+                    filled: true,
+                    fillColor: const Color(0xFF181513),
+                    contentPadding: EdgeInsets.zero,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-  children: [
-    // Flamy Wood Brand Oven Logo (Card Avatar)
-    Container(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: hasNewItems ? Colors.purpleAccent : const Color(0xFFE65C00),
-          width: 1.5,
+                  onChanged: (val) => setState(() => searchQuery = val.toLowerCase().trim()),
+                ),
+              ),
+
+              // Filter Tabs Row
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                color: const Color(0xFF1A1614),
+                child: Center(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF26201D),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF382F2A)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildFilterTab('All', Icons.all_inclusive),
+                          _buildFilterTab('Ordered', Icons.assignment_outlined),
+                          _buildFilterTab('Preparing', Icons.fireplace_rounded),
+                          _buildFilterTab('Ready / Pay', Icons.check_circle_outline_rounded),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Legend Indicators
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                color: const Color(0xFF141211),
+                child: Row(
+                  children: [
+                    _buildLegendItem(Colors.green, 'Free'),
+                    const SizedBox(width: 12),
+                    _buildLegendItem(Colors.redAccent, 'Ordered'),
+                    const SizedBox(width: 12),
+                    _buildLegendItem(Colors.amber, 'Prep'),
+                    const SizedBox(width: 12),
+                    _buildLegendItem(Colors.blueAccent, 'Pay'),
+                    const SizedBox(width: 12),
+                    _buildLegendItem(Colors.purpleAccent, 'Virtual'),
+                  ],
+                ),
+              ),
+
+              // Tables Grid
+              Expanded(
+                child: _buildCaptainTablesGrid(tableOrderMap, activeVirtualOrders),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildFilterTab(String label, IconData icon) {
+    bool isSelected = selectedFilter == label;
+    return InkWell(
+      onTap: () => setState(() => selectedFilter = label),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFE65C00) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: isSelected ? Colors.white : Colors.white60),
+            const SizedBox(width: 5),
+            Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.white70, fontSize: 11.5, fontWeight: FontWeight.bold)),
+          ],
         ),
       ),
-      child: const FlamyWoodOvenLogo(size: 38),
-    ),
-    const SizedBox(width: 10),
-    Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    );
+  }
+
+  Widget _buildLegendItem(Color color, String text) {
+    return Row(
       children: [
-        Text(
-          'Order #${index + 1} • $customerName',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-        ),
-        if (hasNewItems)
-          const Text(
-            'REPEAT ORDER / NEW ITEMS!',
-            style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 11),
-          ),
+        Container(width: 7, height: 7, decoration: BoxDecoration(shape: BoxShape.circle, color: color)),
+        const SizedBox(width: 4),
+        Text(text, style: const TextStyle(color: Colors.white54, fontSize: 10.5)),
       ],
-    ),
-  ],
-),
+    );
+  }
 
-                        // SPECIAL COOKING REQUEST BANNER
-                        if (specialRequest.isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF3B2A15),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFFF7B731)),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.warning_amber_rounded, color: Color(0xFFF7B731), size: 16),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    'Special Note: $specialRequest',
-                                    style: const TextStyle(color: Color(0xFFF7B731), fontWeight: FontWeight.bold, fontSize: 12),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+  Widget _buildCaptainTablesGrid(Map<int, DocumentSnapshot> tableOrderMap, List<DocumentSnapshot> activeVirtualOrders) {
+    List<int> visibleTables = [];
+
+    for (int i = 1; i <= totalTablesCount; i++) {
+      DocumentSnapshot? orderDoc = tableOrderMap[i];
+      bool isOccupied = orderDoc != null;
+
+      if (selectedFilter == 'All') {
+        visibleTables.add(i);
+      } else if (selectedFilter == 'Ordered') {
+        if (isOccupied && (orderDoc.get('status') == 'pending')) visibleTables.add(i);
+      } else if (selectedFilter == 'Preparing') {
+        if (isOccupied && (orderDoc.get('status') == 'preparing')) visibleTables.add(i);
+      } else if (selectedFilter == 'Ready / Pay') {
+        if (isOccupied && (orderDoc.get('status') == 'ready')) visibleTables.add(i);
+      }
+    }
+
+    var visibleVirtuals = activeVirtualOrders.where((doc) {
+      var d = doc.data() as Map<String, dynamic>;
+      String st = (d['status'] ?? 'pending').toString().toLowerCase();
+      if (selectedFilter == 'All') return true;
+      if (selectedFilter == 'Ordered') return st == 'pending';
+      if (selectedFilter == 'Preparing') return st == 'preparing';
+      if (selectedFilter == 'Ready / Pay') return st == 'ready';
+      return false;
+    }).toList();
+
+    int totalItems = visibleTables.length + visibleVirtuals.length;
+
+    if (totalItems == 0) {
+      return Center(
+        child: Text('Is filter ($selectedFilter) me koi active table nahi hai.', style: const TextStyle(color: Colors.white38, fontSize: 14)),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        int columns = constraints.maxWidth > 1100 ? 6 : (constraints.maxWidth > 700 ? 4 : (constraints.maxWidth > 450 ? 3 : 2));
+
+        return GridView.builder(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 1.05,
+          ),
+          itemCount: totalItems,
+          itemBuilder: (context, index) {
+            // 1. Regular Physical Tables
+            if (index < visibleTables.length) {
+              int tableNumber = visibleTables[index];
+              DocumentSnapshot? orderDoc = tableOrderMap[tableNumber];
+              bool isOccupied = orderDoc != null;
+
+              Color statusDotColor = Colors.green;
+              String statusLabel = 'Available';
+
+              if (isOccupied) {
+                var oData = orderDoc.data() as Map<String, dynamic>;
+                String kStatus = (oData['status'] ?? 'pending').toString().toLowerCase();
+                if (kStatus == 'preparing') {
+                  statusDotColor = Colors.amber;
+                  statusLabel = 'Prep';
+                } else if (kStatus == 'ready') {
+                  statusDotColor = Colors.blueAccent;
+                  statusLabel = 'Pay';
+                } else {
+                  statusDotColor = Colors.redAccent;
+                  statusLabel = 'Ordered';
+                }
+              }
+
+              return InkWell(
+                onTap: () {
+                  if (isOccupied) {
+                    _showCaptainTableModal(context, orderDoc);
+                  } else {
+                    prepareOrderForm(prefilledTable: '$tableNumber');
+                  }
+                },
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1D1917),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isOccupied ? statusDotColor : Colors.green.withOpacity(0.4),
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: statusDotColor)),
+                          const SizedBox(width: 6),
+                          Text('$tableNumber', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
                         ],
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                        decoration: BoxDecoration(color: statusDotColor.withOpacity(0.12), borderRadius: BorderRadius.circular(6)),
+                        child: Text(statusLabel, style: TextStyle(color: statusDotColor, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                      ),
+                      if (isOccupied) ...[
+                        const SizedBox(height: 4),
+                        Text('₹${(orderDoc.get('totalPrice') ?? 0).toInt()}', style: const TextStyle(color: Color(0xFFF7B731), fontWeight: FontWeight.w900, fontSize: 12)),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            }
 
-                        const Divider(color: Color(0xFF2E2621), height: 20),
-                        const Text(
-                          'ITEMS ORDERED (TAP ITEM TO MARK READY):',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white54, fontSize: 11, letterSpacing: 0.8),
-                        ),
-                        const SizedBox(height: 8),
-                        ...items.asMap().entries.map((entry) {
-                          int itemIdx = entry.key;
-                          var item = entry.value;
-                          bool isDone = item['isDone'] ?? false;
-                          List toppings = item['toppings'] ?? [];
+            // 2. Active Virtual Tables (Auto-removed once completed)
+            int vIndex = index - visibleTables.length;
+            DocumentSnapshot vDoc = visibleVirtuals[vIndex];
+            var vData = vDoc.data() as Map<String, dynamic>;
+            String vTableName = (vData['tableNo'] ?? 'Virtual').toString();
+            double vTotal = (vData['totalPrice'] ?? 0.0).toDouble();
 
-                          return InkWell(
-                            onTap: () => confirmAndToggleCaptainItem(context, orderDoc.id, items, itemIdx),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
-                              margin: const EdgeInsets.only(bottom: 4),
-                              decoration: BoxDecoration(
-                                color: isDone ? Colors.green.withOpacity(0.08) : Colors.transparent,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            String vStatus = (vData['status'] ?? 'pending').toString().toLowerCase();
+            Color vStatusColor = Colors.redAccent;
+            String vStatusLabel = 'Ordered';
+            if (vStatus == 'preparing') {
+              vStatusColor = Colors.amber;
+              vStatusLabel = 'Prep';
+            } else if (vStatus == 'ready') {
+              vStatusColor = Colors.blueAccent;
+              vStatusLabel = 'Pay';
+            }
+
+            return InkWell(
+              onTap: () => _showCaptainTableModal(context, vDoc),
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF221626),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.purpleAccent.withOpacity(0.85), width: 1.5),
+                  boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 4, offset: Offset(0, 2))],
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.storefront_rounded, color: Colors.purpleAccent, size: 14),
+                        SizedBox(width: 4),
+                        Text('VIRTUAL', style: TextStyle(color: Colors.purpleAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                      child: Text(
+                        vTableName,
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(color: vStatusColor.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                      child: Text(vStatusLabel, style: TextStyle(color: vStatusColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(height: 3),
+                    Text('₹${vTotal.toInt()}', style: const TextStyle(color: Color(0xFFF7B731), fontWeight: FontWeight.w900, fontSize: 12)),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Captain Order Taking Screen (Streamlined for phone & tablet)
+  Widget _buildCaptainOrderTakingView() {
+    return Scaffold(
+      backgroundColor: const Color(0xFF141211),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF7A431D),
+        elevation: 0,
+        title: Text(
+          editingOrderDoc == null ? 'New Order (${tableNoController.text})' : 'Add Items (${tableNoController.text})',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => setState(() => isTakingOrder = false),
+        ),
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('menu_categories').snapshots(),
+        builder: (context, menuSnapshot) {
+          List liveCategories = restaurantMenuCategories;
+          if (menuSnapshot.hasData && menuSnapshot.data!.docs.isNotEmpty) {
+            liveCategories = menuSnapshot.data!.docs.map((d) => d.data() as Map<String, dynamic>).toList();
+          }
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: tableNoController,
+                        style: const TextStyle(color: Color(0xFFF7B731), fontWeight: FontWeight.bold),
+                        decoration: const InputDecoration(labelText: 'Table / Spot', border: OutlineInputBorder(), isDense: true),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: customerNameController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(labelText: 'Customer (Opt)', border: OutlineInputBorder(), isDense: true),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                TextField(
+                  controller: specialRequestController,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: const InputDecoration(
+                    labelText: 'Cooking Instructions (Optional)',
+                    hintText: 'e.g. less spicy, extra crispy',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Size Selector
+                Row(
+                  children: [
+                    const Text('Size:', style: TextStyle(color: Color(0xFFF7B731), fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('Regular'),
+                      selected: selectedSize == 'Regular',
+                      selectedColor: const Color(0xFFE65C00),
+                      onSelected: (val) => setState(() => selectedSize = 'Regular'),
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('Medium'),
+                      selected: selectedSize == 'Medium',
+                      selectedColor: const Color(0xFFE65C00),
+                      onSelected: (val) => setState(() => selectedSize = 'Medium'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                // Menu Search
+                TextField(
+                  controller: menuSearchController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'Search Dish...',
+                    prefixIcon: Icon(Icons.search, color: Color(0xFFE65C00)),
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onChanged: (val) => setState(() => menuSearchQuery = val.toLowerCase().trim()),
+                ),
+                const Divider(color: Color(0xFF2C2520), height: 24),
+
+                // Menu List
+                ...liveCategories.map((cat) {
+                  String catName = cat['categoryName'] ?? '';
+                  List items = cat['items'] ?? [];
+                  var filtered = items.where((it) {
+                    if (menuSearchQuery.isEmpty) return true;
+                    return it['name'].toString().toLowerCase().contains(menuSearchQuery);
+                  }).toList();
+
+                  if (filtered.isEmpty) return const SizedBox.shrink();
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4.0),
+                        child: Text(catName, style: const TextStyle(color: Color(0xFFF7B731), fontWeight: FontWeight.bold, fontSize: 13)),
+                      ),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: filtered.map<Widget>((it) {
+                          bool inCart = tempCart.any((c) => c['name'] == it['name']);
+                          var regP = it['regularPrice'];
+                          var medP = it['mediumPrice'];
+                          var stdP = it['price'];
+                          String pStr = (regP != null && medP != null) ? '₹$regP/₹$medP' : '₹${stdP ?? regP ?? 0}';
+
+                          return ActionChip(
+                            label: Text('${it['name']} ($pStr)', style: TextStyle(fontSize: 11, color: inCart ? Colors.white : const Color(0xFFF7B731))),
+                            backgroundColor: inCart ? const Color(0xFFE65C00) : const Color(0xFF26211D),
+                            onPressed: () => addToCart(it, catName),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                  );
+                }),
+
+                const Divider(color: Color(0xFF2C2520), height: 24),
+
+                // Cart Summary
+                const Text('Selected Items in Order:', style: TextStyle(color: Color(0xFFF7B731), fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 6),
+                tempCart.isEmpty
+                    ? const Padding(padding: EdgeInsets.all(12), child: Text('No items added yet.', style: TextStyle(color: Colors.white38)))
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: tempCart.length,
+                        itemBuilder: (context, idx) {
+                          var c = tempCart[idx];
+                          return Card(
+                            color: const Color(0xFF1E1A17),
+                            margin: const EdgeInsets.only(bottom: 6),
+                            child: ListTile(
+                              dense: true,
+                              title: Text('${c['name']} (${c['size']})', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              subtitle: Text('₹${c['price']} x ${c['qty']}', style: const TextStyle(color: Colors.white54)),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        isDone ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                                        color: isDone ? Colors.greenAccent : Colors.white38,
-                                        size: 20,
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            '${item['name']} (${item['size'] ?? 'Standard'})',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: isDone ? Colors.greenAccent : Colors.white,
-                                              fontWeight: isDone ? FontWeight.bold : FontWeight.w600,
-                                              decoration: isDone ? TextDecoration.lineThrough : null,
-                                              decorationColor: Colors.greenAccent,
-                                            ),
-                                          ),
-                                          if (toppings.isNotEmpty) ...[
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              '+ ${toppings.join(', ')}',
-                                              style: const TextStyle(color: Color(0xFFF7B731), fontSize: 11, fontStyle: FontStyle.italic),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ],
+                                  IconButton(
+                                    icon: const Icon(Icons.remove, color: Color(0xFFE65C00), size: 18),
+                                    onPressed: () {
+                                      setState(() {
+                                        c['qty'] -= 1;
+                                        if (c['qty'] <= 0) tempCart.removeAt(idx);
+                                      });
+                                    },
                                   ),
-                                  Text(
-                                    'x ${item['qty']}',
-                                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFFF7B731)),
+                                  Text('${c['qty']}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                  IconButton(
+                                    icon: const Icon(Icons.add, color: Color(0xFFE65C00), size: 18),
+                                    onPressed: () => setState(() => c['qty'] += 1),
                                   ),
                                 ],
                               ),
                             ),
                           );
-                        }),
-                        const Divider(color: Color(0xFF2E2621), height: 20),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Total: ₹${totalPrice.toInt()}',
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFFF7B731)),
-                            ),
-                            Row(
-                              children: [
-                                if (status == 'pending')
-                                  ElevatedButton.icon(
-                                    onPressed: () => updateOrderStatus(orderDoc.id, 'preparing'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFFE65C00),
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                    icon: const Icon(Icons.fireplace, size: 18),
-                                    label: const Text('Start Preparing', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                  ),
-                                if (status == 'preparing')
-                                  ElevatedButton.icon(
-                                    onPressed: () => updateOrderStatus(orderDoc.id, 'ready'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                    icon: const Icon(Icons.check_circle, size: 18),
-                                    label: const Text('Mark Ready', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                  ),
-                                if (status == 'ready')
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green.withOpacity(0.15),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: Colors.green),
-                                    ),
-                                    child: const Text(
-                                      'Order Ready to Serve 🔥',
-                                      style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ],
+                        },
+                      ),
+                const SizedBox(height: 16),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE65C00), foregroundColor: Colors.white),
+                    onPressed: saveOrder,
+                    child: Text(
+                      editingOrderDoc == null ? 'Send to Kitchen 🔥' : 'Update & Send 🔥',
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                     ),
                   ),
-                );
-              },
-            );
-          },
-        ),
+                ),
+                const SizedBox(height: 40),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

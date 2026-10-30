@@ -14,6 +14,9 @@ dependencies:
   cloud_firestore: ^5.0.0
   cupertino_icons: ^1.0.8
   shared_preferences: ^2.5.6
+  url_launcher: ^6.3.0
+  printing: ^5.13.0 # System / Thermal print trigger karne ke liye
+  pdf: ^3.11.0      # Receipt layout render karne ke liye
 
 dev_dependencies:
   flutter_test:
