@@ -1,9 +1,12 @@
 // ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:html' as html;
+
+// Conditional import for dart:html to prevent Android compilation errors
+import 'reports_stub.dart'
+    if (dart.library.html) 'reports_web.dart';
 
 class ReportsAnalyticsScreen extends StatefulWidget {
   const ReportsAnalyticsScreen({super.key});
@@ -51,20 +54,20 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
   }
 
   // =========================================================================
-  // MODERN POS COMPACT POPUP DATE PICKER (FIXED SEPARATE START & END DATES)
+  // MODERN POS COMPACT POPUP DATE PICKER
   // =========================================================================
   Future<void> _openModernRangeDialog(BuildContext context) async {
     DateTime tempStart = fromDate;
     DateTime tempEnd = toDate;
     DateTime activeMonth = DateTime(tempStart.year, tempStart.month, 1);
-    String selectingTarget = 'start'; // 'start' ya 'end' ko track karega
+    String selectingTarget = 'start';
 
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           int daysInMonth = DateUtils.getDaysInMonth(activeMonth.year, activeMonth.month);
-          int firstWeekday = DateTime(activeMonth.year, activeMonth.month, 1).weekday % 7; // Sunday = 0
+          int firstWeekday = DateTime(activeMonth.year, activeMonth.month, 1).weekday % 7;
 
           const monthNames = [
             'January', 'February', 'March', 'April', 'May', 'June',
@@ -85,7 +88,6 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Title Header
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -93,10 +95,7 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                         children: const [
                           Icon(Icons.date_range_rounded, color: Color(0xFFE65C00), size: 20),
                           SizedBox(width: 8),
-                          Text(
-                            'Select Date Range',
-                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
+                          Text('Select Date Range', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                         ],
                       ),
                       IconButton(
@@ -108,8 +107,6 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-
-                  // Quick Shortcuts Chips
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
@@ -124,30 +121,9 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                           });
                         }),
                         const SizedBox(width: 6),
-                        _buildQuickChip('Yesterday', () {
-                          DateTime y = DateTime.now().subtract(const Duration(days: 1));
-                          setDialogState(() {
-                            tempStart = DateTime(y.year, y.month, y.day, 0, 0, 0);
-                            tempEnd = DateTime(y.year, y.month, y.day, 23, 59, 59);
-                            activeMonth = DateTime(y.year, y.month, 1);
-                            selectingTarget = 'start';
-                          });
-                        }),
-                        const SizedBox(width: 6),
                         _buildQuickChip('This Week', () {
                           DateTime n = DateTime.now();
                           DateTime s = n.subtract(Duration(days: n.weekday - 1));
-                          setDialogState(() {
-                            tempStart = DateTime(s.year, s.month, s.day, 0, 0, 0);
-                            tempEnd = DateTime(n.year, n.month, n.day, 23, 59, 59);
-                            activeMonth = DateTime(n.year, n.month, 1);
-                            selectingTarget = 'start';
-                          });
-                        }),
-                        const SizedBox(width: 6),
-                        _buildQuickChip('Last 7 Days', () {
-                          DateTime n = DateTime.now();
-                          DateTime s = n.subtract(const Duration(days: 6));
                           setDialogState(() {
                             tempStart = DateTime(s.year, s.month, s.day, 0, 0, 0);
                             tempEnd = DateTime(n.year, n.month, n.day, 23, 59, 59);
@@ -169,17 +145,11 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                     ),
                   ),
                   const SizedBox(height: 14),
-
-                  // Interactive Selection Boxes (Start vs End)
                   Row(
                     children: [
                       Expanded(
                         child: InkWell(
-                          onTap: () {
-                            setDialogState(() {
-                              selectingTarget = 'start';
-                            });
-                          },
+                          onTap: () => setDialogState(() => selectingTarget = 'start'),
                           borderRadius: BorderRadius.circular(10),
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -194,29 +164,9 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.calendar_today_rounded, size: 12, color: selectingTarget == 'start' ? const Color(0xFFE65C00) : Colors.white38),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      'START DATE',
-                                      style: TextStyle(
-                                        color: selectingTarget == 'start' ? const Color(0xFFE65C00) : Colors.white38,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                Text('START DATE', style: TextStyle(color: selectingTarget == 'start' ? const Color(0xFFE65C00) : Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
                                 const SizedBox(height: 4),
-                                Text(
-                                  _formatDate(tempStart),
-                                  style: TextStyle(
-                                    color: selectingTarget == 'start' ? Colors.white : const Color(0xFFF7B731),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                                Text(_formatDate(tempStart), style: TextStyle(color: selectingTarget == 'start' ? Colors.white : const Color(0xFFF7B731), fontSize: 13, fontWeight: FontWeight.bold)),
                               ],
                             ),
                           ),
@@ -228,11 +178,7 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                       ),
                       Expanded(
                         child: InkWell(
-                          onTap: () {
-                            setDialogState(() {
-                              selectingTarget = 'end';
-                            });
-                          },
+                          onTap: () => setDialogState(() => selectingTarget = 'end'),
                           borderRadius: BorderRadius.circular(10),
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -247,29 +193,9 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.event_available_rounded, size: 12, color: selectingTarget == 'end' ? const Color(0xFFE65C00) : Colors.white38),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      'END DATE',
-                                      style: TextStyle(
-                                        color: selectingTarget == 'end' ? const Color(0xFFE65C00) : Colors.white38,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                Text('END DATE', style: TextStyle(color: selectingTarget == 'end' ? const Color(0xFFE65C00) : Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
                                 const SizedBox(height: 4),
-                                Text(
-                                  _formatDate(tempEnd),
-                                  style: TextStyle(
-                                    color: selectingTarget == 'end' ? Colors.white : const Color(0xFFF7B731),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                                Text(_formatDate(tempEnd), style: TextStyle(color: selectingTarget == 'end' ? Colors.white : const Color(0xFFF7B731), fontSize: 13, fontWeight: FontWeight.bold)),
                               ],
                             ),
                           ),
@@ -278,56 +204,32 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-
-                  // Month Navigation Row
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        '${monthNames[activeMonth.month - 1]} ${activeMonth.year}',
-                        style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                      ),
+                      Text('${monthNames[activeMonth.month - 1]} ${activeMonth.year}', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
                       Row(
                         children: [
                           IconButton(
                             icon: const Icon(Icons.chevron_left, color: Colors.white70),
-                            onPressed: () {
-                              setDialogState(() {
-                                activeMonth = DateTime(activeMonth.year, activeMonth.month - 1, 1);
-                              });
-                            },
+                            onPressed: () => setDialogState(() => activeMonth = DateTime(activeMonth.year, activeMonth.month - 1, 1)),
                           ),
                           IconButton(
                             icon: const Icon(Icons.chevron_right, color: Colors.white70),
-                            onPressed: () {
-                              setDialogState(() {
-                                activeMonth = DateTime(activeMonth.year, activeMonth.month + 1, 1);
-                              });
-                            },
+                            onPressed: () => setDialogState(() => activeMonth = DateTime(activeMonth.year, activeMonth.month + 1, 1)),
                           ),
                         ],
                       ),
                     ],
                   ),
                   const SizedBox(height: 6),
-
-                  // Weekday Header
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
-                        .map((w) => SizedBox(
-                              width: 38,
-                              child: Text(
-                                w,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold),
-                              ),
-                            ))
+                        .map((w) => SizedBox(width: 38, child: Text(w, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold))))
                         .toList(),
                   ),
                   const SizedBox(height: 6),
-
-                  // Calendar Grid with Independent Start and End selection
                   GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -340,9 +242,7 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                     ),
                     itemBuilder: (context, index) {
                       int dayNumber = index - firstWeekday + 1;
-                      if (dayNumber < 1 || dayNumber > daysInMonth) {
-                        return const SizedBox.shrink();
-                      }
+                      if (dayNumber < 1 || dayNumber > daysInMonth) return const SizedBox.shrink();
 
                       DateTime cellDate = DateTime(activeMonth.year, activeMonth.month, dayNumber);
                       bool isStart = cellDate.year == tempStart.year && cellDate.month == tempStart.month && cellDate.day == tempStart.day;
@@ -366,15 +266,12 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                           setDialogState(() {
                             if (selectingTarget == 'start') {
                               tempStart = DateTime(cellDate.year, cellDate.month, cellDate.day, 0, 0, 0);
-                              // Agar start date end date ke baad chali jaye toh end date ko update karein
                               if (tempStart.isAfter(tempEnd)) {
                                 tempEnd = DateTime(cellDate.year, cellDate.month, cellDate.day, 23, 59, 59);
                               }
-                              // Auto-advance to select End Date next
                               selectingTarget = 'end';
                             } else {
                               tempEnd = DateTime(cellDate.year, cellDate.month, cellDate.day, 23, 59, 59);
-                              // Agar end date start date se pehle select ho jaye toh start ko adjust karein
                               if (tempEnd.isBefore(tempStart)) {
                                 tempStart = DateTime(cellDate.year, cellDate.month, cellDate.day, 0, 0, 0);
                               }
@@ -389,28 +286,16 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                             borderRadius: BorderRadius.circular(8),
                             border: isStart || isEnd ? Border.all(color: Colors.white70, width: 1.2) : null,
                           ),
-                          child: Text(
-                            '$dayNumber',
-                            style: TextStyle(
-                              color: txtColor,
-                              fontWeight: (isStart || isEnd || isInRange) ? FontWeight.bold : FontWeight.normal,
-                              fontSize: 12.5,
-                            ),
-                          ),
+                          child: Text('$dayNumber', style: TextStyle(color: txtColor, fontWeight: (isStart || isEnd || isInRange) ? FontWeight.bold : FontWeight.normal, fontSize: 12.5)),
                         ),
                       );
                     },
                   ),
                   const SizedBox(height: 18),
-
-                  // Actions Buttons
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
-                      ),
+                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
                       const SizedBox(width: 10),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
@@ -428,13 +313,6 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                             toDateController.text = _formatDate(toDate);
                           });
                           Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Filter Applied: ${fromDateController.text} se ${toDateController.text}'),
-                              backgroundColor: const Color(0xFFE65C00),
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
                         },
                         child: const Text('Apply Range', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
@@ -455,43 +333,20 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
       borderRadius: BorderRadius.circular(6),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: const Color(0xFF26211D),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: const Color(0xFF382F2A)),
-        ),
+        decoration: BoxDecoration(color: const Color(0xFF26211D), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFF382F2A))),
         child: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
       ),
     );
   }
 
-  // --- EMBEDDED DIRECT BROWSER .CSV DOWNLOAD TRIGGER ---
+  // --- CROSS-PLATFORM CSV DOWNLOAD TRIGGER ---
   void _downloadCsvFile(String csvContent, String filename) {
     try {
-      if (kIsWeb) {
-        final bytes = utf8.encode('\uFEFF$csvContent');
-        final blob = html.Blob([bytes], 'text/csv;charset=utf-8');
-        final url = html.Url.createObjectUrlFromBlob(blob);
-        final String safeName = filename.endsWith('.csv') ? filename : '$filename.csv';
-
-        final anchor = html.AnchorElement(href: url)
-          ..setAttribute('download', safeName)
-          ..style.display = 'none';
-
-        html.document.body?.children.add(anchor);
-        anchor.click();
-        html.document.body?.children.remove(anchor);
-        html.Url.revokeObjectUrl(url);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('$safeName download ho gaya! (Downloads folder check karein)'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
+      downloadFileCrossPlatform(csvContent, filename);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$filename download ho gaya!'), backgroundColor: Colors.green),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -613,13 +468,7 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
         totalRev += rev;
 
         if (!itemMap.containsKey(key)) {
-          itemMap[key] = {
-            'name': name,
-            'size': size,
-            'qty': qty,
-            'price': price,
-            'revenue': rev,
-          };
+          itemMap[key] = {'name': name, 'size': size, 'qty': qty, 'price': price, 'revenue': rev};
         } else {
           itemMap[key]!['qty'] = (itemMap[key]!['qty'] as int) + qty;
           itemMap[key]!['revenue'] = (itemMap[key]!['revenue'] as double) + rev;
@@ -645,7 +494,6 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
     _downloadCsvFile(csv.toString(), filename);
   }
 
-  // --- EXPORT MODAL ---
   void _openExportReportModal(BuildContext context, List<DocumentSnapshot> allDocs) {
     DateTime exportStart = fromDate;
     DateTime exportEnd = toDate;
@@ -656,12 +504,7 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
         builder: (ctx, setModalState) {
           return AlertDialog(
             backgroundColor: const Color(0xFF1E1A17),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: Color(0xFF2C2520)),
-            ),
-            titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
-            contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF2C2520))),
             title: Row(
               children: const [
                 Icon(Icons.file_download_outlined, color: Color(0xFFE65C00), size: 22),
@@ -679,28 +522,17 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                   onTap: () async {
                     Navigator.pop(ctx);
                     await _openModernRangeDialog(context);
-                    if (context.mounted) {
-                      _openExportReportModal(context, allDocs);
-                    }
+                    if (context.mounted) _openExportReportModal(context, allDocs);
                   },
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF26211D),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFE65C00).withOpacity(0.5)),
-                    ),
+                    decoration: BoxDecoration(color: const Color(0xFF26211D), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFE65C00).withOpacity(0.5))),
                     child: Row(
                       children: [
                         const Icon(Icons.calendar_month_rounded, color: Color(0xFFF7B731), size: 16),
                         const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            '${_formatDate(exportStart)}  to  ${_formatDate(exportEnd)}',
-                            style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
-                          ),
-                        ),
+                        Expanded(child: Text('${_formatDate(exportStart)}  to  ${_formatDate(exportEnd)}', style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold))),
                         const Icon(Icons.edit_calendar_rounded, color: Colors.white54, size: 16),
                       ],
                     ),
@@ -709,38 +541,11 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                 const SizedBox(height: 16),
                 const Text('Choose Report Type:', style: TextStyle(color: Colors.white54, fontSize: 11.5, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
-
-                _buildExportItem(
-                  icon: Icons.receipt_long_rounded,
-                  title: 'Sales Report',
-                  subtitle: 'Bill-wise grand total, taxes, payment mode & dates',
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _generateAndDownloadSalesCsv(allDocs, exportStart, exportEnd);
-                  },
-                ),
+                _buildExportItem(icon: Icons.receipt_long_rounded, title: 'Sales Report', subtitle: 'Bill-wise grand total, taxes & dates', onTap: () { Navigator.pop(ctx); _generateAndDownloadSalesCsv(allDocs, exportStart, exportEnd); }),
                 const SizedBox(height: 8),
-
-                _buildExportItem(
-                  icon: Icons.groups_rounded,
-                  title: 'Customer Report',
-                  subtitle: 'Customer spend history, phone numbers & visits',
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _generateAndDownloadCustomerCsv(allDocs, exportStart, exportEnd);
-                  },
-                ),
+                _buildExportItem(icon: Icons.groups_rounded, title: 'Customer Report', subtitle: 'Customer spend history & visits', onTap: () { Navigator.pop(ctx); _generateAndDownloadCustomerCsv(allDocs, exportStart, exportEnd); }),
                 const SizedBox(height: 8),
-
-                _buildExportItem(
-                  icon: Icons.fastfood_rounded,
-                  title: 'Item Sales Report',
-                  subtitle: 'Item-wise quantity sold, size variants & revenue',
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _generateAndDownloadItemCsv(allDocs, exportStart, exportEnd);
-                  },
-                ),
+                _buildExportItem(icon: Icons.fastfood_rounded, title: 'Item Sales Report', subtitle: 'Item-wise quantity sold & revenue', onTap: () { Navigator.pop(ctx); _generateAndDownloadItemCsv(allDocs, exportStart, exportEnd); }),
               ],
             ),
           );
@@ -755,29 +560,12 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
       borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: const Color(0xFF26211D),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFF382F2A)),
-        ),
+        decoration: BoxDecoration(color: const Color(0xFF26211D), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFF382F2A))),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(color: const Color(0xFFE65C00).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-              child: Icon(icon, color: const Color(0xFFE65C00), size: 18),
-            ),
+            Container(padding: const EdgeInsets.all(7), decoration: BoxDecoration(color: const Color(0xFFE65C00).withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: const Color(0xFFE65C00), size: 18)),
             const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                  const SizedBox(height: 2),
-                  Text(subtitle, style: const TextStyle(color: Colors.white38, fontSize: 10.5)),
-                ],
-              ),
-            ),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)), const SizedBox(height: 2), Text(subtitle, style: const TextStyle(color: Colors.white38, fontSize: 10.5))])),
             const Icon(Icons.download_rounded, color: Colors.greenAccent, size: 18),
           ],
         ),
@@ -795,13 +583,9 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('orders').snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator(color: Color(0xFFE65C00)));
-          }
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFFE65C00)));
 
           var allDocs = snapshot.data!.docs;
-
-          // TODAY METRICS
           var todayDocs = allDocs.where((doc) {
             var data = doc.data() as Map<String, dynamic>;
             Timestamp? t = data['createdAt'] as Timestamp?;
@@ -817,7 +601,6 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
           int todayOrdersCount = todayDocs.length;
           double todayAvgOrderValue = todayOrdersCount > 0 ? (todaySales / todayOrdersCount) : 0.0;
 
-          // LIFETIME CUSTOMERS
           Set<String> allTimeCustomerKeys = {};
           Map<String, double> customerTotalSpendMap = {};
           Map<String, int> customerOrderCountMap = {};
@@ -837,7 +620,6 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
             customerOrderCountMap[key] = (customerOrderCountMap[key] ?? 0) + 1;
           }
 
-          // FILTERED RANGE ORDERS
           var filteredDocs = allDocs.where((doc) {
             var d = doc.data() as Map<String, dynamic>;
             Timestamp? t = d['createdAt'] as Timestamp?;
@@ -872,11 +654,8 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
             }
 
             String status = (d['status'] ?? 'pending').toString().toLowerCase();
-            if (status == 'completed') {
-              completedCount++;
-            } else if (status == 'cancelled') {
-              cancelledCount++;
-            }
+            if (status == 'completed') completedCount++;
+            if (status == 'cancelled') cancelledCount++;
 
             String phone = (d['customerPhone'] ?? '').toString().trim();
             String rawName = (d['customerName'] ?? '').toString().trim();
@@ -926,7 +705,6 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // TOP BAR WITH EXPORT REPORT BUTTON
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -945,44 +723,16 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-
-                    // TODAY METRIC CARDS
                     _buildModernGrid(
                       columns: columns,
                       children: [
-                        _buildModernStatCard(
-                          title: "Today's Sales",
-                          value: "₹${todaySales.toInt()}",
-                          icon: Icons.trending_up_rounded,
-                          accentColor: Colors.greenAccent,
-                          subtitle: "Realtime Collections",
-                        ),
-                        _buildModernStatCard(
-                          title: "Today's Orders",
-                          value: "$todayOrdersCount",
-                          icon: Icons.receipt_long_rounded,
-                          accentColor: Colors.lightBlueAccent,
-                          subtitle: "Total bills placed",
-                        ),
-                        _buildModernStatCard(
-                          title: "Total Customers",
-                          value: "${allTimeCustomerKeys.length}",
-                          icon: Icons.people_alt_rounded,
-                          accentColor: const Color(0xFFF7B731),
-                          subtitle: "In database records",
-                        ),
-                        _buildModernStatCard(
-                          title: "Avg Order Value",
-                          value: "₹${todayAvgOrderValue.toInt()}",
-                          icon: Icons.auto_graph_rounded,
-                          accentColor: Colors.purpleAccent,
-                          subtitle: "Ticket size / order",
-                        ),
+                        _buildModernStatCard(title: "Today's Sales", value: "₹${todaySales.toInt()}", icon: Icons.trending_up_rounded, accentColor: Colors.greenAccent, subtitle: "Realtime Collections"),
+                        _buildModernStatCard(title: "Today's Orders", value: "$todayOrdersCount", icon: Icons.receipt_long_rounded, accentColor: Colors.lightBlueAccent, subtitle: "Total bills placed"),
+                        _buildModernStatCard(title: "Total Customers", value: "${allTimeCustomerKeys.length}", icon: Icons.people_alt_rounded, accentColor: const Color(0xFFF7B731), subtitle: "In database records"),
+                        _buildModernStatCard(title: "Avg Order Value", value: "₹${todayAvgOrderValue.toInt()}", icon: Icons.auto_graph_rounded, accentColor: Colors.purpleAccent, subtitle: "Ticket size / order"),
                       ],
                     ),
                     const SizedBox(height: 28),
-
-                    // SALES REPORT WITH QUICK FILTER + CUSTOM CALENDAR
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -1000,14 +750,9 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-
                     Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1B1715),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF2C2520)),
-                      ),
+                      decoration: BoxDecoration(color: const Color(0xFF1B1715), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF2C2520))),
                       child: Column(
                         children: [
                           Container(
@@ -1030,18 +775,8 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF241E1B),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: const Color(0xFF382F2A)),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        const Icon(Icons.calendar_today_rounded, size: 14, color: Color(0xFFF7B731)),
-                                        const SizedBox(width: 8),
-                                        Text('From: ${fromDateController.text}', style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold)),
-                                      ],
-                                    ),
+                                    decoration: BoxDecoration(color: const Color(0xFF241E1B), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF382F2A))),
+                                    child: Row(children: [const Icon(Icons.calendar_today_rounded, size: 14, color: Color(0xFFF7B731)), const SizedBox(width: 8), Text('From: ${fromDateController.text}', style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold))]),
                                   ),
                                 ),
                               ),
@@ -1052,18 +787,8 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF241E1B),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: const Color(0xFF382F2A)),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        const Icon(Icons.calendar_today_rounded, size: 14, color: Color(0xFFF7B731)),
-                                        const SizedBox(width: 8),
-                                        Text('To: ${toDateController.text}', style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold)),
-                                      ],
-                                    ),
+                                    decoration: BoxDecoration(color: const Color(0xFF241E1B), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF382F2A))),
+                                    child: Row(children: [const Icon(Icons.calendar_today_rounded, size: 14, color: Color(0xFFF7B731)), const SizedBox(width: 8), Text('To: ${toDateController.text}', style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold))]),
                                   ),
                                 ),
                               ),
@@ -1073,33 +798,14 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     Row(
                       children: [
-                        Expanded(
-                          child: _buildModernStatCard(
-                            title: 'Period Total Sales',
-                            value: '₹${periodTotalSales.toInt()}',
-                            icon: Icons.account_balance_wallet_rounded,
-                            accentColor: Colors.greenAccent,
-                            subtitle: '${filteredDocs.length} orders counted',
-                          ),
-                        ),
+                        Expanded(child: _buildModernStatCard(title: 'Period Total Sales', value: '₹${periodTotalSales.toInt()}', icon: Icons.account_balance_wallet_rounded, accentColor: Colors.greenAccent, subtitle: '${filteredDocs.length} orders counted')),
                         const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildModernStatCard(
-                            title: 'Period Orders',
-                            value: '$periodTotalOrders',
-                            icon: Icons.receipt_rounded,
-                            accentColor: Colors.lightBlueAccent,
-                            subtitle: '${fromDateController.text} to ${toDateController.text}',
-                          ),
-                        ),
+                        Expanded(child: _buildModernStatCard(title: 'Period Orders', value: '$periodTotalOrders', icon: Icons.receipt_rounded, accentColor: Colors.lightBlueAccent, subtitle: '${fromDateController.text} to ${toDateController.text}')),
                       ],
                     ),
                     const SizedBox(height: 28),
-
-                    // ORDER ANALYTICS
                     _buildSectionHeader("Order Analytics", Icons.pie_chart_rounded, const Color(0xFFF7B731)),
                     const SizedBox(height: 12),
                     _buildModernGrid(
@@ -1108,14 +814,12 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                         _buildModernStatCard(title: 'Dine-In', value: '$dineInCount', icon: Icons.restaurant_rounded, accentColor: Colors.blueAccent, subtitle: 'Table orders'),
                         _buildModernStatCard(title: 'Takeaway', value: '$takeawayCount', icon: Icons.shopping_bag_rounded, accentColor: Colors.deepOrangeAccent, subtitle: 'Parcel orders'),
                         _buildModernStatCard(title: 'Completed', value: '$completedCount', icon: Icons.check_circle_rounded, accentColor: Colors.greenAccent, subtitle: 'Settled bills'),
-                        _buildModernStatCard(title: 'Cancelled', value: '$cancelledCount', icon: Icons.cancel_rounded, accentColor: Colors.redAccent, subtitle: 'Voided bills (0 total)'),
+                        _buildModernStatCard(title: 'Cancelled', value: '$cancelledCount', icon: Icons.cancel_rounded, accentColor: Colors.redAccent, subtitle: 'Voided bills'),
                         _buildModernStatCard(title: 'Average Bill', value: '₹${periodAvgBill.toInt()}', icon: Icons.payments_rounded, accentColor: Colors.purpleAccent, subtitle: 'Mean order value'),
                         _buildModernStatCard(title: 'Highest Bill', value: '₹${highestBill.toInt()}', icon: Icons.star_rounded, accentColor: const Color(0xFFF7B731), subtitle: 'Single highest order'),
                       ],
                     ),
                     const SizedBox(height: 28),
-
-                    // TOP SELLING ITEMS TABLE
                     _buildSectionHeader("Top Selling Items", Icons.local_fire_department_rounded, const Color(0xFFE65C00)),
                     const SizedBox(height: 12),
                     Container(
@@ -1123,12 +827,7 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                       decoration: BoxDecoration(color: const Color(0xFF1B1715), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF2C2520))),
                       padding: const EdgeInsets.all(16),
                       child: sortedItemsList.isEmpty
-                          ? const Padding(
-                              padding: EdgeInsets.all(20.0),
-                              child: Center(
-                                child: Text('No item sales in this period.', style: TextStyle(color: Colors.white38)),
-                              ),
-                            )
+                          ? const Padding(padding: EdgeInsets.all(20.0), child: Center(child: Text('No item sales in this period.', style: TextStyle(color: Colors.white38))))
                           : Column(
                               children: [
                                 Row(
@@ -1150,14 +849,9 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                                     child: Row(
                                       children: [
                                         Container(
-                                          width: 24,
-                                          height: 24,
+                                          width: 24, height: 24,
                                           alignment: Alignment.center,
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFE65C00).withOpacity(0.15),
-                                            borderRadius: BorderRadius.circular(6),
-                                            border: Border.all(color: const Color(0xFFE65C00).withOpacity(0.4)),
-                                          ),
+                                          decoration: BoxDecoration(color: const Color(0xFFE65C00).withOpacity(0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFFE65C00).withOpacity(0.4))),
                                           child: Text('$idx', style: const TextStyle(color: Color(0xFFE65C00), fontSize: 11, fontWeight: FontWeight.bold)),
                                         ),
                                         const SizedBox(width: 12),
@@ -1172,8 +866,6 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
                             ),
                     ),
                     const SizedBox(height: 28),
-
-                    // CUSTOMER ANALYTICS
                     _buildSectionHeader("Customer Analytics", Icons.supervised_user_circle_rounded, const Color(0xFFF7B731)),
                     const SizedBox(height: 12),
                     _buildModernGrid(
@@ -1199,11 +891,7 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
   Widget _buildSectionHeader(String title, IconData icon, Color accentColor) {
     return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.all(5),
-          decoration: BoxDecoration(color: accentColor.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
-          child: Icon(icon, color: accentColor, size: 16),
-        ),
+        Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: accentColor.withOpacity(0.15), borderRadius: BorderRadius.circular(6)), child: Icon(icon, color: accentColor, size: 16)),
         const SizedBox(width: 8),
         Text(title, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 0.3)),
       ],
@@ -1231,31 +919,16 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 9),
         alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFE65C00) : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-        ),
+        decoration: BoxDecoration(color: isSelected ? const Color(0xFFE65C00) : Colors.transparent, borderRadius: BorderRadius.circular(6)),
         child: Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.white60, fontSize: 12.5, fontWeight: FontWeight.bold)),
       ),
     );
   }
 
-  Widget _buildModernStatCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color accentColor,
-    required String subtitle,
-    bool isText = false,
-  }) {
+  Widget _buildModernStatCard({required String title, required String value, required IconData icon, required Color accentColor, required String subtitle, bool isText = false}) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B1715),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2C2520)),
-        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))],
-      ),
+      decoration: BoxDecoration(color: const Color(0xFF1B1715), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF2C2520)), boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))]),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1263,14 +936,8 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: Text(title.toUpperCase(), style: const TextStyle(color: Colors.white54, fontSize: 10.5, fontWeight: FontWeight.bold, letterSpacing: 0.5), maxLines: 1, overflow: TextOverflow.ellipsis),
-              ),
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(color: accentColor.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
-                child: Icon(icon, color: accentColor, size: 16),
-              ),
+              Expanded(child: Text(title.toUpperCase(), style: const TextStyle(color: Colors.white54, fontSize: 10.5, fontWeight: FontWeight.bold, letterSpacing: 0.5), maxLines: 1, overflow: TextOverflow.ellipsis)),
+              Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: accentColor.withOpacity(0.12), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: accentColor, size: 16)),
             ],
           ),
           Text(value, style: TextStyle(color: accentColor, fontSize: isText ? 16 : 22, fontWeight: FontWeight.w900, letterSpacing: 0.3), maxLines: 1, overflow: TextOverflow.ellipsis),

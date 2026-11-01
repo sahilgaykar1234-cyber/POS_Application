@@ -15,8 +15,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   shared_preferences: ^2.5.6
   url_launcher: ^6.3.0
-  printing: ^5.13.0 # System / Thermal print trigger karne ke liye
-  pdf: ^3.11.0      # Receipt layout render karne ke liye
+  printing: ^5.13.0
+  pdf: ^3.11.0
+  file_picker: ^8.1.2
 
 dev_dependencies:
   flutter_test:
@@ -26,6 +27,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # Flamy Wood Logo Asset
   assets:
     - assets/images/logo.png
