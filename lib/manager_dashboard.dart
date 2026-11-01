@@ -1,6 +1,6 @@
 // ignore_for_file: avoid_web_libraries_in_flutter
-import 'package:file_picker/file_picker.dart'; // Add this import
 import 'dart:convert';
+import 'dart:html' as html;
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -172,7 +172,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     }
   }
 
-  // --- FAST CUSTOMER LOOKUP WITH IN-MEMORY CACHE & PREVIOUS ITEMS ---
   Future<void> _fetchCustomerNameByPhone(String rawPhone) async {
     String phone = rawPhone.trim().replaceAll(RegExp(r'\D'), '');
 
@@ -180,7 +179,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       setState(() => isSearchingCustomer = true);
 
       try {
-        // Query without orderBy to avoid Firestore Composite Index requirements
         var querySnap = await FirebaseFirestore.instance
             .collection('orders')
             .where('customerPhone', isEqualTo: phone)
@@ -197,7 +195,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
             return tB.compareTo(tA);
           });
 
-          // Extract legitimate customer name (skip pure digits or table placeholders)
           String validName = '';
           for (var doc in docs) {
             String r = (doc.data()['customerName'] ?? '').toString();
@@ -260,16 +257,15 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   }
 
   String _formatCustomerDisplayName(String rawName, String? tableNo) {
-    // Kisi bhi tarah ke purane brackets (jaise (Table Test), (Table 1)) ko pehle clean karega
     String clean = rawName
-        .replaceAll(RegExp(r'\s*\([^)]*\)'), '')
+        .replaceAll(r'$1', '')
+        .replaceAll(RegExp(r'\(Table\s*\d+\)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
 
     String t = (tableNo ?? '').trim();
-    if (t.isNotEmpty) {
-      if (int.tryParse(t) != null) {
-        t = 'Table $t';
-      }
+    if (t.isNotEmpty && !t.toLowerCase().startsWith('table')) {
+      t = 'Table $t';
     }
 
     if (clean.isNotEmpty && t.isNotEmpty) {
@@ -371,6 +367,55 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     } catch (e) {
       debugPrint("Error: $e");
     }
+  }
+
+  void _confirmDeleteOrder(BuildContext context, String docId, String customerName) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1A17),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Colors.redAccent, width: 1.2),
+        ),
+        title: const Text(
+          'Delete Order',
+          style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Kya aap "$customerName" ke is order ko permanently delete karna chahte hain?',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await FirebaseFirestore.instance.collection('orders').doc(docId).delete();
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Order successfully delete ho gaya!'),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
+              } catch (e) {
+                debugPrint("Error deleting order: $e");
+              }
+            },
+            child: const Text('Delete 🗑️', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   void updateOrderStatus(String docId, String newStatus) async {
@@ -506,7 +551,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     String rawPhone = customerPhoneController.text.trim();
     String note = specialRequestController.text.trim();
 
-    // Auto-detect and swap if user accidentally typed phone in name or name in phone
     String cleanDigitsInName = rawName.replaceAll(RegExp(r'\D'), '');
     String cleanDigitsInPhone = rawPhone.replaceAll(RegExp(r'\D'), '');
 
@@ -541,7 +585,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
         'subtotal': calcTempSubtotal,
         'hasGst': showGstToggle,
         'gstPercentage': double.tryParse(gstPercentController.text.trim()) ?? 5.0,
-        'status': 'pending', // Ordered (Red)
+        'status': 'pending',
         'kitchenStatus': 'pending',
         'paymentStatus': 'pending',
         'hasNewItemsAdded': false,
@@ -932,32 +976,35 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     );
   }
 
-void _pickAndUploadLogo() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        withData: true, // Web aur Android dono ke liye bytes fetch karega
-      );
+  void _pickAndUploadLogo() {
+    html.FileUploadInputElement uploadInput = html.FileUploadInputElement();
+    uploadInput.accept = 'image/*';
+    uploadInput.click();
 
-      if (result != null && result.files.single.bytes != null) {
-        Uint8List fileBytes = result.files.single.bytes!;
-        String base64Data = base64Encode(fileBytes);
+    uploadInput.onChange.listen((e) {
+      final files = uploadInput.files;
+      if (files != null && files.isNotEmpty) {
+        final file = files[0];
+        final reader = html.FileReader();
 
-        setState(() {
-          shopLogoBase64 = base64Data;
+        reader.onLoadEnd.listen((e) {
+          if (reader.result != null) {
+            String resultStr = reader.result.toString();
+            String base64Data = resultStr.contains(',') ? resultStr.split(',')[1] : resultStr;
+            setState(() {
+              shopLogoBase64 = base64Data;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Logo select ho gaya! "Save" button dabayein save karne ke liye.'),
+                backgroundColor: Color(0xFFE65C00),
+              ),
+            );
+          }
         });
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Logo select ho gaya! "Save" button dabayein save karne ke liye.'),
-            backgroundColor: Color(0xFFE65C00),
-          ),
-        );
+        reader.readAsDataUrl(file);
       }
-    } catch (e) {
-      debugPrint("Error picking logo: $e");
-    }
+    });
   }
 
   void _removeLogo() {
@@ -1058,7 +1105,6 @@ void _pickAndUploadLogo() async {
           return t.toDate().isAfter(startOfToday);
         }).toList();
 
-        // Populate local customer cache in background
         for (var doc in todayOrders) {
           var d = doc.data() as Map<String, dynamic>;
           String p = (d['customerPhone'] ?? '').toString().trim();
@@ -1104,7 +1150,6 @@ void _pickAndUploadLogo() async {
               }
             }
 
-            // Agar physical table nahi hai toh Virtual Table hai
             if (!matchedPhysical && tNo.isNotEmpty) {
               activeVirtualOrders.add(doc);
             }
@@ -1115,25 +1160,7 @@ void _pickAndUploadLogo() async {
           children: [
             Column(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  color: const Color(0xFF221D1A),
-                  child: TextField(
-                    controller: searchFilterController,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Search by table, token, bill, name, mobile...',
-                      hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
-                      prefixIcon: const Icon(Icons.search, color: Colors.white54, size: 18),
-                      filled: true,
-                      fillColor: const Color(0xFF181513),
-                      contentPadding: EdgeInsets.zero,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                    ),
-                    onChanged: (val) => setState(() => searchFilterText = val.toLowerCase().trim()),
-                  ),
-                ),
-
+                // Segment Tabs (Search bar hata diya gaya hai)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -1162,10 +1189,9 @@ void _pickAndUploadLogo() async {
                   ),
                 ),
 
-                // Legend row with prominent "+ Virtual Table" Button
-                // Clean Legend row (Upar ka duplicate button removed)
+                // Clean Legend Row (Upar ka duplicate virtual button hata diya gaya hai)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   color: const Color(0xFF141211),
                   child: Row(
                     children: [
@@ -1190,7 +1216,7 @@ void _pickAndUploadLogo() async {
               ],
             ),
 
-            // Persistent Floating Action Button on Bottom-Right of Orders Screen
+            // Floating Action Button (Neeche wala single button rahega)
             Positioned(
               bottom: 16,
               right: 16,
@@ -1235,7 +1261,6 @@ void _pickAndUploadLogo() async {
       }
     }
 
-    // Filter Virtual Orders based on selected status tab
     var visibleVirtuals = activeVirtualOrders.where((doc) {
       var d = doc.data() as Map<String, dynamic>;
       String st = (d['status'] ?? 'pending').toString().toLowerCase();
@@ -1272,7 +1297,6 @@ void _pickAndUploadLogo() async {
           ),
           itemCount: totalItems,
           itemBuilder: (context, index) {
-            // 1. Regular Physical Tables
             if (index < visibleTables.length) {
               int tableNumber = visibleTables[index];
               DocumentSnapshot? orderDoc = tableOrderMap[tableNumber];
@@ -1373,7 +1397,6 @@ void _pickAndUploadLogo() async {
               );
             }
 
-            // 2. Active Virtual Tables (Disappear when completed!)
             int virtualIndex = index - visibleTables.length;
             DocumentSnapshot vDoc = visibleVirtuals[virtualIndex];
             var vData = vDoc.data() as Map<String, dynamic>;
@@ -1523,7 +1546,7 @@ void _pickAndUploadLogo() async {
     );
   }
 
-    void _openReceiptForOrder(BuildContext context, String docId, Map<String, dynamic> oData) {
+  void _openReceiptForOrder(BuildContext context, String docId, Map<String, dynamic> oData) {
     Map<String, dynamic> bSettings = {
       'shopLogoBase64': shopLogoBase64,
       'shopName': shopNameController.text.trim(),
@@ -1567,7 +1590,6 @@ void _pickAndUploadLogo() async {
           return t.toDate().isAfter(startOfToday);
         }).toList();
 
-        // 1. Separate Active Orders vs Done Orders
         var activeOrders = todayOrders.where((doc) {
           var data = doc.data() as Map<String, dynamic>;
           return (data['status'] ?? 'pending').toString().toLowerCase() != 'completed';
@@ -1578,7 +1600,6 @@ void _pickAndUploadLogo() async {
           return (data['status'] ?? 'pending').toString().toLowerCase() == 'completed';
         }).toList();
 
-        // Sort both by createdAt descending
         int compareDocs(DocumentSnapshot a, DocumentSnapshot b) {
           Timestamp? tA = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
           Timestamp? tB = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
@@ -1591,7 +1612,6 @@ void _pickAndUploadLogo() async {
         activeOrders.sort(compareDocs);
         doneOrders.sort(compareDocs);
 
-        // Put Done orders strictly at the end (last me)
         var orderedList = [...activeOrders, ...doneOrders];
 
         double totalCollectedSales = 0.0;
@@ -1705,6 +1725,9 @@ void _pickAndUploadLogo() async {
                         String displayName = _formatCustomerDisplayName(rawName, table.isNotEmpty ? table : null);
                         double total = (data['totalPrice'] ?? 0.0).toDouble();
                         List items = data['items'] ?? [];
+                        
+                        // Items ki summary list (e.g. Pizza x1, Coke x2)
+                        String itemsSummary = items.map((it) => "${it['name']} (x${it['qty']})").join(', ');
 
                         Timestamp? t = data['createdAt'] as Timestamp?;
                         DateTime orderDt = t?.toDate() ?? DateTime.now();
@@ -1724,7 +1747,6 @@ void _pickAndUploadLogo() async {
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                             child: Row(
                               children: [
-                                // Status Pill
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
@@ -1739,7 +1761,6 @@ void _pickAndUploadLogo() async {
                                 ),
                                 const SizedBox(width: 12),
 
-                                // Order Details
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1755,27 +1776,38 @@ void _pickAndUploadLogo() async {
                                       ),
                                       const SizedBox(height: 3),
                                       Text(
-                                        '$timeStr • ${items.length} items • ₹${total.toInt()}',
+                                        '$timeStr • ₹${total.toInt()}',
                                         style: const TextStyle(color: Color(0xFFF7B731), fontSize: 11.5, fontWeight: FontWeight.w600),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Items: $itemsSummary',
+                                        style: const TextStyle(color: Colors.white60, fontSize: 11),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ],
                                   ),
                                 ),
 
-                                // Direct Print Receipt Button
                                 IconButton(
                                   icon: const Icon(Icons.print_rounded, color: Colors.greenAccent, size: 20),
                                   tooltip: 'Print Receipt',
                                   onPressed: () => _openReceiptForOrder(context, doc.id, data),
                                 ),
 
-                                // Edit Order Button (if not completed)
                                 if (!isDone)
                                   IconButton(
                                     icon: const Icon(Icons.edit_rounded, color: Colors.blueAccent, size: 18),
                                     tooltip: 'Edit Order',
                                     onPressed: () => prepareOrderForm(doc: doc),
                                   ),
+
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                  tooltip: 'Delete Order',
+                                  onPressed: () => _confirmDeleteOrder(context, doc.id, displayName),
+                                ),
                               ],
                             ),
                           ),
@@ -2516,9 +2548,6 @@ void _pickAndUploadLogo() async {
     );
   }
 
-  // =========================================================================
-  // 6. NEW ORDER FORM (WITH PREVIOUS ITEMS HIGHLIGHT + INSTANT REPEAT)
-  // =========================================================================
   Widget _buildOrderFormBody() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('menu_categories').snapshots(),
@@ -2667,7 +2696,6 @@ void _pickAndUploadLogo() async {
                 },
               ),
 
-              // 🟢 REPEAT CUSTOMER PREVIOUS ITEMS BANNER
               if (previousOrderItems.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Container(
