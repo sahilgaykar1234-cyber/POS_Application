@@ -1,8 +1,9 @@
 // ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:convert';
-import 'dart:html' as html;
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:file_picker/file_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'main.dart';
 import 'menu_data.dart';
@@ -976,35 +977,36 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     );
   }
 
-  void _pickAndUploadLogo() {
-    html.FileUploadInputElement uploadInput = html.FileUploadInputElement();
-    uploadInput.accept = 'image/*';
-    uploadInput.click();
+  Future<void> _pickAndUploadLogo() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        withData: true, // Web aur App dono ke liye bytes fetch karega
+      );
 
-    uploadInput.onChange.listen((e) {
-      final files = uploadInput.files;
-      if (files != null && files.isNotEmpty) {
-        final file = files[0];
-        final reader = html.FileReader();
+      if (result != null && result.files.single.bytes != null) {
+        Uint8List fileBytes = result.files.single.bytes!;
+        String base64Data = base64Encode(fileBytes);
 
-        reader.onLoadEnd.listen((e) {
-          if (reader.result != null) {
-            String resultStr = reader.result.toString();
-            String base64Data = resultStr.contains(',') ? resultStr.split(',')[1] : resultStr;
-            setState(() {
-              shopLogoBase64 = base64Data;
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Logo select ho gaya! "Save" button dabayein save karne ke liye.'),
-                backgroundColor: Color(0xFFE65C00),
-              ),
-            );
-          }
+        setState(() {
+          shopLogoBase64 = base64Data;
         });
-        reader.readAsDataUrl(file);
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Logo select ho gaya! "Save" button dabayein save karne ke liye.'),
+            backgroundColor: Color(0xFFE65C00),
+          ),
+        );
       }
-    });
+    } catch (e) {
+      debugPrint("Error picking logo: $e");
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error picking logo: $e'), backgroundColor: Colors.redAccent),
+      );
+    }
   }
 
   void _removeLogo() {
