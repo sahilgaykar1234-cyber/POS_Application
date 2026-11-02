@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'escpos_usb_printer_stub.dart'
+    if (dart.library.js_interop) 'escpos_usb_printer_web.dart';
 
 class PaymentCompleteReceiptScreen extends StatelessWidget {
   final Map<String, dynamic> orderData;
@@ -67,10 +69,19 @@ class PaymentCompleteReceiptScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.print_rounded, color: Colors.white),
             tooltip: 'Print Receipt',
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Sending print job to 80mm thermal printer...'), backgroundColor: Colors.green),
-              );
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                await EscPosUsbPrinter.printReceipt(
+                  order: orderData,
+                  orderId: orderId,
+                  settings: businessSettings ?? {},
+                );
+              } catch (e) {
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Print error: $e'), backgroundColor: Colors.redAccent),
+                );
+              }
             },
           ),
         ],

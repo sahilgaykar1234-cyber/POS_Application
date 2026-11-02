@@ -1,12 +1,15 @@
 // ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:convert';
-import 'dart:html' as html;
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:file_picker/file_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'main.dart';
 import 'menu_data.dart';
 import 'receipt_screen.dart';
+import 'escpos_usb_printer_stub.dart'
+    if (dart.library.js_interop) 'escpos_usb_printer_web.dart';
 import 'customer_contacts_screen.dart';
 import 'reports_analytics_screen.dart';
 
@@ -25,8 +28,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
   String orderTypeTab = 'Dine-In'; // 'Dine-In' or 'Takeaway'
   String selectedStatusFilter = 'All'; // 'All', 'Preparing', 'Payment Pending', 'Completed'
-  final TextEditingController searchFilterController = TextEditingController();
-  String searchFilterText = '';
 
   String salesFilterMode = 'Today';
   DateTime selectedDate = DateTime.now();
@@ -48,7 +49,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   List previousOrderItems = [];
   String previousOrderDateStr = '';
 
-  // Safe declaration (Fixed type definition)
   List tempCart = [];
   String selectedSize = 'Medium';
   int totalTablesCount = 12; // Dynamic table count
@@ -136,7 +136,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
         'email': emailController.text.trim(),
         'gstNumber': gstNumberController.text.trim(),
         'address': addressController.text.trim(),
-
         'receiptHeader': receiptHeaderController.text.trim(),
         'receiptFooter': receiptFooterController.text.trim(),
         'thankYouMessage': thankYouMsgController.text.trim(),
@@ -144,7 +143,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
         'gstPercentage': gstPercentController.text.trim(),
         'currencySymbol': currencySymbolController.text.trim(),
         'currencyCode': currencyCodeController.text.trim(),
-
         'defaultOrderType': defaultOrderType,
         'defaultTax': defaultTaxController.text.trim(),
         'autoGenBillNumber': autoGenBillNumber,
@@ -298,6 +296,97 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       subtotal += ((item['price'] ?? 0.0) * (item['qty'] ?? 1));
     }
     return subtotal;
+  }
+
+  // EZO / GEZHI thermal printer: ESC/POS over WebUSB (escpos_usb_printer.dart)
+  Future<void> printEzoReceipt(Map<String, dynamic> orderData, {String? orderId}) async {
+    try {
+      await EscPosUsbPrinter.printReceipt(
+        order: orderData,
+        orderId: orderId,
+        settings: {
+          'shopLogoBase64': shopLogoBase64,
+          'shopName': shopNameController.text.trim(),
+          'tagline': taglineController.text.trim(),
+          'address': addressController.text.trim(),
+          'mobileNumber': mobileNumberController.text.trim(),
+          'gstNumber': gstNumberController.text.trim(),
+          'receiptHeader': receiptHeaderController.text.trim(),
+          'receiptFooter': receiptFooterController.text.trim(),
+          'thankYouMessage': thankYouMsgController.text.trim(),
+          'showGst': showGstToggle,
+          'gstPercentage': gstPercentController.text.trim(),
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Print error: $e'), backgroundColor: Colors.redAccent),
+      );
+    }
+  }
+
+  // Order form se (place order se pehle ya edit ke time) bill print karna.
+  void _confirmAndPrintDraftOrder() {
+    if (tempCart.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Print ke liye pehle kam se kam ek item add karein!')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1A17),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFFE65C00), width: 1.2),
+        ),
+        title: Row(
+          children: const [
+            Icon(Icons.print_rounded, color: Color(0xFFF7B731), size: 22),
+            SizedBox(width: 8),
+            Text('Print Bill', style: TextStyle(color: Color(0xFFF7B731), fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: Text(
+          'Kya aap is order ka bill (${tempCart.length} items, ₹${calcTempTotal.toInt()}) print karna chahte hain?',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Nahi', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE65C00), foregroundColor: Colors.white),
+            onPressed: () {
+              Navigator.pop(ctx);
+
+              final String rawName = customerNameController.text.trim();
+              final Map<String, dynamic> draft = {
+                'customerName': rawName.isEmpty ? 'Walk-in Guest' : rawName,
+                'customerPhone': customerPhoneController.text.trim(),
+                'tableNo': tableNoController.text.trim(),
+                'items': tempCart.map((e) => Map<String, dynamic>.from(e)).toList(),
+                'subtotal': calcTempSubtotal,
+                'totalPrice': calcTempTotal,
+                'hasGst': showGstToggle,
+                'gstPercentage': double.tryParse(gstPercentController.text.trim()) ?? 5.0,
+                'paymentStatus': editingOrderDoc != null
+                    ? ((editingOrderDoc!.data() as Map<String, dynamic>)['paymentStatus'] ?? 'pending')
+                    : 'pending',
+              };
+
+              printEzoReceipt(draft, orderId: editingOrderDoc?.id);
+            },
+            icon: const Icon(Icons.print_rounded, size: 16),
+            label: const Text('Haan, Print', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   void markOrderAsFinalDone(BuildContext context, String docId, String customerName) {
@@ -813,6 +902,14 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
             overflow: TextOverflow.ellipsis,
           ),
           actions: [
+            if (currentView == 'NewOrder')
+              IconButton(
+                icon: const Icon(Icons.print_rounded, color: Colors.white),
+                tooltip: 'Print Bill',
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                padding: EdgeInsets.zero,
+                onPressed: _confirmAndPrintDraftOrder,
+              ),
             if (currentNavIndex == 4)
               Padding(
                 padding: const EdgeInsets.only(right: 6.0),
@@ -976,35 +1073,32 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     );
   }
 
-  void _pickAndUploadLogo() {
-    html.FileUploadInputElement uploadInput = html.FileUploadInputElement();
-    uploadInput.accept = 'image/*';
-    uploadInput.click();
+  Future<void> _pickAndUploadLogo() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        withData: true,
+      );
 
-    uploadInput.onChange.listen((e) {
-      final files = uploadInput.files;
-      if (files != null && files.isNotEmpty) {
-        final file = files[0];
-        final reader = html.FileReader();
+      if (result != null && result.files.single.bytes != null) {
+        Uint8List fileBytes = result.files.single.bytes!;
+        String base64Data = base64Encode(fileBytes);
 
-        reader.onLoadEnd.listen((e) {
-          if (reader.result != null) {
-            String resultStr = reader.result.toString();
-            String base64Data = resultStr.contains(',') ? resultStr.split(',')[1] : resultStr;
-            setState(() {
-              shopLogoBase64 = base64Data;
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Logo select ho gaya! "Save" button dabayein save karne ke liye.'),
-                backgroundColor: Color(0xFFE65C00),
-              ),
-            );
-          }
+        setState(() {
+          shopLogoBase64 = base64Data;
         });
-        reader.readAsDataUrl(file);
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Logo select ho gaya! "Save" button dabayein save karne ke liye.'),
+            backgroundColor: Color(0xFFE65C00),
+          ),
+        );
       }
-    });
+    } catch (e) {
+      debugPrint("Error picking logo: $e");
+    }
   }
 
   void _removeLogo() {
@@ -1160,7 +1254,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
           children: [
             Column(
               children: [
-                // Segment Tabs (Search bar hata diya gaya hai)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -1189,7 +1282,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                   ),
                 ),
 
-                // Clean Legend Row (Upar ka duplicate virtual button hata diya gaya hai)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   color: const Color(0xFF141211),
@@ -1216,7 +1308,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
               ],
             ),
 
-            // Floating Action Button (Neeche wala single button rahega)
             Positioned(
               bottom: 16,
               right: 16,
@@ -1546,33 +1637,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     );
   }
 
-  void _openReceiptForOrder(BuildContext context, String docId, Map<String, dynamic> oData) {
-    Map<String, dynamic> bSettings = {
-      'shopLogoBase64': shopLogoBase64,
-      'shopName': shopNameController.text.trim(),
-      'tagline': taglineController.text.trim(),
-      'address': addressController.text.trim(),
-      'mobileNumber': mobileNumberController.text.trim(),
-      'gstNumber': gstNumberController.text.trim(),
-      'receiptHeader': receiptHeaderController.text.trim(),
-      'receiptFooter': receiptFooterController.text.trim(),
-      'thankYouMessage': thankYouMsgController.text.trim(),
-      'showGst': showGstToggle,
-      'gstPercentage': gstPercentController.text.trim(),
-    };
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PaymentCompleteReceiptScreen(
-          orderData: oData,
-          orderId: docId,
-          businessSettings: bSettings,
-        ),
-      ),
-    );
-  }
-
   Widget _buildDashboardOverviewBody() {
     DateTime now = DateTime.now();
     DateTime startOfToday = DateTime(now.year, now.month, now.day);
@@ -1725,9 +1789,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                         String displayName = _formatCustomerDisplayName(rawName, table.isNotEmpty ? table : null);
                         double total = (data['totalPrice'] ?? 0.0).toDouble();
                         List items = data['items'] ?? [];
-                        
-                        // Items ki summary list (e.g. Pizza x1, Coke x2)
-                        String itemsSummary = items.map((it) => "${it['name']} (x${it['qty']})").join(', ');
 
                         Timestamp? t = data['createdAt'] as Timestamp?;
                         DateTime orderDt = t?.toDate() ?? DateTime.now();
@@ -1744,69 +1805,70 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                             ),
                           ),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                            child: Row(
+                            padding: const EdgeInsets.fromLTRB(14, 10, 8, 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: statusColor.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: statusColor.withOpacity(0.5)),
-                                  ),
-                                  child: Text(
-                                    statusText.toUpperCase(),
-                                    style: TextStyle(color: statusColor, fontSize: 10.5, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        displayName,
-                                        style: TextStyle(
-                                          color: isDone ? Colors.white70 : Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13.5,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
+                                // ---- Header: status + naam/time + actions ----
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: statusColor.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: statusColor.withOpacity(0.5)),
                                       ),
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        '$timeStr • ₹${total.toInt()}',
-                                        style: const TextStyle(color: Color(0xFFF7B731), fontSize: 11.5, fontWeight: FontWeight.w600),
+                                      child: Text(
+                                        statusText.toUpperCase(),
+                                        style: TextStyle(color: statusColor, fontSize: 10.5, fontWeight: FontWeight.bold),
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'Items: $itemsSummary',
-                                        style: const TextStyle(color: Colors.white60, fontSize: 11),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            displayName,
+                                            style: TextStyle(
+                                              color: isDone ? Colors.white70 : Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '$timeStr  •  ${items.length} item${items.length == 1 ? '' : 's'}',
+                                            style: const TextStyle(color: Colors.white54, fontSize: 11.5),
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.print_rounded, color: Colors.greenAccent, size: 20),
+                                      tooltip: 'Print EZO Receipt',
+                                      onPressed: () => printEzoReceipt(data, orderId: doc.id),
+                                    ),
+                                    if (!isDone)
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_rounded, color: Colors.blueAccent, size: 18),
+                                        tooltip: 'Edit Order',
+                                        onPressed: () => prepareOrderForm(doc: doc),
+                                      ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                      tooltip: 'Delete Order',
+                                      onPressed: () => _confirmDeleteOrder(context, doc.id, displayName),
+                                    ),
+                                  ],
                                 ),
 
-                                IconButton(
-                                  icon: const Icon(Icons.print_rounded, color: Colors.greenAccent, size: 20),
-                                  tooltip: 'Print Receipt',
-                                  onPressed: () => _openReceiptForOrder(context, doc.id, data),
-                                ),
-
-                                if (!isDone)
-                                  IconButton(
-                                    icon: const Icon(Icons.edit_rounded, color: Colors.blueAccent, size: 18),
-                                    tooltip: 'Edit Order',
-                                    onPressed: () => prepareOrderForm(doc: doc),
-                                  ),
-
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
-                                  tooltip: 'Delete Order',
-                                  onPressed: () => _confirmDeleteOrder(context, doc.id, displayName),
+                                // ---- Items + price + GST + total (poori width) ----
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 6, top: 6),
+                                  child: _buildOrderItemsBreakdown(data, isDone),
                                 ),
                               ],
                             ),
@@ -1819,6 +1881,104 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
           ),
         );
       },
+    );
+  }
+
+  String _fmtMoney(num v) => v % 1 == 0 ? '₹${v.toInt()}' : '₹${v.toStringAsFixed(2)}';
+
+  // Dashboard order card: items (qty x name ... amount) + Subtotal / GST / Total.
+  Widget _buildOrderItemsBreakdown(Map<String, dynamic> data, bool isDone) {
+    final List items = (data['items'] as List?) ?? [];
+    final Color textColor = isDone ? Colors.white54 : Colors.white70;
+    const Color lineColor = Color(0xFF2C2520);
+
+    double itemsSum = 0;
+    final List<Widget> rows = [];
+
+    for (final it in items) {
+      final int qty = ((it['qty'] ?? 1) as num).toInt();
+      final double price = ((it['price'] ?? 0) as num).toDouble();
+      final String size = (it['size'] ?? '').toString();
+      final String name = (it['name'] ?? '').toString();
+      final double amount = price * qty;
+      itemsSum += amount;
+
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 30,
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2C2520),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Text('${qty}x', style: const TextStyle(color: Color(0xFFF7B731), fontSize: 11, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name, style: TextStyle(color: isDone ? Colors.white60 : Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    if (size.isNotEmpty && size != 'Standard')
+                      Text('$size  •  ${_fmtMoney(price)} each', style: const TextStyle(color: Colors.white38, fontSize: 10.5)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(_fmtMoney(amount), style: TextStyle(color: textColor, fontSize: 12.5, fontWeight: FontWeight.w700)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final double total = ((data['totalPrice'] ?? itemsSum) as num).toDouble();
+    final double subtotal = ((data['subtotal'] ?? itemsSum) as num).toDouble();
+    final double gstAmount = total - subtotal;
+    final bool hasGst = gstAmount > 0.009;
+    final double? pctNum = double.tryParse((data['gstPercentage'] ?? '').toString());
+    final String pctLabel = pctNum == null ? '' : ' (${pctNum % 1 == 0 ? pctNum.toInt() : pctNum}%)';
+
+    Widget lr(String l, String r, {Color? color, double size = 11.5, FontWeight? weight}) {
+      final st = TextStyle(color: color ?? textColor, fontSize: size, fontWeight: weight);
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 1.5),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [Text(l, style: st), Text(r, style: st)],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF171311),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: lineColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ...rows,
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 5),
+            child: Divider(color: lineColor, height: 1),
+          ),
+          if (hasGst) ...[
+            lr('Subtotal', _fmtMoney(subtotal)),
+            lr('GST$pctLabel', _fmtMoney(double.parse(gstAmount.toStringAsFixed(2))), color: Colors.lightBlueAccent, weight: FontWeight.w600),
+            const SizedBox(height: 2),
+          ],
+          lr('Total', _fmtMoney(total), color: const Color(0xFFF7B731), size: 14, weight: FontWeight.w900),
+        ],
+      ),
     );
   }
 
@@ -2291,9 +2451,9 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                   builder: (ctx) => AlertDialog(
                     backgroundColor: const Color(0xFF1E1A17),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    title: const Text('Connect Thermal Printer', style: TextStyle(color: Color(0xFFF7B731))),
+                    title: const Text('Connect EZO Printer', style: TextStyle(color: Color(0xFFF7B731))),
                     content: const Text(
-                      'Bluetooth / USB / COM port scanner scanning for available 58mm & 80mm thermal printers...',
+                      'Ensure your EZO USB printer is connected and powered on. It will appear directly in the print dialog.',
                       style: TextStyle(color: Colors.white70, fontSize: 13),
                     ),
                     actions: [
@@ -2318,9 +2478,9 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: const [
-                        Text('Connect Thermal Printer', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5)),
+                        Text('Connect EZO Printer', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5)),
                         SizedBox(height: 3),
-                        Text('Scan and select your Bluetooth / COM printer for receipts.', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                        Text('Ready for USB thermal receipts.', style: TextStyle(color: Colors.white54, fontSize: 11)),
                       ],
                     ),
                   ),
