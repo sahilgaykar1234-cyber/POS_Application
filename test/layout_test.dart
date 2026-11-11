@@ -201,6 +201,43 @@ void main() {
       expect(find.text('Section 2'), findsWidgets);
     });
 
+    testWidgets('Manager bottom navigation · ${s.key}', (t) async {
+      var selected = 2;
+      await pumpAt(
+        t,
+        s.value,
+        StatefulBuilder(
+          builder: (ctx, set) => AppShell(
+            bottomNav: true,
+            brandTitle: 'Pizza La Forno',
+            brandSubtitle: 'Manager',
+            destinations: [
+              for (final l in ['Dashboard', 'New order', 'Tables', 'Kitchen', 'Menu', 'Reports', 'Expenses', 'Customers', 'Staff', 'Settings'])
+                ShellDestination(icon: Icons.circle_outlined, label: l, onMobileBar: ['Dashboard', 'New order', 'Tables', 'Menu'].contains(l), badge: l == 'Tables' ? 3 : null),
+            ],
+            selectedIndex: selected,
+            onSelect: (i) => set(() => selected = i),
+            onLogout: () {},
+            body: const Center(child: Text('body')),
+          ),
+        ),
+        AppTheme.light(),
+      );
+      expect(t.takeException(), isNull);
+      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(find.byType(NavigationRail), findsNothing);
+      if (s.value.width >= 1024) {
+        expect(find.text('Settings'), findsOneWidget, reason: 'all 10 fit on desktop');
+        expect(find.text('More'), findsNothing);
+      } else {
+        expect(find.text('More'), findsOneWidget);
+        await t.tap(find.text('More'));
+        await t.pumpAndSettle();
+        expect(find.text('Sign out'), findsOneWidget);
+      }
+      expect(t.takeException(), isNull);
+    });
+
     testWidgets('Settle bill sheet · ${s.key}', (t) async {
       await pumpAt(
         t,

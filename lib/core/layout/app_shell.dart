@@ -43,7 +43,12 @@ class AppShell extends StatelessWidget {
     this.actions = const [],
     this.floatingActionButton,
     this.brandInitial,
+    this.bottomNav = false,
   });
+
+  /// Navigation always in a bottom bar (all screen sizes), like the original
+  /// Manager app. Items that don't fit go under "More".
+  final bool bottomNav;
 
   final String brandTitle;
   final String brandSubtitle;
@@ -63,6 +68,7 @@ class AppShell extends StatelessWidget {
     final size = context.screenSize;
     final p = context.palette;
 
+    if (bottomNav) return _bottom(context);
     if (size == ScreenSize.mobile) return _mobile(context);
 
     final side = size == ScreenSize.desktop ? _Sidebar(shell: this) : _Rail(shell: this);
@@ -81,6 +87,86 @@ class AppShell extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// Indices shown on a bottom bar of [slots] buttons: everything if it
+  /// fits, else (slots - 1) items — "mobile bar" items first — plus More.
+  List<int> _barIndices(int slots) {
+    if (destinations.length <= slots) return [for (var i = 0; i < destinations.length; i++) i];
+    final keep = slots - 1;
+    final preferred = [for (var i = 0; i < destinations.length; i++) if (destinations[i].onMobileBar) i];
+    final rest = [for (var i = 0; i < destinations.length; i++) if (!destinations[i].onMobileBar) i];
+    final chosen = [...preferred, ...rest].take(keep).toList()..sort();
+    return chosen;
+  }
+
+  Widget _bottom(BuildContext context) {
+    final p = context.palette;
+    final width = MediaQuery.sizeOf(context).width;
+    final slots = (width / 96).floor().clamp(5, 12);
+    final barIdx = _barIndices(slots);
+    final hasMore = barIdx.length < destinations.length;
+    final selectedOnBar = barIdx.indexOf(selectedIndex);
+    final navSelected = selectedOnBar >= 0 ? selectedOnBar : (hasMore ? barIdx.length : 0);
+    final wide = width >= Breakpoints.tablet;
+
+    return Scaffold(
+      backgroundColor: p.canvas,
+      appBar: AppBar(
+        titleSpacing: wide ? Space.xl : Space.lg,
+        title: Row(
+          children: [
+            if (wide) ...[
+              _BrandHeader(title: brandTitle, subtitle: brandSubtitle, initial: brandInitial, compact: true),
+              const SizedBox(width: Space.md),
+              Flexible(
+                child: Text(brandTitle, overflow: TextOverflow.ellipsis, style: TextStyle(color: p.inkSubtle, fontSize: 15, fontWeight: FontWeight.w600)),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Space.sm),
+                child: Icon(Icons.chevron_right_rounded, color: p.inkSubtle, size: 20),
+              ),
+            ],
+            Flexible(child: Text(_title, overflow: TextOverflow.ellipsis)),
+          ],
+        ),
+        actions: [
+          ...actions,
+          if (wide) ...[
+            IconButton(
+              tooltip: 'Light / dark',
+              onPressed: () => ThemeController.instance.toggle(context),
+              icon: Icon(ThemeController.instance.isDark(context) ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+            ),
+            IconButton(tooltip: 'Sign out', onPressed: onLogout, icon: const Icon(Icons.logout_rounded)),
+          ],
+          const SizedBox(width: Space.sm),
+        ],
+      ),
+      floatingActionButton: floatingActionButton,
+      body: body,
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: navSelected,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        onDestinationSelected: (i) {
+          if (i < barIdx.length) {
+            onSelect(barIdx[i]);
+          } else {
+            _showMore(context, barIdx);
+          }
+        },
+        destinations: [
+          for (final i in barIdx)
+            NavigationDestination(
+              icon: _badge(context, destinations[i].badge, Icon(destinations[i].icon)),
+              selectedIcon: _badge(context, destinations[i].badge, Icon(destinations[i].selectedIcon)),
+              label: destinations[i].label,
+              tooltip: destinations[i].label,
+            ),
+          if (hasMore) const NavigationDestination(icon: Icon(Icons.menu_rounded), label: 'More'),
         ],
       ),
     );

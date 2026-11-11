@@ -64,7 +64,10 @@ class _ShellFrame extends StatelessWidget {
     required this.builders,
     this.onSwitchMode,
     this.switchLabel,
+    this.bottomNav = false,
   });
+
+  final bool bottomNav;
 
   final String roleLabel;
   final List<ShellDestination> Function(int running) destinations;
@@ -93,6 +96,7 @@ class _ShellFrame extends StatelessWidget {
               if (onSwitchMode != null)
                 TextButton.icon(onPressed: onSwitchMode, icon: const Icon(Icons.swap_horiz_rounded, size: 18), label: Text(switchLabel ?? 'Switch')),
             ],
+            bottomNav: bottomNav,
             body: _LazyStack(index: index, builders: builders),
           );
         },
@@ -124,6 +128,8 @@ class _ManagerShellState extends State<ManagerShell> {
     final me = AuthService.instance.currentUser;
     return _ShellFrame(
       roleLabel: 'Manager',
+      // Navigation at the bottom on every screen size (as in the original app).
+      bottomNav: true,
       index: _i,
       onSelect: _go,
       onSwitchMode: widget.onSwitchMode,
