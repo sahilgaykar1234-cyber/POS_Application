@@ -10,6 +10,7 @@ import '../../core/web/favicon.dart';
 import '../../core/widgets/confirm_dialog.dart';
 import '../customers/customers_screen.dart';
 import '../kitchen/kitchen_screen.dart';
+import '../kitchen/order_alerts_host.dart';
 import '../manager/manager_home_screen.dart';
 import '../menu/menu_management_screen.dart';
 import '../orders/order_model.dart';
@@ -240,11 +241,12 @@ class CaptainShell extends StatelessWidget {
                   wide
                       ? TextButton.icon(onPressed: onSwitchMode, icon: const Icon(Icons.swap_horiz_rounded, size: 18), label: const Text('Manager view'))
                       : IconButton(tooltip: 'Manager view', onPressed: onSwitchMode, icon: const Icon(Icons.swap_horiz_rounded)),
+                const SystemAlertsButton(),
                 IconButton(tooltip: 'Sign out', onPressed: () => _confirmSignOut(context), icon: const Icon(Icons.logout_rounded)),
                 const SizedBox(width: Space.sm),
               ],
             ),
-            body: const KitchenScreen(),
+            body: const OrderAlertsHost(child: KitchenScreen()),
           ),
         );
       },

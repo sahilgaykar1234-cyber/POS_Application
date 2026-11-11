@@ -1,6 +1,8 @@
 // Renders every main Manager/Captain screen with realistic sample data at
 // phone, tablet and desktop sizes (light + dark) and fails on any layout
 // overflow or exception.
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +12,7 @@ import 'package:pos_app/core/layout/app_shell.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
 import 'package:pos_app/features/customers/customers_screen.dart';
 import 'package:pos_app/features/kitchen/kitchen_screen.dart';
+import 'package:pos_app/features/kitchen/order_alerts_host.dart';
 import 'package:pos_app/features/manager/manager_home_screen.dart';
 import 'package:pos_app/features/menu/menu_management_screen.dart';
 import 'package:pos_app/features/menu/menu_models.dart';
@@ -409,6 +412,47 @@ void main() {
       await t.tap(find.text('Cancel'));
       await t.pumpAndSettle();
       expect(t.takeException(), isNull);
+    });
+  }
+
+  for (final s in sizes.entries) {
+    testWidgets('Captain: new order pop-up with chime · ${s.key}', (t) async {
+      final ctrl = StreamController<List<PosOrder>>();
+      var chimes = 0;
+      await pumpAt(
+        t,
+        s.value,
+        OrderAlertsHost(ordersStream: ctrl.stream, chime: () => chimes++, child: KitchenScreen(ordersStream: const Stream.empty())),
+        AppTheme.light(),
+      );
+      ctrl.add(orders());
+      await t.pump();
+      expect(find.byType(Material).evaluate().where((e) => e.widget.key.toString().contains('order-alert')), isEmpty);
+      final fresh = PosOrder('NEW00001', {
+        'customerName': 'Mehta (Table 7)',
+        'tableNo': '7',
+        'status': 'pending',
+        'specialRequest': 'No onion',
+        'items': [
+          for (var i = 0; i < 6; i++) {'name': 'Pizza number $i with a long name', 'size': '10 inch', 'qty': 1},
+          {'name': 'Coke', 'qty': 1, 'custom': true},
+        ],
+        'createdAt': ago(0),
+      });
+      ctrl.add([...orders(), fresh]);
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 400));
+      expect(chimes, 1);
+      expect(find.byKey(const Key('order-alert-NEW00001')), findsOneWidget);
+      expect(find.text('Table 7'), findsOneWidget);
+      expect(find.text('+2 more items'), findsOneWidget);
+      expect(find.text('Note: No onion'), findsOneWidget);
+      expect(t.takeException(), isNull);
+      await t.tap(find.text('OK'));
+      await t.pump();
+      expect(find.byKey(const Key('order-alert-NEW00001')), findsNothing);
+      await t.pumpWidget(const SizedBox());
+      unawaited(ctrl.close());
     });
   }
 }

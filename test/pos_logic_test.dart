@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:pos_app/features/customers/customers_screen.dart';
+import 'package:pos_app/features/kitchen/order_alerts.dart';
 import 'package:pos_app/features/manager/sales_stats.dart';
 import 'package:pos_app/features/menu/menu_models.dart';
 import 'package:pos_app/features/orders/bill.dart';
@@ -499,5 +500,46 @@ void main() {
     expect(ResponsiveGrid.columnsFor(358, minTileWidth: 160, maxColumns: 6, count: 5), 2);
     expect(ResponsiveGrid.columnsFor(760, minTileWidth: 170, maxColumns: 6, count: 6), 3);
     expect(ResponsiveGrid.columnsFor(760, minTileWidth: 170, maxColumns: 6), 4);
+  });
+
+  group('Kitchen order alerts', () {
+    PosOrder o(String id, {String status = 'pending', List<Map<String, dynamic>>? items, String table = '2'}) => PosOrder(id, {
+          'status': status,
+          'tableNo': table,
+          'items': items ?? [{'name': 'Margherita', 'qty': 1}],
+        });
+
+    test('no alerts for orders that already existed when the screen opened', () {
+      final d = OrderAlertDetector();
+      expect(d.update([o('a'), o('b')]), isEmpty);
+      expect(d.update([o('a'), o('b')]), isEmpty);
+    });
+
+    test('new order alerts once', () {
+      final d = OrderAlertDetector()..update([o('a')]);
+      final r = d.update([o('a'), o('n')]);
+      expect(r.map((x) => (x.kind, x.order.id)), [(OrderAlertKind.newOrder, 'n')]);
+      expect(r.single.where, 'Table 2');
+      expect(d.update([o('a'), o('n')]), isEmpty);
+    });
+
+    test('items added alerts; removing or extra off-menu items do not', () {
+      final d = OrderAlertDetector()..update([o('a')]);
+      final more = o('a', items: [{'name': 'Margherita', 'qty': 2}]);
+      expect(d.update([more]).single.kind, OrderAlertKind.itemsAdded);
+      expect(d.update([o('a')]), isEmpty); // back to 1
+      expect(d.update([o('a', items: [{'name': 'Margherita', 'qty': 1}, {'name': 'Coke', 'qty': 3, 'custom': true}])]), isEmpty);
+    });
+
+    test('orders not waiting for the kitchen do not alert', () {
+      final d = OrderAlertDetector()..update([]);
+      expect(d.update([o('p', status: 'preparing'), o('c', status: 'completed'), o('x', items: [{'name': 'Coke', 'qty': 1, 'custom': true}])]), isEmpty);
+    });
+
+    test('takeaway label uses the token', () {
+      final d = OrderAlertDetector()..update([]);
+      final t = PosOrder('t', {'status': 'pending', 'tableNo': '', 'orderType': 'Takeaway', 'tokenNo': 7, 'items': [{'name': 'Pizza', 'qty': 1}]});
+      expect(d.update([t]).single.where, 'Takeaway · Token #7');
+    });
   });
 }
