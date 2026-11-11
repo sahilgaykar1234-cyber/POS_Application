@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../theme/theme_controller.dart';
@@ -44,7 +47,11 @@ class AppShell extends StatelessWidget {
     this.floatingActionButton,
     this.brandInitial,
     this.bottomNav = false,
+    this.brandLogoBase64,
   });
+
+  /// The cafe's uploaded logo (from Settings); shown instead of the initial.
+  final String? brandLogoBase64;
 
   /// Navigation always in a bottom bar (all screen sizes), like the original
   /// Manager app. Items that don't fit go under "More".
@@ -120,7 +127,7 @@ class AppShell extends StatelessWidget {
         title: Row(
           children: [
             if (wide) ...[
-              _BrandHeader(title: brandTitle, subtitle: brandSubtitle, initial: brandInitial, compact: true),
+              _BrandHeader(title: brandTitle, subtitle: brandSubtitle, initial: brandInitial, logo: brandLogoBase64, compact: true),
               const SizedBox(width: Space.md),
               Flexible(
                 child: Text(brandTitle, overflow: TextOverflow.ellipsis, style: TextStyle(color: p.inkSubtle, fontSize: 15, fontWeight: FontWeight.w600)),
@@ -222,7 +229,7 @@ class AppShell extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _BrandHeader(title: brandTitle, subtitle: brandSubtitle, initial: brandInitial),
+                _BrandHeader(title: brandTitle, subtitle: brandSubtitle, initial: brandInitial, logo: brandLogoBase64),
                 const SizedBox(height: Space.sm),
                 for (var i = 0; i < destinations.length; i++)
                   if (!onBar.contains(i))
@@ -291,25 +298,35 @@ class _TopBar extends StatelessWidget {
 }
 
 class _BrandHeader extends StatelessWidget {
-  const _BrandHeader({required this.title, required this.subtitle, this.initial, this.compact = false});
+  const _BrandHeader({required this.title, required this.subtitle, this.initial, this.logo, this.compact = false});
   final String title;
   final String subtitle;
   final String? initial;
+  final String? logo;
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final avatar = Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(color: p.primary, borderRadius: BorderRadius.circular(10)),
-      alignment: Alignment.center,
-      child: Text(
-        (initial ?? (title.isEmpty ? '?' : title[0])).toUpperCase(),
-        style: TextStyle(color: p.onPrimary, fontWeight: FontWeight.w800, fontSize: 18),
-      ),
-    );
+    final bytes = decodeLogo(logo);
+    final Widget avatar = bytes != null
+        ? Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: p.border)),
+            clipBehavior: Clip.antiAlias,
+            child: Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true),
+          )
+        : Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(color: p.primary, borderRadius: BorderRadius.circular(10)),
+            alignment: Alignment.center,
+            child: Text(
+              (initial ?? (title.isEmpty ? '?' : title[0])).toUpperCase(),
+              style: TextStyle(color: p.onPrimary, fontWeight: FontWeight.w800, fontSize: 18),
+            ),
+          );
     if (compact) return Tooltip(message: '$title · $subtitle', child: avatar);
     return Row(
       children: [
@@ -406,7 +423,7 @@ class _Sidebar extends StatelessWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(Space.lg, Space.xl, Space.lg, Space.md),
-                child: _BrandHeader(title: shell.brandTitle, subtitle: shell.brandSubtitle, initial: shell.brandInitial),
+                child: _BrandHeader(title: shell.brandTitle, subtitle: shell.brandSubtitle, initial: shell.brandInitial, logo: shell.brandLogoBase64),
               ),
               Expanded(
                 child: ListView(
@@ -454,7 +471,7 @@ class _Rail extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.only(top: Space.lg, bottom: Space.sm),
-              child: _BrandHeader(title: shell.brandTitle, subtitle: shell.brandSubtitle, initial: shell.brandInitial, compact: true),
+              child: _BrandHeader(title: shell.brandTitle, subtitle: shell.brandSubtitle, initial: shell.brandInitial, logo: shell.brandLogoBase64, compact: true),
             ),
             Expanded(
               child: NavigationRail(
@@ -504,4 +521,21 @@ class _ThemeTile extends StatelessWidget {
       onTap: () => ThemeController.instance.toggle(context),
     );
   }
+}
+
+String? _logoKey;
+Uint8List? _logoBytes;
+
+/// Decodes (and remembers) the cafe logo so it isn't re-decoded every build.
+Uint8List? decodeLogo(String? b64) {
+  if (b64 == null || b64.isEmpty) return null;
+  if (b64 != _logoKey) {
+    try {
+      _logoBytes = base64Decode(b64);
+    } catch (_) {
+      _logoBytes = null;
+    }
+    _logoKey = b64;
+  }
+  return _logoBytes;
 }

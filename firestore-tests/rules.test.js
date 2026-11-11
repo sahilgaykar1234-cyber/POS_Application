@@ -86,17 +86,19 @@ test('manager cannot change cafe profile/subscription or escalate', async () => 
   await assertFails(setDoc(doc(db, 'subscriptionPayments/x'), { cafeId: 'A', amount: 1 }));
 });
 
-test('captain: takes orders and settles, but cannot delete or touch the menu', async () => {
+test('captain: kitchen status only (no new orders, no billing, no delete)', async () => {
   await seed();
   const db = ctx.captainA();
   await assertSucceeds(getDoc(doc(db, 'cafes/A/orders/o1')));
   await assertSucceeds(updateDoc(doc(db, 'cafes/A/orders/o1'), { status: 'preparing', kitchenStatus: 'preparing' }));
-  await assertSucceeds(addDoc(collection(db, 'cafes/A/orders'), { totalPrice: 1, status: 'pending' }));
-  await assertSucceeds(updateDoc(doc(db, 'cafes/A/orders/o1'), { paymentStatus: 'paid_cash', status: 'completed' }));
+  await assertSucceeds(updateDoc(doc(db, 'cafes/A/orders/o1'), { status: 'ready', kitchenStatus: 'ready' }));
+  await assertFails(updateDoc(doc(db, 'cafes/A/orders/o1'), { totalPrice: 0 }), 'cannot change bill');
+  await assertFails(updateDoc(doc(db, 'cafes/A/orders/o1'), { paymentStatus: 'paid_cash' }), 'cannot settle');
+  await assertFails(updateDoc(doc(db, 'cafes/A/orders/o1'), { status: 'completed', kitchenStatus: 'completed' }));
+  await assertFails(addDoc(collection(db, 'cafes/A/orders'), { totalPrice: 1 }), 'cannot create orders');
   await assertFails(deleteDoc(doc(db, 'cafes/A/orders/o1')));
   await assertFails(setDoc(doc(db, 'cafes/A/menuItems/i9'), { name: 'x' }));
   await assertFails(getDoc(doc(db, 'cafes/B/orders/o1')));
-  await assertFails(addDoc(collection(db, 'cafes/B/orders'), { totalPrice: 1 }));
 });
 
 test('users collection: managers see only their cafe staff; nobody writes', async () => {

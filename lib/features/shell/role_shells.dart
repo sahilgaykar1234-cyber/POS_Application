@@ -3,7 +3,12 @@ import 'package:flutter/material.dart';
 import '../../core/auth/auth_gate.dart';
 import '../../core/auth/auth_service.dart';
 import '../../core/data/firestore_paths.dart';
+import '../../core/config/app_config.dart';
 import '../../core/layout/app_shell.dart';
+import '../../core/layout/breakpoints.dart';
+import '../../core/theme/theme_controller.dart';
+import '../../core/theme/tokens.dart';
+import '../../core/web/favicon.dart';
 import '../../core/widgets/confirm_dialog.dart';
 import '../customers/customers_screen.dart';
 import '../kitchen/kitchen_screen.dart';
@@ -54,6 +59,17 @@ Future<void> _confirmSignOut(BuildContext context) async {
 /// Running orders count for the Tables badge.
 Stream<int> _runningCount() => OrderService.instance.watchAll().map((l) => todaysOrders(l).where((o) => o.isActive).length);
 
+/// Browser tab: cafe name + uploaded logo as favicon (web only).
+Widget _brandTab({required BuildContext context, required BusinessSettings? settings, required Widget child}) {
+  applyFavicon(settings?.logoBase64);
+  final name = settings?.shopName ?? '';
+  return Title(
+    title: name.isEmpty ? AppConfig.appName : '$name · ${AppConfig.appName}',
+    color: context.palette.primary,
+    child: child,
+  );
+}
+
 class _ShellFrame extends StatelessWidget {
   const _ShellFrame({
     required this.roleLabel,
@@ -84,19 +100,24 @@ class _ShellFrame extends StatelessWidget {
         stream: _runningCount(),
         builder: (context, running) {
           final name = s.data?.shopName ?? '';
-          return AppShell(
-            brandTitle: name.isEmpty ? 'My Cafe' : name,
-            brandSubtitle: roleLabel,
-            destinations: destinations(running.data ?? 0),
-            selectedIndex: index,
-            onSelect: onSelect,
-            onLogout: () => _confirmSignOut(context),
-            actions: [
-              if (onSwitchMode != null)
-                TextButton.icon(onPressed: onSwitchMode, icon: const Icon(Icons.swap_horiz_rounded, size: 18), label: Text(switchLabel ?? 'Switch')),
-            ],
-            bottomNav: bottomNav,
-            body: _LazyStack(index: index, builders: builders),
+          return _brandTab(
+            context: context,
+            settings: s.data,
+            child: AppShell(
+              brandTitle: name.isEmpty ? 'My Cafe' : name,
+              brandSubtitle: roleLabel,
+              brandLogoBase64: s.data?.logoBase64,
+              destinations: destinations(running.data ?? 0),
+              selectedIndex: index,
+              onSelect: onSelect,
+              onLogout: () => _confirmSignOut(context),
+              actions: [
+                if (onSwitchMode != null)
+                  TextButton.icon(onPressed: onSwitchMode, icon: const Icon(Icons.swap_horiz_rounded, size: 18), label: Text(switchLabel ?? 'Switch')),
+              ],
+              bottomNav: bottomNav,
+              body: _LazyStack(index: index, builders: builders),
+            ),
           );
         },
       ),
@@ -117,9 +138,12 @@ class ManagerShell extends StatefulWidget {
 class _ManagerShellState extends State<ManagerShell> {
   int _i = 0;
 
-  static const _pos = 1, _tables = 2;
+  static const _tables = 1;
 
   void _go(int i) => setState(() => _i = i);
+
+  /// New orders open from Tables (tap a free table) or the dashboard button.
+  void _newOrder() => Navigator.push(context, MaterialPageRoute(builder: (_) => const PosScreen(standalone: true)));
 
   @override
   Widget build(BuildContext context) {
@@ -135,18 +159,16 @@ class _ManagerShellState extends State<ManagerShell> {
       switchLabel: 'Captain view',
       destinations: (running) => [
         const ShellDestination(icon: Icons.space_dashboard_outlined, selectedIcon: Icons.space_dashboard, label: 'Dashboard', onMobileBar: true),
-        const ShellDestination(icon: Icons.point_of_sale_outlined, selectedIcon: Icons.point_of_sale, label: 'New order', onMobileBar: true),
         ShellDestination(icon: Icons.table_restaurant_outlined, selectedIcon: Icons.table_restaurant, label: 'Tables', badge: running, onMobileBar: true),
-        const ShellDestination(icon: Icons.soup_kitchen_outlined, selectedIcon: Icons.soup_kitchen, label: 'Kitchen'),
-        const ShellDestination(icon: Icons.restaurant_menu_outlined, selectedIcon: Icons.restaurant_menu, label: 'Menu', section: 'Manage', onMobileBar: true),
+        const ShellDestination(icon: Icons.soup_kitchen_outlined, selectedIcon: Icons.soup_kitchen, label: 'Kitchen', onMobileBar: true),
+        const ShellDestination(icon: Icons.restaurant_menu_outlined, selectedIcon: Icons.restaurant_menu, label: 'Menu', onMobileBar: true),
         const ShellDestination(icon: Icons.insights_outlined, selectedIcon: Icons.insights, label: 'Reports'),
         const ShellDestination(icon: Icons.groups_outlined, selectedIcon: Icons.groups, label: 'Customers'),
         const ShellDestination(icon: Icons.badge_outlined, selectedIcon: Icons.badge, label: 'Staff'),
         const ShellDestination(icon: Icons.settings_outlined, selectedIcon: Icons.settings, label: 'Settings'),
       ],
       builders: [
-        (_) => ManagerHomeScreen(onNewOrder: () => _go(_pos), onOpenTables: () => _go(_tables)),
-        (_) => PosScreen(onDone: () {}),
+        (_) => ManagerHomeScreen(onNewOrder: _newOrder, onOpenTables: () => _go(_tables)),
         (_) => const OrdersBoardScreen(canDelete: true),
         (_) => const KitchenScreen(),
         (_) => MenuManagementScreen(cafeId: cafeId),
@@ -159,35 +181,74 @@ class _ManagerShellState extends State<ManagerShell> {
   }
 }
 
-class CaptainShell extends StatefulWidget {
+/// Captain: only the kitchen board. Orders come from the Manager; the
+/// Captain just moves them New → Preparing → Ready.
+class CaptainShell extends StatelessWidget {
   const CaptainShell({super.key, this.onSwitchMode});
   final VoidCallback? onSwitchMode;
 
   @override
-  State<CaptainShell> createState() => _CaptainShellState();
-}
-
-class _CaptainShellState extends State<CaptainShell> {
-  int _i = 0;
-
-  @override
   Widget build(BuildContext context) {
-    return _ShellFrame(
-      roleLabel: 'Captain',
-      index: _i,
-      onSelect: (i) => setState(() => _i = i),
-      onSwitchMode: widget.onSwitchMode,
-      switchLabel: 'Manager view',
-      destinations: (running) => [
-        const ShellDestination(icon: Icons.point_of_sale_outlined, selectedIcon: Icons.point_of_sale, label: 'New order', onMobileBar: true),
-        ShellDestination(icon: Icons.table_restaurant_outlined, selectedIcon: Icons.table_restaurant, label: 'Tables', badge: running, onMobileBar: true),
-        const ShellDestination(icon: Icons.soup_kitchen_outlined, selectedIcon: Icons.soup_kitchen, label: 'Kitchen', onMobileBar: true),
-      ],
-      builders: [
-        (_) => PosScreen(onDone: () {}),
-        (_) => const OrdersBoardScreen(canDelete: false),
-        (_) => const KitchenScreen(),
-      ],
+    return StreamBuilder<BusinessSettings>(
+      stream: BusinessSettingsRepository.instance.watch(),
+      builder: (context, s) {
+        final p = context.palette;
+        final name = (s.data?.shopName ?? '').isEmpty ? 'My Cafe' : s.data!.shopName;
+        final logo = decodeLogo(s.data?.logoBase64);
+        final wide = !context.isMobile;
+        return _brandTab(
+          context: context,
+          settings: s.data,
+          child: Scaffold(
+            backgroundColor: p.canvas,
+            appBar: AppBar(
+              titleSpacing: wide ? Space.xl : Space.lg,
+              title: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: logo == null ? p.primary : Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: logo == null ? null : Border.all(color: p.border),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    alignment: Alignment.center,
+                    child: logo != null
+                        ? Image.memory(logo, fit: BoxFit.contain, gaplessPlayback: true)
+                        : Text(name[0].toUpperCase(), style: TextStyle(color: p.onPrimary, fontWeight: FontWeight.w800, fontSize: 18)),
+                  ),
+                  const SizedBox(width: Space.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                        Text('Captain · Kitchen', style: TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w500)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                if (onSwitchMode != null)
+                  wide
+                      ? TextButton.icon(onPressed: onSwitchMode, icon: const Icon(Icons.swap_horiz_rounded, size: 18), label: const Text('Manager view'))
+                      : IconButton(tooltip: 'Manager view', onPressed: onSwitchMode, icon: const Icon(Icons.swap_horiz_rounded)),
+                IconButton(
+                  tooltip: 'Light / dark',
+                  onPressed: () => ThemeController.instance.toggle(context),
+                  icon: Icon(ThemeController.instance.isDark(context) ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+                ),
+                IconButton(tooltip: 'Sign out', onPressed: () => _confirmSignOut(context), icon: const Icon(Icons.logout_rounded)),
+                const SizedBox(width: Space.sm),
+              ],
+            ),
+            body: const KitchenScreen(),
+          ),
+        );
+      },
     );
   }
 }

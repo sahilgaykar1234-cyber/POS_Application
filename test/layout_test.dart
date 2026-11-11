@@ -205,8 +205,8 @@ void main() {
             brandTitle: 'Pizza La Forno',
             brandSubtitle: 'Manager',
             destinations: [
-              for (final l in ['Dashboard', 'New order', 'Tables', 'Kitchen', 'Menu', 'Reports', 'Customers', 'Staff', 'Settings'])
-                ShellDestination(icon: Icons.circle_outlined, label: l, onMobileBar: ['Dashboard', 'New order', 'Tables', 'Menu'].contains(l), badge: l == 'Tables' ? 3 : null),
+              for (final l in ['Dashboard', 'Tables', 'Kitchen', 'Menu', 'Reports', 'Customers', 'Staff', 'Settings'])
+                ShellDestination(icon: Icons.circle_outlined, label: l, onMobileBar: ['Dashboard', 'Tables', 'Kitchen', 'Menu'].contains(l), badge: l == 'Tables' ? 3 : null),
             ],
             selectedIndex: selected,
             onSelect: (i) => set(() => selected = i),
@@ -219,8 +219,9 @@ void main() {
       expect(t.takeException(), isNull);
       expect(find.byType(NavigationBar), findsOneWidget);
       expect(find.byType(NavigationRail), findsNothing);
-      if (s.value.width >= 1024) {
-        expect(find.text('Settings'), findsOneWidget, reason: 'all sections fit on desktop');
+      final slots = (s.value.width / 96).floor().clamp(5, 12);
+      if (8 <= slots) {
+        expect(find.text('Settings'), findsOneWidget, reason: 'all sections fit');
         expect(find.text('More'), findsNothing);
       } else {
         expect(find.text('More'), findsOneWidget);

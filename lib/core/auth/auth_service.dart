@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../config/app_config.dart';
 import '../data/firestore_paths.dart';
 import '../theme/theme_controller.dart';
+import '../web/favicon.dart';
 import 'app_user.dart';
 
 /// All authentication goes through here. Passwords are handled entirely by
@@ -62,6 +63,7 @@ class AuthService {
     currentUser = null;
     FirestorePaths.setActiveCafe(null);
     ThemeController.instance.legacyAdmin.value = false;
+    applyFavicon(null); // back to the default icon on the login screen
     await _auth.signOut();
   }
 

@@ -5,6 +5,7 @@ import '../../core/layout/breakpoints.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/ui.dart';
+import '../menu/menu_models.dart' show formatPrice;
 import '../orders/bill.dart';
 import '../orders/order_details_sheet.dart';
 import '../orders/order_model.dart';
@@ -137,24 +138,13 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
               ? Padding(padding: const EdgeInsets.symmetric(vertical: Space.lg), child: Text('No orders yet today.', style: TextStyle(color: p.inkSubtle)))
               : Column(
                   children: [
-                    for (final o in recent.take(8))
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        minTileHeight: 56,
-                        title: Text(o.displayName, style: const TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: Text('${o.billNo} · ${o.itemCount} items · ${Fmt.dateTime(o.createdAt).split(', ').last}'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (!context.isMobile) ...[
-                              StatusChip(o.isActive ? o.statusLabel : (o.isPaid ? 'Paid' : o.statusLabel)),
-                              const SizedBox(width: Space.md),
-                            ],
-                            MoneyText(o.totalPrice, style: const TextStyle(fontWeight: FontWeight.w700)),
-                          ],
-                        ),
-                        onTap: o.isActive ? () => showOrderDetailsSheet(context, o, settings, canDelete: true) : null,
+                    for (var i = 0; i < recent.take(8).length; i++) ...[
+                      if (i > 0) Divider(height: 1, color: p.border),
+                      _RecentBill(
+                        order: recent[i],
+                        onTap: recent[i].isActive ? () => showOrderDetailsSheet(context, recent[i], settings, canDelete: true) : null,
                       ),
+                    ],
                   ],
                 ),
         ),
@@ -398,6 +388,94 @@ class _PaymentSplit extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// One bill in "Recent bills": header + every item with qty, size and price.
+class _RecentBill extends StatelessWidget {
+  const _RecentBill({required this.order, this.onTap});
+  final PosOrder order;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final o = order;
+    final time = Fmt.dateTime(o.createdAt).split(', ').last;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: Radii.controlR,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: Space.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(o.displayName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                      Text('${o.billNo} · $time · ${o.paymentLabel}', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                StatusChip(o.isActive ? o.statusLabel : (o.isPaid ? 'Paid' : o.statusLabel)),
+              ],
+            ),
+            const SizedBox(height: Space.sm),
+            for (final it in o.items)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(width: 32, child: Text('${it['qty'] ?? 1}×', style: TextStyle(color: p.inkSubtle, fontWeight: FontWeight.w600))),
+                    Expanded(
+                      child: Text(
+                        '${it['name']}${(it['size'] ?? 'Standard') != 'Standard' ? ' (${it['size']})' : ''}'
+                        '  ·  ₹${formatPrice(((it['price'] ?? 0) as num).toDouble())} each',
+                        style: TextStyle(color: p.inkMuted, fontSize: 13),
+                      ),
+                    ),
+                    Text(
+                      Fmt.money(((it['price'] ?? 0) as num) * ((it['qty'] ?? 1) as num)),
+                      style: const TextStyle(fontSize: 13, fontFeatures: [FontFeature.tabularFigures()]),
+                    ),
+                  ],
+                ),
+              ),
+            if (o.discount > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Row(children: [
+                  const SizedBox(width: 32),
+                  Expanded(child: Text('Discount', style: TextStyle(color: p.primaryHover, fontSize: 13))),
+                  Text('− ₹${o.discount.toStringAsFixed(2)}', style: TextStyle(color: p.primaryHover, fontSize: 13)),
+                ]),
+              ),
+            if (o.gstAmount > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Row(children: [
+                  const SizedBox(width: 32),
+                  Expanded(child: Text('GST', style: TextStyle(color: p.inkSubtle, fontSize: 13))),
+                  Text('₹${o.gstAmount.toStringAsFixed(2)}', style: TextStyle(color: p.inkSubtle, fontSize: 13)),
+                ]),
+              ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const SizedBox(width: 32),
+                const Expanded(child: Text('Total', style: TextStyle(fontWeight: FontWeight.w700))),
+                MoneyText(o.totalPrice, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
