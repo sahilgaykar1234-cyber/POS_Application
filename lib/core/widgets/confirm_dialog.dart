@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+import '../theme/tokens.dart';
 
 /// Confirmation for destructive actions. When [confirmText] is set, the user
 /// must type it exactly before the confirm button is enabled, which prevents
@@ -21,61 +21,40 @@ Future<bool> showDangerConfirmDialog(
     barrierDismissible: false,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setDialogState) {
-        final canConfirm =
-            confirmText == null || controller.text.trim() == confirmText;
+        final p = ctx.palette;
+        final canConfirm = confirmText == null || controller.text.trim() == confirmText;
         return AlertDialog(
-          backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: AppColors.danger, width: 1.2),
+          icon: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(color: p.dangerTint, shape: BoxShape.circle),
+            child: Icon(Icons.warning_amber_rounded, color: p.danger),
           ),
-          title: Row(
-            children: [
-              const Icon(Icons.warning_amber_rounded, color: AppColors.danger),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(message, style: const TextStyle(color: Colors.white70)),
-                if (confirmText != null) ...[
-                  const SizedBox(height: 14),
-                  Text(
-                    'Confirm karne ke liye "$confirmText" type karein:',
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
-                  ),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: controller,
-                    autofocus: true,
-                    onChanged: (_) => setDialogState(() {}),
-                    decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
-                  ),
+          title: Text(title, textAlign: TextAlign.center),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(message, style: TextStyle(color: p.inkMuted)),
+                  if (confirmText != null) ...[
+                    const SizedBox(height: Space.lg),
+                    Text('Type "$confirmText" to confirm:', style: TextStyle(color: p.inkSubtle, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    TextField(controller: controller, autofocus: true, onChanged: (_) => setDialogState(() {})),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.danger,
-                foregroundColor: Colors.white,
-              ),
+            OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: p.danger, foregroundColor: Colors.white),
               onPressed: canConfirm ? () => Navigator.pop(ctx, true) : null,
-              child: Text(confirmLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
+              child: Text(confirmLabel),
             ),
           ],
         );
@@ -86,4 +65,24 @@ Future<bool> showDangerConfirmDialog(
   // Not disposing `controller` here on purpose: the dialog's exit animation can
   // still rebuild the TextField after pop, and a disposed controller would throw.
   return result ?? false;
+}
+
+/// Simple yes/no confirmation (non-destructive).
+Future<bool> showConfirmDialog(BuildContext context,
+    {required String title, required String message, String confirmLabel = 'Confirm'}) async {
+  final r = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Text(message, style: TextStyle(color: ctx.palette.inkMuted)),
+      ),
+      actions: [
+        OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(confirmLabel)),
+      ],
+    ),
+  );
+  return r ?? false;
 }

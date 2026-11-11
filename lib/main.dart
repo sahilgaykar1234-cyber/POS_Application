@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'core/auth/auth_gate.dart';
 import 'core/config/app_config.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,6 +30,8 @@ void main() async {
     cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
   );
 
+  await ThemeController.instance.load();
+
   runApp(const PosApp());
 }
 
@@ -37,12 +40,18 @@ class PosApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: AppConfig.appName,
-      theme: AppTheme.dark,
-      // Every role signs in here; AuthGate routes by server-assigned role.
-      home: const AuthGate(),
+    final themes = ThemeController.instance;
+    return ListenableBuilder(
+      listenable: Listenable.merge([themes, themes.legacyAdmin]),
+      builder: (context, _) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: AppConfig.appName,
+        theme: themes.legacyAdmin.value ? AppTheme.legacyAdmin : AppTheme.light(),
+        darkTheme: themes.legacyAdmin.value ? AppTheme.legacyAdmin : AppTheme.dark(),
+        themeMode: themes.value,
+        // Every role signs in here; AuthGate routes by server-assigned role.
+        home: const AuthGate(),
+      ),
     );
   }
 }

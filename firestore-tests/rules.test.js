@@ -86,17 +86,29 @@ test('manager cannot change cafe profile/subscription or escalate', async () => 
   await assertFails(setDoc(doc(db, 'subscriptionPayments/x'), { cafeId: 'A', amount: 1 }));
 });
 
-test('captain: kitchen status only', async () => {
+test('captain: takes orders and settles, but cannot delete or touch menu/expenses', async () => {
   await seed();
   const db = ctx.captainA();
   await assertSucceeds(getDoc(doc(db, 'cafes/A/orders/o1')));
   await assertSucceeds(updateDoc(doc(db, 'cafes/A/orders/o1'), { status: 'preparing', kitchenStatus: 'preparing' }));
-  await assertFails(updateDoc(doc(db, 'cafes/A/orders/o1'), { totalPrice: 0 }), 'cannot change bill');
-  await assertFails(updateDoc(doc(db, 'cafes/A/orders/o1'), { status: 'completed', kitchenStatus: 'completed' }));
+  await assertSucceeds(addDoc(collection(db, 'cafes/A/orders'), { totalPrice: 1, status: 'pending' }));
+  await assertSucceeds(updateDoc(doc(db, 'cafes/A/orders/o1'), { paymentStatus: 'paid_cash', status: 'completed' }));
   await assertFails(deleteDoc(doc(db, 'cafes/A/orders/o1')));
-  await assertFails(addDoc(collection(db, 'cafes/A/orders'), { totalPrice: 1 }));
   await assertFails(setDoc(doc(db, 'cafes/A/menuItems/i9'), { name: 'x' }));
+  await assertFails(getDocs(collection(db, 'cafes/A/expenses')));
+  await assertFails(addDoc(collection(db, 'cafes/A/expenses'), { amount: 1 }));
   await assertFails(getDoc(doc(db, 'cafes/B/orders/o1')));
+  await assertFails(addDoc(collection(db, 'cafes/B/orders'), { totalPrice: 1 }));
+});
+
+test('expenses: manager of the cafe only', async () => {
+  await seed();
+  const m = ctx.managerA();
+  await assertSucceeds(addDoc(collection(m, 'cafes/A/expenses'), { amount: 500, category: 'Rent' }));
+  await assertSucceeds(getDocs(collection(m, 'cafes/A/expenses')));
+  await assertFails(getDocs(collection(ctx.managerB(), 'cafes/A/expenses')));
+  await assertFails(addDoc(collection(ctx.managerB(), 'cafes/A/expenses'), { amount: 1 }));
+  await assertSucceeds(getDocs(collection(ctx.superAdmin(), 'cafes/A/expenses')));
 });
 
 test('users collection: managers see only their cafe staff; nobody writes', async () => {

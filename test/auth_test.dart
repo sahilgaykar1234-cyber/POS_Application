@@ -87,7 +87,7 @@ void main() {
   testWidgets('MessageScreen shows action', (tester) async {
     var tapped = false;
     await tester.pumpWidget(MaterialApp(
-      theme: AppTheme.dark,
+      theme: AppTheme.light(),
       home: MessageScreen(
         icon: Icons.block,
         title: 'Blocked',

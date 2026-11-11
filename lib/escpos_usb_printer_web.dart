@@ -472,11 +472,18 @@ class EscPosUsbPrinter {
             (settings['gstPercentage'] ?? order['gstPercentage'] ?? '5')
                 .toString()) ??
         5.0;
+    // Discount (if any) is taken off before GST; old bills have none, so the
+    // numbers below are unchanged for them.
+    final discount = ((order['discountGiven'] ?? 0) as num).toDouble();
+    final taxable = subtotal - discount;
     final taxAmount = showGst
-        ? (total - subtotal > 0 ? total - subtotal : subtotal * (gstPct / 100.0))
+        ? (total - taxable > 0 ? total - taxable : taxable * (gstPct / 100.0))
         : 0.0;
 
     _lr('Subtotal:', _money(subtotal));
+    if (discount > 0) {
+      _lr('Discount:', '-${_money(discount)}');
+    }
     if (showGst) {
       _lr('GST ($gstPct%):', _money(taxAmount));
     }
@@ -491,7 +498,7 @@ class EscPosUsbPrinter {
     // ---- Footer ----
     _centerText(_s(settings['thankYouMessage']), bold: true);
     _centerText(_s(settings['receiptFooter']));
-    _centerText('* SOFTWARE POWERED BY POS APP *');
+    _centerText('* POWERED BY CAFE POS *');
 
     _raw([0x0A, 0x0A, 0x0A, 0x0A]); // feed
     _raw([0x1D, 0x56, 0x42, 0x00]); // cut (cutter na ho to ignore)

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/auth/auth_service.dart';
 import '../../core/config/app_config.dart';
-import '../../core/theme/app_theme.dart';
+import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_logo.dart';
 
 /// Form validators, kept public so they can be unit-tested.
@@ -82,7 +82,6 @@ class _LoginScreenState extends State<LoginScreen> {
     final email = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
         title: const Text('Reset password'),
         content: Form(
           key: formKey,
@@ -90,10 +89,10 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Enter your account email. We will send you a link to set a new password.\n\n'
                 'Cafe username logins (like "flammywood"): please ask the owner to reset the password.',
-                style: TextStyle(color: Colors.white70),
+                style: TextStyle(color: ctx.palette.inkMuted),
               ),
               const SizedBox(height: 14),
               TextFormField(
@@ -136,127 +135,134 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Card(
-              color: AppColors.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: AppColors.border),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Form(
-                  key: _formKey,
-                  child: AutofillGroup(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Center(child: AppLogo(size: 64)),
-                        const SizedBox(height: 14),
-                        const Text(
-                          AppConfig.appName,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.accent),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Sign in to continue',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white54),
-                        ),
-                        const SizedBox(height: 24),
-                        TextFormField(
-                          controller: _emailCtrl,
-                          keyboardType: TextInputType.emailAddress,
-                          autofillHints: const [AutofillHints.username, AutofillHints.email],
-                          textInputAction: TextInputAction.next,
-                          enabled: !_loading,
-                          validator: LoginValidators.usernameOrEmail,
-                          decoration: const InputDecoration(
-                            labelText: 'Username',
-                            hintText: 'e.g. flammywood',
-                            prefixIcon: Icon(Icons.person_outline),
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: _passwordCtrl,
-                          obscureText: _obscure,
-                          autofillHints: const [AutofillHints.password],
-                          textInputAction: TextInputAction.done,
-                          enabled: !_loading,
-                          validator: LoginValidators.password,
-                          onFieldSubmitted: (_) => _submit(),
-                          decoration: InputDecoration(
-                            labelText: 'Password',
-                            prefixIcon: const Icon(Icons.lock_outline),
-                            border: const OutlineInputBorder(),
-                            suffixIcon: IconButton(
-                              tooltip: _obscure ? 'Show password' : 'Hide password',
-                              icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                              onPressed: () => setState(() => _obscure = !_obscure),
-                            ),
-                          ),
-                        ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: _loading ? null : _forgotPassword,
-                            child: const Text('Forgot password?'),
-                          ),
-                        ),
-                        if (_error != null) ...[
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: AppColors.danger.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppColors.danger.withValues(alpha: 0.5)),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.error_outline, color: AppColors.danger, size: 18),
-                                const SizedBox(width: 8),
-                                Expanded(child: Text(_error!, style: const TextStyle(color: Colors.white))),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                        SizedBox(
-                          height: 48,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
-                            onPressed: _loading ? null : _submit,
-                            child: _loading
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
-                                  )
-                                : const Text('Sign in', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+    final p = context.palette;
+    final wide = MediaQuery.sizeOf(context).width >= 960;
+
+    final form = Form(
+      key: _formKey,
+      child: AutofillGroup(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (!wide) ...[
+              const Align(alignment: Alignment.centerLeft, child: AppLogo(size: 48)),
+              const SizedBox(height: Space.xl),
+            ],
+            Text('Welcome back', style: context.text.headlineMedium),
+            const SizedBox(height: 4),
+            Text('Sign in with your cafe username or email.', style: TextStyle(color: p.inkSubtle)),
+            const SizedBox(height: Space.xl),
+            TextFormField(
+              controller: _emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              autofillHints: const [AutofillHints.username, AutofillHints.email],
+              textInputAction: TextInputAction.next,
+              enabled: !_loading,
+              validator: LoginValidators.usernameOrEmail,
+              decoration: const InputDecoration(labelText: 'Username', hintText: 'e.g. flammywood', prefixIcon: Icon(Icons.person_outline)),
+            ),
+            const SizedBox(height: Space.md),
+            TextFormField(
+              controller: _passwordCtrl,
+              obscureText: _obscure,
+              autofillHints: const [AutofillHints.password],
+              textInputAction: TextInputAction.done,
+              enabled: !_loading,
+              validator: LoginValidators.password,
+              onFieldSubmitted: (_) => _submit(),
+              decoration: InputDecoration(
+                labelText: 'Password',
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  tooltip: _obscure ? 'Show password' : 'Hide password',
+                  icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                  onPressed: () => setState(() => _obscure = !_obscure),
                 ),
               ),
             ),
-          ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(onPressed: _loading ? null : _forgotPassword, child: const Text('Forgot password?')),
+            ),
+            if (_error != null) ...[
+              Container(
+                padding: const EdgeInsets.all(Space.md),
+                decoration: BoxDecoration(color: p.dangerTint, borderRadius: Radii.controlR),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline, color: p.danger, size: 20),
+                    const SizedBox(width: Space.sm),
+                    Expanded(child: Text(_error!, style: TextStyle(color: p.danger, fontWeight: FontWeight.w600))),
+                  ],
+                ),
+              ),
+              const SizedBox(height: Space.md),
+            ],
+            SizedBox(
+              height: 52,
+              child: FilledButton(
+                onPressed: _loading ? null : _submit,
+                child: _loading
+                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                    : const Text('Sign in', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
         ),
+      ),
+    );
+
+    final formPane = Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(Space.xl),
+        child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 400), child: form),
+      ),
+    );
+
+    if (!wide) return Scaffold(backgroundColor: p.surface, body: SafeArea(child: formPane));
+
+    return Scaffold(
+      backgroundColor: p.surface,
+      body: Row(
+        children: [
+          Expanded(
+            child: Container(
+              color: p.ink,
+              padding: const EdgeInsets.all(56),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    const AppLogo(size: 40),
+                    const SizedBox(width: Space.md),
+                    Text(AppConfig.appName, style: TextStyle(color: p.surface, fontSize: 20, fontWeight: FontWeight.w800)),
+                  ]),
+                  const Spacer(),
+                  Text('Run your cafe from one screen.',
+                      style: TextStyle(color: p.surface, fontSize: 40, height: 1.15, fontWeight: FontWeight.w800, letterSpacing: -1)),
+                  const SizedBox(height: Space.lg),
+                  for (final f in const [
+                    'Take orders and bill in seconds',
+                    'Live table and kitchen status',
+                    'Menu, staff and sales reports in one place',
+                  ])
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: Space.sm),
+                      child: Row(children: [
+                        Icon(Icons.check_circle_rounded, color: p.primary, size: 20),
+                        const SizedBox(width: Space.sm),
+                        Text(f, style: TextStyle(color: p.border, fontSize: 16)),
+                      ]),
+                    ),
+                  const Spacer(),
+                  Text(AppConfig.appTagline, style: TextStyle(color: p.inkSubtle, fontSize: 13)),
+                ],
+              ),
+            ),
+          ),
+          Expanded(child: formPane),
+        ],
       ),
     );
   }

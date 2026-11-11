@@ -10,6 +10,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 ///   cafes/{cafeId}/subcategories/{id}      menu subcategories
 ///   cafes/{cafeId}/menuItems/{id}          menu items (variants + add-ons)
 ///   cafes/{cafeId}/orders/{id}             customer orders / bills
+///   cafes/{cafeId}/expenses/{id}           cafe expenses (Manager)
 ///   users/{uid}                            staff profiles (backend-written)
 ///   plans/{id}, subscriptionPayments/{id}  SaaS billing (Super Admin)
 ///   auditLogs/{id}, notifications/{id}
@@ -67,6 +68,10 @@ class FirestorePaths {
 
   static CollectionReference<Map<String, dynamic>> menuItems([String? cafeId]) =>
       cafe(_cafeOrActive(cafeId)).collection('menuItems');
+
+  /// Day-to-day cafe expenses (Manager only).
+  static CollectionReference<Map<String, dynamic>> expenses([String? cafeId]) =>
+      cafe(_cafeOrActive(cafeId)).collection('expenses');
 
   // ---------------------------------------------------------------------------
   // Platform collections

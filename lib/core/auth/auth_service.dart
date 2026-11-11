@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../config/app_config.dart';
 import '../data/firestore_paths.dart';
+import '../theme/theme_controller.dart';
 import 'app_user.dart';
 
 /// All authentication goes through here. Passwords are handled entirely by
@@ -60,6 +61,7 @@ class AuthService {
   Future<void> signOut() async {
     currentUser = null;
     FirestorePaths.setActiveCafe(null);
+    ThemeController.instance.legacyAdmin.value = false;
     await _auth.signOut();
   }
 

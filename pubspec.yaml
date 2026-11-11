@@ -22,6 +22,7 @@ dependencies:
   firebase_auth: ^5.7.0
   cloud_functions: ^5.6.2
   firebase_storage: ^12.4.10
+  fl_chart: ^1.3.1
 
 dev_dependencies:
   flutter_test:
@@ -33,3 +34,18 @@ flutter:
 
   assets:
     - assets/images/logo.png
+
+  # Inter (SIL Open Font License, see assets/fonts/Inter-LICENSE.txt), bundled so
+  # the POS looks the same offline.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Inter-ExtraBold.ttf
+          weight: 800

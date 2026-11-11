@@ -5,7 +5,8 @@ import '../../core/auth/app_user.dart';
 import '../../core/auth/auth_service.dart';
 import '../../core/config/app_config.dart';
 import '../../core/services/staff_service.dart';
-import '../../core/theme/app_theme.dart';
+import '../../core/theme/tokens.dart';
+import '../../core/widgets/ui.dart';
 import '../../core/widgets/confirm_dialog.dart';
 import '../auth/login_screen.dart';
 
@@ -42,57 +43,34 @@ class StaffManagementScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: embedded ? Colors.transparent : AppColors.background,
-      appBar: embedded
-          ? null
-          : AppBar(
-              backgroundColor: AppColors.surface,
-              title: Text('Staff · $cafeName', style: const TextStyle(fontWeight: FontWeight.bold)),
-            ),
+      backgroundColor: Colors.transparent,
+      appBar: embedded ? null : AppBar(title: Text('Staff · $cafeName')),
       floatingActionButton: _invitableRoles.isEmpty
           ? null
           : FloatingActionButton.extended(
               heroTag: 'add-staff',
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
               icon: const Icon(Icons.person_add_alt_1),
-              label: const Text('Add staff', style: TextStyle(fontWeight: FontWeight.bold)),
+              label: const Text('Add staff'),
               onPressed: () => _showInviteDialog(context),
             ),
       body: StreamBuilder<List<StaffMember>>(
         stream: StaffService.instance.watchCafeStaff(cafeId),
         builder: (context, snap) {
-          if (snap.hasError) {
-            return const Center(child: Text('Could not load staff.', style: TextStyle(color: Colors.white60)));
-          }
-          if (!snap.hasData) {
-            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-          }
+          if (snap.hasError) return const ErrorState(message: 'Could not load staff.');
+          if (!snap.hasData) return const LoadingState();
           final staff = snap.data!;
-          if (staff.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.group_outlined, size: 48, color: Colors.white24),
-                    SizedBox(height: 12),
-                    Text('No staff yet', style: TextStyle(fontSize: 16, color: Colors.white70)),
-                    SizedBox(height: 4),
-                    Text('Tap "Add staff" to invite someone.', style: TextStyle(color: Colors.white38)),
-                  ],
-                ),
+          return PageBody(
+            maxWidth: 900,
+            children: [
+              PageHeader(
+                title: 'Staff',
+                subtitle: '${staff.length} account${staff.length == 1 ? '' : 's'} · each person signs in with their own login',
               ),
-            );
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-            itemCount: staff.length,
-            itemBuilder: (context, i) => _StaffTile(
-              member: staff[i],
-              canManage: _canManage(staff[i]),
-            ),
+              if (staff.isEmpty)
+                const EmptyState(icon: Icons.group_outlined, title: 'No staff yet', message: 'Tap "Add staff" to invite someone.')
+              else
+                for (final m in staff) _StaffTile(member: m, canManage: _canManage(m)),
+            ],
           );
         },
       ),
@@ -136,7 +114,7 @@ class _StaffTileState extends State<_StaffTile> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AuthService.friendlyError(e)), backgroundColor: AppColors.danger),
+          SnackBar(content: Text(AuthService.friendlyError(e))),
         );
       }
     } finally {
@@ -175,7 +153,6 @@ class _StaffTileState extends State<_StaffTile> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(disabling ? '${m.displayName} disabled' : '${m.displayName} enabled'),
-          backgroundColor: AppColors.success,
         ),
       );
     });
@@ -184,34 +161,27 @@ class _StaffTileState extends State<_StaffTile> {
   @override
   Widget build(BuildContext context) {
     final m = widget.member;
-    final (statusLabel, statusColor) = switch (m.status) {
-      'invited' => ('Invited', AppColors.accent),
-      'disabled' => ('Disabled', AppColors.danger),
-      _ => ('Active', AppColors.success),
+    final p = context.palette;
+    final statusLabel = switch (m.status) {
+      'invited' => 'Invited',
+      'disabled' => 'Disabled',
+      _ => 'Active',
     };
 
-    return Card(
-      color: AppColors.surface,
-      margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: AppColors.border),
-      ),
+    return SurfaceCard(
+      margin: const EdgeInsets.only(bottom: Space.sm),
       child: ListTile(
+        minTileHeight: 64,
         leading: CircleAvatar(
-          backgroundColor: AppColors.surfaceAlt,
-          child: Icon(
-            m.role == UserRole.manager ? Icons.badge_outlined : Icons.restaurant_outlined,
-            color: AppColors.accent,
-          ),
+          backgroundColor: p.primaryTint,
+          child: Icon(m.role == UserRole.manager ? Icons.badge_outlined : Icons.restaurant_outlined, color: p.primary),
         ),
-        title: Text(m.displayName, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text('${m.role?.label ?? 'Unknown role'} · ${AppConfig.displayLogin(m.email)}',
-            style: const TextStyle(color: Colors.white54, fontSize: 12)),
+        title: Text(m.displayName, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text('${m.role?.label ?? 'Unknown role'} · ${AppConfig.displayLogin(m.email)}'),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(statusLabel, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12)),
+            StatusChip(statusLabel),
             if (_busy)
               const Padding(
                 padding: EdgeInsets.all(12),
@@ -281,7 +251,6 @@ class _InviteDialogState extends State<_InviteDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: AppColors.surface,
       title: const Text('Add staff member'),
       content: SizedBox(
         width: 380,
@@ -321,7 +290,7 @@ class _InviteDialogState extends State<_InviteDialog> {
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),
-                Text(_error!, style: const TextStyle(color: AppColors.danger)),
+                Text(_error!, style: TextStyle(color: context.palette.danger)),
               ],
             ],
           ),
@@ -330,7 +299,6 @@ class _InviteDialogState extends State<_InviteDialog> {
       actions: [
         TextButton(onPressed: _loading ? null : () => Navigator.pop(context), child: const Text('Cancel')),
         ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
           onPressed: _loading ? null : _submit,
           child: _loading
               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
@@ -351,10 +319,9 @@ Future<void> showLinkDialog(
   return showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
-      backgroundColor: AppColors.surface,
       title: Row(
         children: [
-          const Icon(Icons.check_circle, color: AppColors.success),
+          Icon(Icons.check_circle, color: ctx.palette.success),
           const SizedBox(width: 8),
           Expanded(child: Text(title)),
         ],
@@ -365,16 +332,16 @@ Future<void> showLinkDialog(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(message, style: const TextStyle(color: Colors.white70)),
+            Text(message, style: TextStyle(color: ctx.palette.inkMuted)),
             if (link.isNotEmpty) ...[
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceAlt,
+                  color: ctx.palette.surfaceAlt,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: SelectableText(link, maxLines: 3, style: const TextStyle(fontSize: 12, color: Colors.white60)),
+                child: SelectableText(link, maxLines: 3, style: TextStyle(fontSize: 12, color: ctx.palette.inkSubtle)),
               ),
             ],
           ],

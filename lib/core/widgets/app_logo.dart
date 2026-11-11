@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+import '../theme/tokens.dart';
 
 /// Neutral platform logo, used where a cafe has not uploaded its own logo.
 class AppLogo extends StatelessWidget {
@@ -10,15 +10,12 @@ class AppLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: AppColors.primary.withValues(alpha: 0.15),
-        border: Border.all(color: AppColors.primary, width: 1.5),
-      ),
-      child: Icon(Icons.storefront_rounded, color: AppColors.primary, size: size * 0.55),
+      decoration: BoxDecoration(color: p.primary, borderRadius: BorderRadius.circular(size * 0.26)),
+      child: Icon(Icons.storefront_rounded, color: p.onPrimary, size: size * 0.55),
     );
   }
 }

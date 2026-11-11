@@ -2,13 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../captain_dashboard.dart';
 import '../../features/admin/super_admin_shell.dart';
 import '../../features/auth/login_screen.dart';
-import '../../manager_dashboard.dart';
+import '../../features/shell/role_shells.dart';
 import '../data/firestore_paths.dart';
 import '../subscription/cafe_access.dart';
-import '../theme/app_theme.dart';
+import '../theme/theme_controller.dart';
+import '../theme/tokens.dart';
 import '../widgets/message_screen.dart';
 import 'app_user.dart';
 import 'auth_service.dart';
@@ -90,6 +90,11 @@ class _SignedInGateState extends State<_SignedInGate> {
           );
         }
 
+        // Super Admin screens keep their previous dark look (redesign on hold).
+        final legacy = ThemeController.instance.legacyAdmin;
+        if (legacy.value != appUser.isSuperAdmin) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => legacy.value = appUser.isSuperAdmin);
+        }
         if (appUser.isSuperAdmin) return const SuperAdminShell();
         return _CafeGate(user: appUser);
       },
@@ -143,7 +148,7 @@ class _CafeGate extends StatelessWidget {
         // A cafe login (manager role) chooses Manager or Captain view after
         // signing in; a captain-only account goes straight to the kitchen.
         final cafeName = (cafe.data()?['name'] ?? 'Your cafe').toString();
-        final dashboard = user.isManager ? _ModeChooser(cafeName: cafeName) : const CaptainDashboardScreen();
+        final dashboard = user.isManager ? _ModeChooser(cafeName: cafeName) : const CaptainShell();
         // Always the same widget structure, so the dashboard (and any
         // half-entered order) survives the banner appearing/disappearing.
         return _WarningBanner(
@@ -164,8 +169,9 @@ class _WarningBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final msg = message;
+    final p = context.palette;
     return Material(
-      color: AppColors.background,
+      color: p.canvas,
       child: Column(
         children: [
           if (msg != null)
@@ -173,14 +179,14 @@ class _WarningBanner extends StatelessWidget {
               bottom: false,
               child: Container(
                 width: double.infinity,
-                color: const Color(0xFF8A5A00),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                color: p.warningTint,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Row(
                   children: [
-                    const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 18),
+                    Icon(Icons.warning_amber_rounded, color: p.warning, size: 20),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(msg, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                      child: Text(msg, style: TextStyle(color: p.warning, fontSize: 13, fontWeight: FontWeight.w600)),
                     ),
                   ],
                 ),
@@ -207,7 +213,6 @@ class _SignOutMessage extends StatelessWidget {
   Widget build(BuildContext context) {
     return MessageScreen(
       icon: icon,
-      iconColor: AppColors.accent,
       title: title,
       message: message,
       actionLabel: 'Sign out',
@@ -216,7 +221,8 @@ class _SignOutMessage extends StatelessWidget {
   }
 }
 
-/// After a cafe login: "Manager" (POS, billing, menu) or "Captain" (kitchen).
+/// After a cafe login: "Manager" (POS, billing, menu) or "Captain"
+/// (orders + kitchen). The choice can be switched later from the top bar.
 class _ModeChooser extends StatefulWidget {
   const _ModeChooser({required this.cafeName});
   final String cafeName;
@@ -230,53 +236,68 @@ class _ModeChooserState extends State<_ModeChooser> {
 
   @override
   Widget build(BuildContext context) {
-    if (_mode == 'manager') return const ManagerDashboardScreen();
-    if (_mode == 'captain') return const CaptainDashboardScreen();
+    if (_mode == 'manager') return ManagerShell(onSwitchMode: () => setState(() => _mode = 'captain'));
+    if (_mode == 'captain') return CaptainShell(onSwitchMode: () => setState(() => _mode = 'manager'));
+    final p = context.palette;
 
-    Widget option(String mode, IconData icon, String title, String subtitle) => Card(
-          color: AppColors.surface,
-          margin: const EdgeInsets.only(bottom: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: const BorderSide(color: AppColors.border),
-          ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-            leading: CircleAvatar(
-              radius: 26,
-              backgroundColor: AppColors.primary.withValues(alpha: 0.15),
-              child: Icon(icon, color: AppColors.primary, size: 28),
+    Widget option(String mode, IconData icon, String title, String subtitle) => Padding(
+          padding: const EdgeInsets.only(bottom: Space.md),
+          child: Material(
+            color: p.surface,
+            shape: RoundedRectangleBorder(borderRadius: Radii.cardR, side: BorderSide(color: p.border)),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => setState(() => _mode = mode),
+              child: Padding(
+                padding: const EdgeInsets.all(Space.lg),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(color: p.primaryTint, borderRadius: BorderRadius.circular(14)),
+                      child: Icon(icon, color: p.primary, size: 28),
+                    ),
+                    const SizedBox(width: Space.lg),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(title, style: context.text.titleLarge),
+                          const SizedBox(height: 2),
+                          Text(subtitle, style: TextStyle(color: p.inkSubtle)),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.arrow_forward_rounded, color: p.inkSubtle),
+                  ],
+                ),
+              ),
             ),
-            title: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            subtitle: Text(subtitle, style: const TextStyle(color: Colors.white54)),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () => setState(() => _mode = mode),
           ),
         );
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: p.canvas,
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(Space.xl),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
+            constraints: const BoxConstraints(maxWidth: 460),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(widget.cafeName,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.accent)),
-                const SizedBox(height: 6),
-                const Text('Continue as', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54)),
-                const SizedBox(height: 24),
-                option('manager', Icons.point_of_sale, 'Manager', 'Orders, billing, tables, menu, reports'),
-                option('captain', Icons.soup_kitchen_outlined, 'Captain', 'Kitchen: start cooking, mark ready'),
-                const SizedBox(height: 8),
+                Text(widget.cafeName, textAlign: TextAlign.center, style: context.text.headlineMedium),
+                const SizedBox(height: 4),
+                Text('How are you working today?', textAlign: TextAlign.center, style: TextStyle(color: p.inkSubtle)),
+                const SizedBox(height: Space.xl),
+                option('manager', Icons.point_of_sale_rounded, 'Manager', 'Dashboard, orders, billing, menu, reports'),
+                option('captain', Icons.room_service_outlined, 'Captain', 'Take orders, tables and kitchen'),
+                const SizedBox(height: Space.sm),
                 TextButton.icon(
                   onPressed: () => signOutToLogin(context),
-                  icon: const Icon(Icons.logout, size: 18),
+                  icon: const Icon(Icons.logout_rounded, size: 18),
                   label: const Text('Sign out'),
                 ),
               ],

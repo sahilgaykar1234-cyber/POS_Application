@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:pos_app/core/data/firestore_paths.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
+import 'package:pos_app/core/theme/tokens.dart';
 import 'package:pos_app/core/widgets/confirm_dialog.dart';
 
 void main() {
@@ -31,16 +32,27 @@ void main() {
     });
   });
 
-  test('AppTheme keeps the original brand colours', () {
-    final theme = AppTheme.dark;
-    expect(theme.scaffoldBackgroundColor, const Color(0xFF141211));
-    expect(theme.colorScheme.primary, const Color(0xFFE65C00));
-    expect(theme.colorScheme.secondary, const Color(0xFFF7B731));
+  test('light/dark themes carry the Ember palette', () {
+    final light = AppTheme.light();
+    final dark = AppTheme.dark();
+    expect(light.extension<Palette>(), Palette.light);
+    expect(dark.extension<Palette>(), Palette.dark);
+    expect(light.colorScheme.primary, const Color(0xFFC2410C));
+    expect(light.brightness, Brightness.light);
+    expect(dark.brightness, Brightness.dark);
+    expect(light.textTheme.bodyMedium?.fontFamily, 'Inter');
+  });
+
+  test('Super Admin keeps its previous dark brown look', () {
+    final t = AppTheme.legacyAdmin;
+    expect(t.scaffoldBackgroundColor, const Color(0xFF141211));
+    expect(t.colorScheme.primary, const Color(0xFFE65C00));
   });
 
   group('showDangerConfirmDialog', () {
     Future<void> openDialog(WidgetTester tester) async {
       await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.light(),
         home: Builder(
           builder: (context) => ElevatedButton(
             onPressed: () async {
@@ -60,8 +72,8 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    ElevatedButton confirmButton(WidgetTester tester) => tester.widget<ElevatedButton>(
-          find.widgetWithText(ElevatedButton, 'Reset Menu'),
+    FilledButton confirmButton(WidgetTester tester) => tester.widget<FilledButton>(
+          find.widgetWithText(FilledButton, 'Reset Menu'),
         );
 
     testWidgets('confirm is disabled until the exact text is typed', (tester) async {
@@ -80,6 +92,7 @@ void main() {
     testWidgets('cancel returns false', (tester) async {
       bool? result;
       await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.light(),
         home: Builder(
           builder: (context) => ElevatedButton(
             onPressed: () async {

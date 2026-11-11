@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+
+import 'core/theme/tokens.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'escpos_usb_printer_stub.dart'
     if (dart.library.js_interop) 'escpos_usb_printer_web.dart';
@@ -53,38 +55,47 @@ class PaymentCompleteReceiptScreen extends StatelessWidget {
     final List items = orderData['items'] ?? [];
     final double subtotal = (orderData['subtotal'] ?? orderData['totalPrice'] ?? 0.0).toDouble();
     final double grandTotal = (orderData['totalPrice'] ?? subtotal).toDouble();
-    final double taxAmount = showGst ? (grandTotal - subtotal > 0 ? grandTotal - subtotal : subtotal * (gstPercentage / 100.0)) : 0.0;
+    // Discount (if any) is taken off before GST; old bills have none.
+    final double discount = ((orderData['discountGiven'] ?? 0) as num).toDouble();
+    final double taxable = subtotal - discount;
+    final double taxAmount = showGst ? (grandTotal - taxable > 0 ? grandTotal - taxable : taxable * (gstPercentage / 100.0)) : 0.0;
+
+    final p = context.palette;
+    Future<void> printNow() async {
+      final messenger = ScaffoldMessenger.of(context);
+      try {
+        await EscPosUsbPrinter.printReceipt(order: orderData, orderId: orderId, settings: businessSettings ?? {});
+      } catch (e) {
+        messenger.showSnackBar(SnackBar(content: Text('Print error: $e')));
+      }
+    }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF141211),
+      backgroundColor: p.canvas,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF7A431D),
-        elevation: 0,
-        title: const Text('Thermal Bill Receipt', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.print_rounded, color: Colors.white),
-            tooltip: 'Print Receipt',
-            onPressed: () async {
-              final messenger = ScaffoldMessenger.of(context);
-              try {
-                await EscPosUsbPrinter.printReceipt(
-                  order: orderData,
-                  orderId: orderId,
-                  settings: businessSettings ?? {},
-                );
-              } catch (e) {
-                messenger.showSnackBar(
-                  SnackBar(content: Text('Print error: $e'), backgroundColor: Colors.redAccent),
-                );
-              }
-            },
+        title: Text('Bill $billNo'),
+        leading: IconButton(icon: const Icon(Icons.close_rounded), tooltip: 'Close', onPressed: () => Navigator.pop(context)),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.all(Space.lg),
+          decoration: BoxDecoration(color: p.surface, border: Border(top: BorderSide(color: p.border))),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Row(
+                children: [
+                  Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Done'))),
+                  const SizedBox(width: Space.md),
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton.icon(onPressed: printNow, icon: const Icon(Icons.print_rounded), label: const Text('Print receipt')),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ],
+        ),
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -95,8 +106,9 @@ class PaymentCompleteReceiptScreen extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: p.border),
               boxShadow: const [
-                BoxShadow(color: Colors.black45, blurRadius: 12, offset: Offset(0, 4)),
+                BoxShadow(color: Color(0x14101828), blurRadius: 16, offset: Offset(0, 6)),
               ],
             ),
             child: Column(
@@ -118,18 +130,12 @@ class PaymentCompleteReceiptScreen extends StatelessWidget {
                             base64Decode(shopLogoBase64),
                             fit: BoxFit.contain,
                             errorBuilder: (context, error, stackTrace) {
-                              return Image.asset('assets/images/logo.png', fit: BoxFit.contain);
+                              return const Icon(Icons.storefront_rounded, color: Colors.black54, size: 34);
                             },
                           )
-                        : Image.asset(
-                            'assets/images/logo.png',
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                color: Colors.black12,
-                                child: const Icon(Icons.local_pizza_rounded, color: Color(0xFF7A431D), size: 36),
-                              );
-                            },
+                        : Container(
+                            color: Colors.black12,
+                            child: const Icon(Icons.storefront_rounded, color: Colors.black54, size: 34),
                           ),
                   ),
                 ),
@@ -297,6 +303,17 @@ class PaymentCompleteReceiptScreen extends StatelessWidget {
                   ],
                 ),
 
+                if (discount > 0) ...[
+                  const SizedBox(height: 3),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Discount:', style: TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.black87)),
+                      Text('-₹${discount.toStringAsFixed(2)}', style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.black)),
+                    ],
+                  ),
+                ],
+
                 if (showGst) ...[
                   const SizedBox(height: 3),
                   Row(
@@ -350,7 +367,7 @@ class PaymentCompleteReceiptScreen extends StatelessWidget {
                 ],
 
                 const Text(
-                  '*** SOFTWARE POWERED BY POS APP ***',
+                  '*** POWERED BY CAFE POS ***',
                   style: TextStyle(fontFamily: 'monospace', fontSize: 9, color: Colors.black38),
                 ),
               ],

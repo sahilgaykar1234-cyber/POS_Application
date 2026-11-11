@@ -1,7 +1,8 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_theme.dart';
+import '../../core/theme/tokens.dart';
+import '../../core/widgets/ui.dart';
 import '../../core/widgets/confirm_dialog.dart';
 import 'menu_models.dart';
 import 'menu_repository.dart';
@@ -9,7 +10,10 @@ import 'menu_repository.dart';
 /// Manager's menu editor: categories → subcategories → items (with sizes,
 /// add-ons, photo, availability). Everything is stored per cafe in Firestore.
 class MenuManagementScreen extends StatefulWidget {
-  const MenuManagementScreen({super.key, required this.cafeId, this.readOnly = false});
+  const MenuManagementScreen({super.key, required this.cafeId, this.readOnly = false, this.menuStream});
+
+  /// Test hook (default: live Firestore).
+  final Stream<MenuData>? menuStream;
 
   final String cafeId;
 
@@ -22,13 +26,13 @@ class MenuManagementScreen extends StatefulWidget {
 
 class _MenuManagementScreenState extends State<MenuManagementScreen> {
   late final MenuRepository _repo = MenuRepository(widget.cafeId);
-  late final Stream<MenuData> _menu = _repo.watchMenu();
+  late final Stream<MenuData> _menu = widget.menuStream ?? _repo.watchMenu();
   String _search = '';
 
   void _toast(String msg, {bool error = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: error ? AppColors.danger : AppColors.success),
+      SnackBar(content: Text(msg)),
     );
   }
 
@@ -51,7 +55,6 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     return showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
         title: Text(title),
         content: Form(
           key: key,
@@ -176,296 +179,504 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
 
   // ---------------------------------------------------------------- build
 
+  String? _selCat; // null = all items
+  String? _selSub;
+  String _avail = 'all'; // all | available | soldout
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<MenuData>(
       stream: _menu,
       builder: (context, snap) {
-        if (snap.hasError) {
-          return const Center(
-            child: Text('Could not load the menu. Please check your connection.', style: TextStyle(color: Colors.white60)),
-          );
-        }
-        if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+        if (snap.hasError) return const ErrorState(message: 'Could not load the menu. Please check your connection.');
+        if (!snap.hasData) return const LoadingState(label: 'Loading menu…');
         final menu = snap.data!;
+        if (_selCat != null && !menu.categories.any((c) => c.id == _selCat)) _selCat = null;
+        if (_selSub != null && !menu.subcategories.any((s) => s.id == _selSub)) _selSub = null;
 
+        final wide = MediaQuery.sizeOf(context).width >= 1100;
         return Scaffold(
           backgroundColor: Colors.transparent,
-          floatingActionButton: widget.readOnly
+          floatingActionButton: widget.readOnly || wide
               ? null
-              : FloatingActionButton.extended(
+              : FloatingActionButton(
                   heroTag: 'menu-add-item',
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add item', style: TextStyle(fontWeight: FontWeight.bold)),
-                  onPressed: menu.categories.isEmpty
-                      ? () => _toast('Add a category first.', error: true)
-                      : () => _openItemEditor(menu),
+                  tooltip: 'Add item',
+                  onPressed: menu.categories.isEmpty ? () => _toast('Add a category first.', error: true) : () => _openItemEditor(menu, categoryId: _selCat, subcategoryId: _selSub),
+                  child: const Icon(Icons.add),
                 ),
-          body: ListView(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 96),
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      decoration: const InputDecoration(
-                        hintText: 'Search items…',
-                        prefixIcon: Icon(Icons.search),
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      onChanged: (v) => setState(() => _search = v.trim().toLowerCase()),
-                    ),
-                  ),
-                  if (!widget.readOnly) ...[
-                    const SizedBox(width: 10),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.create_new_folder_outlined, size: 18),
-                      label: const Text('Category'),
-                      onPressed: () => _addCategory(menu),
-                    ),
+          body: wide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(width: 290, child: _categoryTree(menu)),
+                    VerticalDivider(width: 1, color: context.palette.border),
+                    Expanded(child: _itemsPanel(menu, wide: true)),
                   ],
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${menu.categories.length} categories · ${menu.items.length} items · '
-                '${menu.items.where((i) => !i.isAvailable).length} unavailable',
-                style: const TextStyle(color: Colors.white38, fontSize: 12),
-              ),
-              const SizedBox(height: 10),
-              if (menu.categories.isEmpty)
-                const _EmptyMenu()
-              else
-                for (var i = 0; i < menu.categories.length; i++) _buildCategory(menu, i),
-            ],
-          ),
+                )
+              : _itemsPanel(menu, wide: false),
         );
       },
     );
   }
 
-  bool _matches(MenuItem i) =>
-      _search.isEmpty || i.name.toLowerCase().contains(_search) || i.description.toLowerCase().contains(_search);
+  List<MenuItem> _visibleItems(MenuData menu) {
+    return menu.items.where((i) {
+      if (_search.isNotEmpty && !(i.name.toLowerCase().contains(_search) || i.description.toLowerCase().contains(_search))) return false;
+      if (_search.isEmpty && _selCat != null && i.categoryId != _selCat) return false;
+      if (_search.isEmpty && _selSub != null && i.subcategoryId != _selSub) return false;
+      if (_avail == 'available' && !i.isAvailable) return false;
+      if (_avail == 'soldout' && i.isAvailable) return false;
+      return true;
+    }).toList();
+  }
 
-  Widget _buildCategory(MenuData menu, int index) {
-    final c = menu.categories[index];
-    final direct = menu.itemsOf(c.id, directOnly: true).where(_matches).toList();
-    final subs = menu.subcategoriesOf(c.id);
-    final total = menu.itemsOf(c.id).length;
-    final visible = direct.length + subs.fold<int>(0, (n, s) => n + menu.itemsOf(c.id, subcategoryId: s.id).where(_matches).length);
-    if (_search.isNotEmpty && visible == 0) return const SizedBox.shrink();
+  // ------------------------------------------------------------ left tree
 
-    return Card(
-      color: AppColors.surface,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: AppColors.border)),
-      clipBehavior: Clip.antiAlias,
-      child: ExpansionTile(
-        key: PageStorageKey('cat-${c.id}'),
-        initiallyExpanded: _search.isNotEmpty || menu.categories.length <= 3,
-        shape: const Border(),
-        title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.accent, fontSize: 16)),
-        subtitle: Text('$total items${subs.isNotEmpty ? ' · ${subs.length} subcategories' : ''}',
-            style: const TextStyle(color: Colors.white38, fontSize: 12)),
-        trailing: widget.readOnly
-            ? null
-            : PopupMenuButton<String>(
-                tooltip: 'Category actions',
-                onSelected: (v) {
-                  switch (v) {
-                    case 'item':
-                      _openItemEditor(menu, categoryId: c.id);
-                    case 'sub':
-                      _addSubcategory(c, menu);
-                    case 'rename':
-                      _renameCategory(c);
-                    case 'up':
-                      _move(menu.categories, index, -1, (x) => x.id, (x) => x.sortOrder, _repo.categoryRef);
-                    case 'down':
-                      _move(menu.categories, index, 1, (x) => x.id, (x) => x.sortOrder, _repo.categoryRef);
-                    case 'delete':
-                      _deleteCategory(c);
-                  }
-                },
-                itemBuilder: (_) => [
-                  const PopupMenuItem(value: 'item', child: Text('Add item here')),
-                  const PopupMenuItem(value: 'sub', child: Text('Add subcategory')),
-                  const PopupMenuItem(value: 'rename', child: Text('Rename')),
-                  if (index > 0) const PopupMenuItem(value: 'up', child: Text('Move up')),
-                  if (index < menu.categories.length - 1) const PopupMenuItem(value: 'down', child: Text('Move down')),
-                  const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: AppColors.danger))),
+  Widget _categoryTree(MenuData menu) {
+    final p = context.palette;
+    Widget row({required String label, required int count, required bool selected, required VoidCallback onTap, double indent = 0, Widget? menuBtn, bool bold = true}) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 2),
+        child: Material(
+          color: selected ? p.primaryTint : Colors.transparent,
+          borderRadius: Radii.controlR,
+          child: InkWell(
+            borderRadius: Radii.controlR,
+            onTap: onTap,
+            child: SizedBox(
+              height: indent > 0 ? 40 : kTouch,
+              child: Row(
+                children: [
+                  SizedBox(width: 12 + indent),
+                  Expanded(
+                    child: Text(label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: selected ? FontWeight.w700 : (bold ? FontWeight.w600 : FontWeight.w500),
+                          fontSize: indent > 0 ? 13 : 14,
+                          color: selected ? p.primaryHover : (bold ? p.ink : p.inkMuted),
+                        )),
+                  ),
+                  Text('$count', style: TextStyle(color: selected ? p.primaryHover : p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w600)),
+                  menuBtn ?? const SizedBox(width: 12),
                 ],
               ),
-        children: [
-          for (var k = 0; k < direct.length; k++) _buildItem(menu, direct, k),
-          for (final s in subs) _buildSubcategory(menu, c, s),
-          if (total == 0)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('No items yet. Use ⋮ → "Add item here".', style: TextStyle(color: Colors.white38)),
             ),
+          ),
+        ),
+      );
+    }
+
+    final children = <Widget>[
+      row(label: 'All items', count: menu.items.length, selected: _selCat == null, onTap: () => setState(() {
+            _selCat = null;
+            _selSub = null;
+          })),
+      const SizedBox(height: Space.sm),
+    ];
+    for (var i = 0; i < menu.categories.length; i++) {
+      final c = menu.categories[i];
+      children.add(row(
+        label: c.name,
+        count: menu.itemsOf(c.id).length,
+        selected: _selCat == c.id && _selSub == null,
+        onTap: () => setState(() {
+          _selCat = c.id;
+          _selSub = null;
+        }),
+        menuBtn: widget.readOnly ? null : _categoryMenu(menu, c, i),
+      ));
+      for (final s in menu.subcategoriesOf(c.id)) {
+        children.add(row(
+          label: s.name,
+          count: menu.itemsOf(c.id, subcategoryId: s.id).length,
+          selected: _selSub == s.id,
+          indent: 16,
+          bold: false,
+          onTap: () => setState(() {
+            _selCat = c.id;
+            _selSub = s.id;
+          }),
+          menuBtn: widget.readOnly ? null : _subcategoryMenu(menu, c, s),
+        ));
+      }
+    }
+
+    return Container(
+      color: p.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Space.lg, Space.lg, Space.sm, Space.sm),
+            child: Row(
+              children: [
+                Expanded(child: Text('Categories', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
+                if (!widget.readOnly)
+                  IconButton(tooltip: 'Add category', icon: const Icon(Icons.create_new_folder_outlined), onPressed: () => _addCategory(menu)),
+              ],
+            ),
+          ),
+          Expanded(
+            child: menu.categories.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(Space.lg),
+                    child: Text('No categories yet. Add one to start building the menu.', style: TextStyle(color: p.inkSubtle)),
+                  )
+                : ListView(padding: const EdgeInsets.fromLTRB(Space.md, 0, Space.md, Space.lg), children: children),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSubcategory(MenuData menu, MenuCategory c, MenuSubcategory s) {
-    final items = menu.itemsOf(c.id, subcategoryId: s.id).where(_matches).toList();
-    if (_search.isNotEmpty && items.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget _categoryMenu(MenuData menu, MenuCategory c, int index) => PopupMenuButton<String>(
+        tooltip: 'Category actions',
+        icon: const Icon(Icons.more_vert, size: 18),
+        onSelected: (v) {
+          switch (v) {
+            case 'item':
+              _openItemEditor(menu, categoryId: c.id);
+            case 'sub':
+              _addSubcategory(c, menu);
+            case 'rename':
+              _renameCategory(c);
+            case 'up':
+              _move(menu.categories, index, -1, (x) => x.id, (x) => x.sortOrder, _repo.categoryRef);
+            case 'down':
+              _move(menu.categories, index, 1, (x) => x.id, (x) => x.sortOrder, _repo.categoryRef);
+            case 'delete':
+              _deleteCategory(c);
+          }
+        },
+        itemBuilder: (_) => [
+          const PopupMenuItem(value: 'item', child: Text('Add item here')),
+          const PopupMenuItem(value: 'sub', child: Text('Add subcategory')),
+          const PopupMenuItem(value: 'rename', child: Text('Rename')),
+          if (index > 0) const PopupMenuItem(value: 'up', child: Text('Move up')),
+          if (index < menu.categories.length - 1) const PopupMenuItem(value: 'down', child: Text('Move down')),
+          PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: context.palette.danger))),
+        ],
+      );
+
+  Widget _subcategoryMenu(MenuData menu, MenuCategory c, MenuSubcategory s) => PopupMenuButton<String>(
+        tooltip: 'Subcategory actions',
+        icon: const Icon(Icons.more_vert, size: 18),
+        onSelected: (v) {
+          if (v == 'item') _openItemEditor(menu, categoryId: c.id, subcategoryId: s.id);
+          if (v == 'rename') _renameSubcategory(s);
+          if (v == 'delete') _deleteSubcategory(s);
+        },
+        itemBuilder: (_) => [
+          const PopupMenuItem(value: 'item', child: Text('Add item here')),
+          const PopupMenuItem(value: 'rename', child: Text('Rename')),
+          PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: context.palette.danger))),
+        ],
+      );
+
+  // ------------------------------------------------------------ items panel
+
+  Widget _itemsPanel(MenuData menu, {required bool wide}) {
+    final p = context.palette;
+    final items = _visibleItems(menu);
+    final cat = menu.categories.where((c) => c.id == _selCat).firstOrNull;
+    final sub = menu.subcategories.where((s) => s.id == _selSub).firstOrNull;
+    final title = _search.isNotEmpty ? 'Search results' : (sub?.name ?? cat?.name ?? 'All items');
+    final pad = wide ? Space.xl : Space.lg;
+
+    return ListView(
+      padding: EdgeInsets.fromLTRB(pad, pad, pad, 96),
       children: [
-        Container(
-          color: AppColors.surfaceAlt,
-          padding: const EdgeInsets.only(left: 16),
-          child: Row(
-            children: [
-              const Icon(Icons.subdirectory_arrow_right, size: 16, color: Colors.white38),
-              const SizedBox(width: 6),
-              Expanded(child: Text(s.name, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white))),
-              Text('${items.length}', style: const TextStyle(color: Colors.white38, fontSize: 12)),
-              if (!widget.readOnly)
-                PopupMenuButton<String>(
-                  tooltip: 'Subcategory actions',
-                  onSelected: (v) {
-                    if (v == 'item') _openItemEditor(menu, categoryId: c.id, subcategoryId: s.id);
-                    if (v == 'rename') _renameSubcategory(s);
-                    if (v == 'delete') _deleteSubcategory(s);
-                  },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'item', child: Text('Add item here')),
-                    PopupMenuItem(value: 'rename', child: Text('Rename')),
-                    PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: AppColors.danger))),
-                  ],
-                )
-              else
-                const SizedBox(height: 40),
-            ],
-          ),
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: Space.md,
+          runSpacing: Space.md,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (sub != null && cat != null) Text(cat.name, style: TextStyle(color: p.inkSubtle, fontSize: 13)),
+                Text(title, style: context.text.headlineSmall),
+                Text(
+                  '${menu.items.length} items · ${menu.items.where((i) => !i.isAvailable).length} sold out',
+                  style: TextStyle(color: p.inkSubtle, fontSize: 13),
+                ),
+              ],
+            ),
+            Wrap(
+              spacing: Space.sm,
+              runSpacing: Space.sm,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SearchField(width: wide ? 260 : null, hint: 'Search items', onChanged: (v) => setState(() => _search = v.trim().toLowerCase())),
+                if (!widget.readOnly && !wide)
+                  OutlinedButton.icon(onPressed: () => _addCategory(menu), icon: const Icon(Icons.create_new_folder_outlined, size: 18), label: const Text('Category')),
+                if (!widget.readOnly && wide)
+                  FilledButton.icon(
+                    onPressed: menu.categories.isEmpty ? () => _toast('Add a category first.', error: true) : () => _openItemEditor(menu, categoryId: _selCat, subcategoryId: _selSub),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Add item'),
+                  ),
+              ],
+            ),
+          ],
         ),
-        for (var k = 0; k < items.length; k++) _buildItem(menu, items, k),
+        const SizedBox(height: Space.md),
+        if (!wide && menu.categories.isNotEmpty) ...[
+          FilterPills<String?>(
+            options: [(null, 'All'), for (final c in menu.categories) (c.id, c.name)],
+            selected: _selCat,
+            onSelected: (v) => setState(() {
+              _selCat = v;
+              _selSub = null;
+            }),
+          ),
+          if (_selCat != null && menu.subcategoriesOf(_selCat!).isNotEmpty) ...[
+            const SizedBox(height: Space.sm),
+            FilterPills<String?>(
+              options: [(null, 'All'), for (final s in menu.subcategoriesOf(_selCat!)) (s.id, s.name)],
+              selected: _selSub,
+              onSelected: (v) => setState(() => _selSub = v),
+            ),
+          ],
+          if (!widget.readOnly && _selCat != null) ...[
+            const SizedBox(height: Space.sm),
+            Row(children: [
+              TextButton.icon(
+                onPressed: () => _addSubcategory(menu.categories.firstWhere((c) => c.id == _selCat), menu),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Subcategory'),
+              ),
+              TextButton.icon(
+                onPressed: () => _renameCategory(menu.categories.firstWhere((c) => c.id == _selCat)),
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: const Text('Rename'),
+              ),
+              TextButton.icon(
+                style: TextButton.styleFrom(foregroundColor: p.danger),
+                onPressed: () => _deleteCategory(menu.categories.firstWhere((c) => c.id == _selCat)),
+                icon: const Icon(Icons.delete_outline, size: 18),
+                label: const Text('Delete'),
+              ),
+            ]),
+          ],
+          const SizedBox(height: Space.sm),
+        ],
+        FilterPills<String>(
+          options: const [('all', 'All'), ('available', 'Available'), ('soldout', 'Sold out')],
+          selected: _avail,
+          onSelected: (v) => setState(() => _avail = v),
+        ),
+        const SizedBox(height: Space.lg),
+        if (menu.categories.isEmpty)
+          EmptyState(
+            icon: Icons.restaurant_menu,
+            title: 'Your menu is empty',
+            message: 'Start by adding a category, e.g. "Pizza" or "Beverages".',
+            action: widget.readOnly ? null : FilledButton.icon(onPressed: () => _addCategory(menu), icon: const Icon(Icons.add), label: const Text('Add category')),
+          )
+        else if (items.isEmpty)
+          const EmptyState(icon: Icons.search_off_rounded, title: 'No items here', message: 'Try another category or filter.')
+        else
+          SurfaceCard(
+            child: Column(
+              children: [
+                if (wide)
+                  Container(
+                    color: p.surfaceAlt,
+                    padding: const EdgeInsets.symmetric(horizontal: Space.lg, vertical: 10),
+                    child: Row(children: [
+                      Expanded(flex: 5, child: _th('Item')),
+                      Expanded(flex: 4, child: _th('Sizes & prices')),
+                      Expanded(flex: 3, child: _th('Add-ons')),
+                      SizedBox(width: 90, child: _th('Available')),
+                      const SizedBox(width: 48),
+                    ]),
+                  ),
+                for (var i = 0; i < items.length; i++) ...[
+                  if (i > 0) Divider(height: 1, color: p.border),
+                  wide ? _itemRowWide(menu, items, i) : _itemRowCompact(menu, items, i),
+                ],
+              ],
+            ),
+          ),
       ],
     );
   }
 
-  Widget _buildItem(MenuData menu, List<MenuItem> siblings, int index) {
+  Widget _th(String t) => Text(t, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.palette.inkSubtle));
+
+  bool _canReorder(MenuItem item) => _search.isEmpty && (_selSub != null || (_selCat != null && item.subcategoryId == null));
+
+  Widget _itemActions(MenuData menu, List<MenuItem> siblings, int index) {
     final item = siblings[index];
-    return Opacity(
-      opacity: item.isAvailable ? 1 : 0.55,
-      child: ListTile(
-        leading: _ItemThumb(url: item.imageUrl),
-        title: Row(
+    final reorder = _canReorder(item);
+    return PopupMenuButton<String>(
+      tooltip: 'Item actions',
+      onSelected: (v) {
+        switch (v) {
+          case 'edit':
+            _openItemEditor(menu, item: item);
+          case 'up':
+            _move(siblings, index, -1, (x) => x.id, (x) => x.sortOrder, _repo.itemRef);
+          case 'down':
+            _move(siblings, index, 1, (x) => x.id, (x) => x.sortOrder, _repo.itemRef);
+          case 'delete':
+            _deleteItem(item);
+        }
+      },
+      itemBuilder: (_) => [
+        const PopupMenuItem(value: 'edit', child: Text('Edit')),
+        if (reorder && index > 0) const PopupMenuItem(value: 'up', child: Text('Move up')),
+        if (reorder && index < siblings.length - 1) const PopupMenuItem(value: 'down', child: Text('Move down')),
+        PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: context.palette.danger))),
+      ],
+    );
+  }
+
+  Widget _availabilitySwitch(MenuItem item) => Switch(
+        value: item.isAvailable,
+        onChanged: widget.readOnly ? null : (v) => _guard(() => _repo.setAvailability(item.id, v)),
+      );
+
+  Widget _priceChips(MenuItem item) {
+    final p = context.palette;
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        for (final v in item.variants)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(color: p.surfaceAlt, borderRadius: BorderRadius.circular(6)),
+            child: Text(item.variants.length == 1 && v.label == 'Standard' ? '₹${formatPrice(v.price)}' : '${v.label} ₹${formatPrice(v.price)}',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          ),
+      ],
+    );
+  }
+
+  Widget _nameCell(MenuItem item) {
+    final p = context.palette;
+    return Row(
+      children: [
+        _ItemThumb(url: item.imageUrl, name: item.name),
+        const SizedBox(width: Space.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Flexible(
+                  child: Text(item.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontWeight: FontWeight.w600, color: item.isAvailable ? p.ink : p.inkSubtle)),
+                ),
+                if (item.isJain) _Badge('J', p.info, p.infoTint),
+                if (item.spicyLevel > 0)
+                  for (var i = 0; i < item.spicyLevel; i++) Icon(Icons.local_fire_department_rounded, size: 14, color: p.danger),
+                if (!item.isAvailable) ...[const SizedBox(width: 6), const StatusChip('Sold out')],
+              ]),
+              if (item.description.isNotEmpty)
+                Text(item.description, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: p.inkSubtle)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _itemRowWide(MenuData menu, List<MenuItem> siblings, int index) {
+    final item = siblings[index];
+    final p = context.palette;
+    return InkWell(
+      onTap: widget.readOnly ? null : () => _openItemEditor(menu, item: item),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: Space.lg, vertical: 10),
+        child: Row(
           children: [
-            Flexible(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600))),
-            if (item.isJain) const _Badge('J', Color(0xFF0091EA)),
-            if (item.spicyLevel > 0) Text(' ${'🌶' * item.spicyLevel}', style: const TextStyle(fontSize: 12)),
+            Expanded(flex: 5, child: _nameCell(item)),
+            Expanded(flex: 4, child: Padding(padding: const EdgeInsets.only(right: Space.sm), child: _priceChips(item))),
+            Expanded(
+              flex: 3,
+              child: Text(
+                item.addOns.isEmpty ? '—' : item.addOns.map((a) => '${a.name} +₹${formatPrice(a.price)}').join(', '),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: p.inkMuted),
+              ),
+            ),
+            SizedBox(width: 90, child: Align(alignment: Alignment.centerLeft, child: _availabilitySwitch(item))),
+            SizedBox(width: 48, child: widget.readOnly ? null : _itemActions(menu, siblings, index)),
           ],
         ),
-        subtitle: Text(
-          [
-            item.variants.length > 1
-                ? item.variants.map((v) => '${v.label} ₹${formatPrice(v.price)}').join(' · ')
-                : item.priceSummary,
-            if (item.addOns.isNotEmpty) '+ ${item.addOns.length} add-on${item.addOns.length > 1 ? 's' : ''}',
-            if (!item.isAvailable) 'UNAVAILABLE',
-          ].join('   '),
-          style: const TextStyle(color: Colors.white54, fontSize: 12),
-        ),
-        trailing: widget.readOnly
-            ? null
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Tooltip(
-                    message: item.isAvailable ? 'Available — tap to mark sold out' : 'Unavailable — tap to make available',
-                    child: Switch(
-                      value: item.isAvailable,
-                      activeThumbColor: AppColors.success,
-                      onChanged: (v) => _guard(() => _repo.setAvailability(item.id, v)),
-                    ),
-                  ),
-                  PopupMenuButton<String>(
-                    tooltip: 'Item actions',
-                    onSelected: (v) {
-                      switch (v) {
-                        case 'edit':
-                          _openItemEditor(menu, item: item);
-                        case 'up':
-                          _move(siblings, index, -1, (x) => x.id, (x) => x.sortOrder, _repo.itemRef);
-                        case 'down':
-                          _move(siblings, index, 1, (x) => x.id, (x) => x.sortOrder, _repo.itemRef);
-                        case 'delete':
-                          _deleteItem(item);
-                      }
-                    },
-                    itemBuilder: (_) => [
-                      const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                      if (index > 0) const PopupMenuItem(value: 'up', child: Text('Move up')),
-                      if (index < siblings.length - 1) const PopupMenuItem(value: 'down', child: Text('Move down')),
-                      const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: AppColors.danger))),
-                    ],
-                  ),
-                ],
-              ),
-        onTap: widget.readOnly ? null : () => _openItemEditor(menu, item: item),
       ),
     );
   }
-}
 
-class _EmptyMenu extends StatelessWidget {
-  const _EmptyMenu();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 48),
-      child: Column(
-        children: [
-          Icon(Icons.restaurant_menu, size: 52, color: Colors.white24),
-          SizedBox(height: 12),
-          Text('Your menu is empty', style: TextStyle(fontSize: 16, color: Colors.white70)),
-          SizedBox(height: 4),
-          Text('Start by adding a category, e.g. "Pizza" or "Beverages".', style: TextStyle(color: Colors.white38)),
-        ],
+  Widget _itemRowCompact(MenuData menu, List<MenuItem> siblings, int index) {
+    final item = siblings[index];
+    return InkWell(
+      onTap: widget.readOnly ? null : () => _openItemEditor(menu, item: item),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(Space.md, Space.md, 0, Space.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(children: [
+              Expanded(child: _nameCell(item)),
+              _availabilitySwitch(item),
+              if (!widget.readOnly) _itemActions(menu, siblings, index),
+            ]),
+            Padding(padding: const EdgeInsets.only(left: 56, top: 6, right: Space.md), child: _priceChips(item)),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _Badge extends StatelessWidget {
-  const _Badge(this.text, this.color);
+  const _Badge(this.text, this.color, this.tint);
   final String text;
   final Color color;
+  final Color tint;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(left: 6),
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
-      child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
+      decoration: BoxDecoration(color: tint, borderRadius: BorderRadius.circular(4)),
+      child: Text(text, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800)),
     );
   }
 }
 
 class _ItemThumb extends StatelessWidget {
-  const _ItemThumb({this.url});
+  const _ItemThumb({this.url, required this.name});
   final String? url;
+  final String name;
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
+    final ph = Container(
+      color: p.primaryTint,
+      alignment: Alignment.center,
+      child: Text(name.isEmpty ? '?' : name.characters.first.toUpperCase(), style: TextStyle(color: p.primary.withValues(alpha: 0.6), fontWeight: FontWeight.w800)),
+    );
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: SizedBox(
         width: 44,
         height: 44,
-        child: url == null
-            ? Container(color: AppColors.surfaceAlt, child: const Icon(Icons.fastfood_outlined, color: Colors.white24))
-            : Image.network(url!, fit: BoxFit.cover, errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined)),
+        child: url == null ? ph : Image.network(url!, fit: BoxFit.cover, errorBuilder: (_, _, _) => ph),
       ),
     );
   }
@@ -560,7 +771,7 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
     if (f.size > 2 * 1024 * 1024) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please choose a photo under 2 MB.'), backgroundColor: AppColors.danger),
+          const SnackBar(content: Text('Please choose a photo under 2 MB.')),
         );
       }
       return;
@@ -580,7 +791,7 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
     final labels = _variants.map((v) => v.label.text.trim().toLowerCase()).toList();
     if (labels.toSet().length != labels.length) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Each size/variant needs a different name.'), backgroundColor: AppColors.danger),
+        const SnackBar(content: Text('Each size/variant needs a different name.')),
       );
       return;
     }
@@ -639,7 +850,7 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
   void _fail(String msg) {
     if (!mounted) return;
     setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: AppColors.danger));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   String? _priceValidator(String? v) {
@@ -654,15 +865,13 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
     final variantLabels = _variants.map((v) => v.label.text.trim()).where((s) => s.isNotEmpty).toList();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.palette.canvas,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
         title: Text(widget.item == null ? 'Add item' : 'Edit item'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 10),
             child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
               onPressed: _saving ? null : _save,
               icon: _saving
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
@@ -810,8 +1019,8 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.accent, fontSize: 15)),
-            if (hint != null) Text(hint, style: const TextStyle(color: Colors.white38, fontSize: 12)),
+            Text(title, style: TextStyle(fontWeight: FontWeight.w700, color: context.palette.ink, fontSize: 15)),
+            if (hint != null) Text(hint, style: TextStyle(color: context.palette.inkSubtle, fontSize: 12)),
           ],
         ),
       );
@@ -852,7 +1061,7 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
           ),
           IconButton(
             tooltip: 'Remove size',
-            icon: const Icon(Icons.remove_circle_outline, color: AppColors.danger),
+            icon: Icon(Icons.remove_circle_outline, color: context.palette.danger),
             onPressed: _variants.length <= 1
                 ? null
                 : () => setState(() {
@@ -867,7 +1076,7 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
   Widget _addOnRow(int i, List<String> variantLabels) {
     final a = _addOns[i];
     return Card(
-      color: AppColors.surface,
+      color: context.palette.surfaceAlt,
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
         padding: const EdgeInsets.all(10),
@@ -897,14 +1106,14 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
                 ),
                 IconButton(
                   tooltip: 'Remove add-on',
-                  icon: const Icon(Icons.delete_outline, color: AppColors.danger),
+                  icon: Icon(Icons.delete_outline, color: context.palette.danger),
                   onPressed: () => setState(() => _addOns.removeAt(i).dispose()),
                 ),
               ],
             ),
             if (variantLabels.length > 1) ...[
               const SizedBox(height: 6),
-              const Text('Available on (none selected = all sizes):', style: TextStyle(color: Colors.white54, fontSize: 12)),
+              Text('Available on (none selected = all sizes):', style: TextStyle(color: context.palette.inkSubtle, fontSize: 12)),
               Wrap(
                 spacing: 6,
                 children: [
@@ -934,17 +1143,17 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
             child: Container(
               width: 110,
               height: 110,
-              color: AppColors.surfaceAlt,
+              color: context.palette.surfaceAlt,
               child: _newImage != null
                   ? Image.memory(_newImage!.bytes!, fit: BoxFit.cover)
                   : _imageUrl != null
                       ? Image.network(_imageUrl!, fit: BoxFit.cover, errorBuilder: (_, _, _) => const Icon(Icons.broken_image))
-                      : const Column(
+                      : Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.add_a_photo_outlined, color: Colors.white38),
-                            SizedBox(height: 4),
-                            Text('Add photo', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                            Icon(Icons.add_a_photo_outlined, color: context.palette.inkSubtle),
+                            const SizedBox(height: 4),
+                            Text('Add photo', style: TextStyle(color: context.palette.inkSubtle, fontSize: 12)),
                           ],
                         ),
             ),
@@ -956,7 +1165,7 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
               _newImage = null;
               _imageUrl = null;
             }),
-            child: const Text('Remove photo', style: TextStyle(color: AppColors.danger, fontSize: 12)),
+            child: Text('Remove photo', style: TextStyle(color: context.palette.danger, fontSize: 12)),
           ),
       ],
     );

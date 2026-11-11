@@ -66,12 +66,16 @@ service cloud.firestore {
 
       match /orders/{orderId} {
         allow read: if canReadCafe(cafeId);
-        // Managers run the POS: create, edit, bill, complete, delete.
-        allow create, update, delete: if isManagerOf(cafeId) && cafeOperational(cafeId);
-        // Captains (kitchen screen) may only change the cooking status.
-        allow update: if role() == 'captain' && myCafe() == cafeId && cafeOperational(cafeId)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'kitchenStatus'])
-          && request.resource.data.status in ['pending', 'preparing', 'ready'];
+        // Managers and Captains take orders, add items, update kitchen
+        // status and settle bills. Only Managers can delete an order.
+        allow create, update: if isStaffOf(cafeId) && cafeOperational(cafeId);
+        allow delete: if isManagerOf(cafeId) && cafeOperational(cafeId);
+      }
+
+      // Expenses: Managers only (Captains never see cafe costs).
+      match /expenses/{id} {
+        allow read: if isSuper() || isManagerOf(cafeId);
+        allow write: if isManagerOf(cafeId) && cafeOperational(cafeId);
       }
 
       // Anything else under a cafe: Super Admin only.
