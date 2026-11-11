@@ -24,6 +24,9 @@
  *       Simple shared cafe login (e.g. flammywood / 123). After signing in
  *       the user picks Manager or Captain view. Re-run to change the password.
  *
+ *   rename-login <old-username> <new-username>
+ *       Changes a username login (password, role and cafe unchanged).
+ *
  *   list-cafes
  *   list-users
  */
@@ -231,6 +234,32 @@ async function createCafeLogin(username, password, cafeId) {
   return { username, cafeName: cafe.get('name') };
 }
 
+/**
+ * Renames a username login (e.g. laferno -> laforno). Password, role and
+ * cafe stay the same; only the sign-in name changes.
+ */
+async function renameLogin(oldName, newName) {
+  const from = String(oldName || '').trim().toLowerCase();
+  const to = String(newName || '').trim().toLowerCase();
+  if (!from || !/^[a-z0-9._-]{3,30}$/.test(to)) throw new Error('Usage: rename-login <old-username> <new-username>');
+  const user = await auth.getUserByEmail(loginEmail(from)).catch(() => null);
+  if (!user) throw new Error(`Login "${from}" not found.`);
+  const taken = await auth.getUserByEmail(loginEmail(to)).catch(() => null);
+  if (taken) throw new Error(`Login "${to}" already exists.`);
+
+  await auth.updateUser(user.uid, { email: loginEmail(to) });
+  await db.collection('users').doc(user.uid).set({ email: loginEmail(to), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  await db.collection('auditLogs').add({
+    action: 'staff.rename',
+    actorUid: 'local-admin-script',
+    cafeId: (user.customClaims || {}).cafeId || null,
+    targetUid: user.uid,
+    details: { from, to },
+    at: FieldValue.serverTimestamp(),
+  });
+  console.log(`Renamed login "${from}" -> "${to}". Password is unchanged.`);
+}
+
 async function listCafes() {
   const snap = await db.collection('cafes').get();
   if (snap.empty) return console.log('No cafes yet.');
@@ -266,6 +295,8 @@ async function main() {
     case 'create-cafe-login':
       await createCafeLogin(args[0], args[1], args[2]);
       return;
+    case 'rename-login':
+      return renameLogin(args[0], args[1]);
     case 'list-cafes':
       return listCafes();
     case 'list-users':
@@ -277,6 +308,7 @@ async function main() {
           '  create-cafe <name> [--legacy]\n' +
           '  create-staff <email> <manager|captain> <cafeId> [name]\n' +
           '  create-cafe-login <username> <password> <cafeId>\n' +
+          '  rename-login <old-username> <new-username>\n' +
           '  list-cafes | list-users',
       );
   }
