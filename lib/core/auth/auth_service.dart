@@ -40,7 +40,9 @@ class AuthService {
       email: AppConfig.loginEmail(identifier),
       password: AppConfig.loginPassword(identifier, password),
     );
-    // Mark an invited account as active. Best-effort: never block sign-in.
+    // Mark an invited (email) account as active. Shared username logins are
+    // created active already, so skip the call. Best-effort: never blocks sign-in.
+    if (AppConfig.isUsername(identifier.trim())) return;
     try {
       await FirebaseFunctions.instanceFor(region: AppConfig.functionsRegion)
           .httpsCallable('confirmFirstSignIn')
