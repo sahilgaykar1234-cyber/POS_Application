@@ -9,16 +9,18 @@ import 'core/theme/app_theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Public web config (safe to ship; security comes from Auth + Firestore rules).
+  // Public web config of the registered "SuratPOS Web" app (safe to ship;
+  // security comes from Auth + Firestore rules). Source:
+  //   firebase apps:sdkconfig web --project suratpos
   await Firebase.initializeApp(
     options: const FirebaseOptions(
-      apiKey: "AIzaSyDMe-TEEFwzfx7H1bBVwq8QKuD_Zpabs8",
-      appId: "1:696863288881:web:216140984c82a5c8a00f90",
+      apiKey: "AIzaSyDMe-TEEfwrfx7TH1bBVwqBQKuD_Zpabs0",
+      appId: "1:696853288881:web:215140904c82a5c0a80f90",
       messagingSenderId: "696853288881",
       projectId: "suratpos",
       authDomain: "suratpos.firebaseapp.com",
-      storageBucket: "suratpos.appspot.com",
-      measurementId: "G-LC3416JZYD",
+      storageBucket: "suratpos.firebasestorage.app",
+      measurementId: "G-LCG416QZTD",
     ),
   );
 

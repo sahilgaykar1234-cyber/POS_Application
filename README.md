@@ -1,18 +1,20 @@
-# pos_app
+# Cafe POS
 
-A new Flutter project.
+Multi-tenant point-of-sale for cafes and restaurants (Flutter web + Firebase).
 
-## Getting Started
+- **Master Admin** — onboard cafes, plans, subscription payments, staff, audit log
+- **Manager** — POS billing, tables, menu (sizes, add-ons, photos), reports, captains
+- **Captain** — kitchen screen
 
-This project is a starting point for a Flutter application.
+Every cafe's data lives under `cafes/{cafeId}/…` and is isolated by Firestore
+security rules using server-assigned roles (Firebase Auth custom claims).
 
-A few resources to get you started if this is your first Flutter project:
+**Go-live and testing:** see [docs/SETUP.md](docs/SETUP.md).
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-# POS_Application
+| Folder | What |
+|---|---|
+| `lib/` | Flutter app |
+| `functions/` | Cloud Functions (invites, cafes, subscription job) |
+| `firestore.rules`, `storage.rules` | Security rules |
+| `firestore-tests/` | Rules tests (Firestore emulator) |
+| `tools/admin/` | Local admin scripts: backup, bootstrap, migration, menu import |
