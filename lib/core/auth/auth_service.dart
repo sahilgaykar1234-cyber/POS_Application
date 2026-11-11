@@ -87,6 +87,13 @@ class AuthService {
       return error.message ?? 'Sign-in failed. Please try again.';
     }
     if (error is FirebaseFunctionsException) {
+      // These codes mean the server functions are not reachable/deployed
+      // (e.g. Cloud Functions not set up yet), not a problem with the input.
+      const serverDown = ['internal', 'not-found', 'unavailable', 'unimplemented', 'deadline-exceeded'];
+      if (serverDown.contains(error.code)) {
+        return 'This needs the server setup, which is not active yet. '
+            'Please ask the owner to add staff for now.';
+      }
       return error.message ?? 'Request failed. Please try again.';
     }
     return 'Something went wrong. Please try again.';
