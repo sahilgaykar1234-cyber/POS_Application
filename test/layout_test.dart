@@ -266,6 +266,22 @@ void main() {
     });
   }
 
+  for (final size in [sizes['phone']!, sizes['desktop']!]) {
+    testWidgets('Settings: save bar only when changed, page scrolls to the end · ${size.width}', (t) async {
+      await pumpAt(t, size, SettingsScreen(loader: () async => settings), AppTheme.light());
+      await t.pumpAndSettle();
+      expect(find.text('You have unsaved changes'), findsNothing);
+      // The last section must be reachable (nothing hidden behind an empty bar).
+      await t.scrollUntilVisible(find.text('Auto'), 300, scrollable: find.byType(Scrollable).first);
+      await t.pumpAndSettle();
+      expect(find.text('Auto'), findsOneWidget);
+      await t.enterText(find.widgetWithText(TextFormField, 'Footer'), 'See you soon');
+      await t.pumpAndSettle();
+      expect(find.text('You have unsaved changes'), findsOneWidget);
+      expect(t.takeException(), isNull);
+    });
+  }
+
   testWidgets('POS phone: add items then open the cart sheet', (t) async {
     await pumpAt(t, sizes['phone']!, PosScreen(menuStream: Stream.value(menu()), settingsStream: Stream.value(settings)), AppTheme.light());
     await t.tap(find.text('Add').last); // Thums Up (single size → added directly)

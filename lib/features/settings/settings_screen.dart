@@ -25,9 +25,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _form = GlobalKey<FormState>();
   final _c = <String, TextEditingController>{
     for (final k in [
-      'shopName', 'tagline', 'ownerName', 'mobileNumber', 'email', 'gstNumber', 'address',
-      'receiptHeader', 'receiptFooter', 'thankYouMessage', 'gstPercentage', 'currencySymbol',
-      'currencyCode', 'defaultTax', 'numberOfTables',
+      'shopName',
+      'tagline',
+      'ownerName',
+      'mobileNumber',
+      'email',
+      'gstNumber',
+      'address',
+      'receiptHeader',
+      'receiptFooter',
+      'thankYouMessage',
+      'gstPercentage',
+      'currencySymbol',
+      'currencyCode',
+      'defaultTax',
+      'numberOfTables',
     ])
       k: TextEditingController(),
   };
@@ -157,34 +169,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      bottomNavigationBar: AnimatedSlide(
-        duration: const Duration(milliseconds: 180),
-        offset: _dirty ? Offset.zero : const Offset(0, 1),
-        child: Container(
-          padding: const EdgeInsets.all(Space.md),
-          decoration: BoxDecoration(color: p.surface, border: Border(top: BorderSide(color: p.border))),
-          child: SafeArea(
-            top: false,
-            child: Row(
-              children: [
-                Expanded(child: Text('You have unsaved changes', style: TextStyle(color: p.inkSubtle))),
-                OutlinedButton(
-                  onPressed: _saving
-                      ? null
-                      : () {
-                          setState(() => _loading = true);
-                          _dirty = false;
-                          _load();
-                        },
-                  child: const Text('Discard'),
+      // Only present while there are unsaved changes, so it never takes space
+      // (and cuts the page) when hidden.
+      bottomNavigationBar: !_dirty
+          ? null
+          : Container(
+              padding: const EdgeInsets.all(Space.md),
+              decoration: BoxDecoration(
+                color: p.surface,
+                border: Border(top: BorderSide(color: p.border)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text('You have unsaved changes', style: TextStyle(color: p.inkSubtle)),
+                    ),
+                    OutlinedButton(
+                      onPressed: _saving
+                          ? null
+                          : () {
+                              setState(() => _loading = true);
+                              _dirty = false;
+                              _load();
+                            },
+                      child: const Text('Discard'),
+                    ),
+                    const SizedBox(width: Space.sm),
+                    FilledButton(onPressed: _saving ? null : _save, child: Text(_saving ? 'Saving…' : 'Save changes')),
+                  ],
                 ),
-                const SizedBox(width: Space.sm),
-                FilledButton(onPressed: _saving ? null : _save, child: Text(_saving ? 'Saving…' : 'Save changes')),
-              ],
+              ),
             ),
-          ),
-        ),
-      ),
+
       body: Form(
         key: _form,
         child: PageBody(
@@ -201,9 +219,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Container(
                         width: 76,
                         height: 76,
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: Radii.cardR, border: Border.all(color: p.border)),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: Radii.cardR,
+                          border: Border.all(color: p.border),
+                        ),
                         clipBehavior: Clip.antiAlias,
-                        child: _logo == null ? const Center(child: AppLogo(size: 44)) : Image.memory(base64Decode(_logo!), fit: BoxFit.contain),
+                        child: _logo == null
+                            ? const Center(child: AppLogo(size: 44))
+                            : Image.memory(base64Decode(_logo!), fit: BoxFit.contain),
                       ),
                       const SizedBox(width: Space.lg),
                       Expanded(
@@ -213,18 +237,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             Text('Logo', style: context.text.titleSmall),
                             Text('Printed on bills. PNG/JPG under 300 KB.', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
                             const SizedBox(height: Space.sm),
-                            Wrap(spacing: Space.sm, children: [
-                              OutlinedButton(onPressed: _pickLogo, child: Text(_logo == null ? 'Upload' : 'Change')),
-                              if (_logo != null)
-                                TextButton(
-                                  style: TextButton.styleFrom(foregroundColor: p.danger),
-                                  onPressed: () => setState(() {
-                                    _logo = null;
-                                    _dirty = true;
-                                  }),
-                                  child: const Text('Remove'),
-                                ),
-                            ]),
+                            Wrap(
+                              spacing: Space.sm,
+                              children: [
+                                OutlinedButton(onPressed: _pickLogo, child: Text(_logo == null ? 'Upload' : 'Change')),
+                                if (_logo != null)
+                                  TextButton(
+                                    style: TextButton.styleFrom(foregroundColor: p.danger),
+                                    onPressed: () => setState(() {
+                                      _logo = null;
+                                      _dirty = true;
+                                    }),
+                                    child: const Text('Remove'),
+                                  ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
@@ -266,7 +293,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         Expanded(child: Text('Default order type', style: context.text.titleSmall)),
                         SegmentedButton<String>(
                           showSelectedIcon: false,
-                          segments: const [ButtonSegment(value: 'Dine-In', label: Text('Dine-in')), ButtonSegment(value: 'Takeaway', label: Text('Takeaway'))],
+                          segments: const [
+                            ButtonSegment(value: 'Dine-In', label: Text('Dine-in')),
+                            ButtonSegment(value: 'Takeaway', label: Text('Takeaway')),
+                          ],
                           selected: {_defaultOrderType == 'Takeaway' ? 'Takeaway' : 'Dine-In'},
                           onSelectionChanged: (s) => setState(() {
                             _defaultOrderType = s.first;
@@ -300,11 +330,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             SectionCard(
               title: 'Receipt text',
               icon: Icons.print_outlined,
-              child: Column(children: [
-                _field('receiptHeader', 'Header'),
-                _field('thankYouMessage', 'Thank-you message'),
-                _field('receiptFooter', 'Footer'),
-              ]),
+              child: Column(
+                children: [
+                  _field('receiptHeader', 'Header'),
+                  _field('thankYouMessage', 'Thank-you message'),
+                  _field('receiptFooter', 'Footer'),
+                ],
+              ),
             ),
             SectionCard(
               title: 'Appearance',
@@ -334,15 +366,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _row(List<Widget> children) => LayoutBuilder(
-        builder: (context, c) => c.maxWidth < 520
-            ? Column(children: children)
-            : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                for (var i = 0; i < children.length; i++) ...[
-                  if (i > 0) const SizedBox(width: Space.md),
-                  Expanded(child: children[i]),
-                ],
-              ]),
-      );
+    builder: (context, c) => c.maxWidth < 520
+        ? Column(children: children)
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(width: Space.md), Expanded(child: children[i])],
+            ],
+          ),
+  );
 
   Widget _field(String key, String label, {bool required = false, TextInputType? keyboard, int maxLines = 1, bool number = false}) {
     return Padding(
