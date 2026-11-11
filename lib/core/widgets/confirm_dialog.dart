@@ -52,7 +52,7 @@ Future<bool> showDangerConfirmDialog(
           actions: [
             OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: p.danger, foregroundColor: Colors.white),
+              style: FilledButton.styleFrom(backgroundColor: p.danger, foregroundColor: context.onStatusFill),
               onPressed: canConfirm ? () => Navigator.pop(ctx, true) : null,
               child: Text(confirmLabel),
             ),

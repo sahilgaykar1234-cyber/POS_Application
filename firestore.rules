@@ -74,6 +74,12 @@ service cloud.firestore {
           && request.resource.data.status in ['pending', 'preparing', 'ready'];
       }
 
+      // Per-cafe counters (daily takeaway token). Managers take orders.
+      match /counters/{id} {
+        allow read: if canReadCafe(cafeId);
+        allow write: if isManagerOf(cafeId) && cafeOperational(cafeId);
+      }
+
       // Anything else under a cafe: Super Admin only.
       match /{other=**} {
         allow read, write: if isSuper();

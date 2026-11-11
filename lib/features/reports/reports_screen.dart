@@ -1,6 +1,8 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_theme.dart';
+
 import '../../core/layout/breakpoints.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
@@ -168,7 +170,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               avatar: const Icon(Icons.date_range_outlined, size: 18),
               label: Text(_period == _Period.custom ? 'Custom range' : 'Pick dates'),
               backgroundColor: _period == _Period.custom ? p.ink : null,
-              labelStyle: TextStyle(color: _period == _Period.custom ? p.surface : p.inkMuted),
+              labelStyle: TextStyle(fontFamily: AppTheme.fontFamily, color: _period == _Period.custom ? p.surface : p.inkMuted),
               onPressed: _pickCustom,
             ),
           ],

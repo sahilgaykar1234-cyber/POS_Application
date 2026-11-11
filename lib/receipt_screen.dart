@@ -1,10 +1,9 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'features/orders/whatsapp_bill.dart';
+import 'features/orders/whatsapp_launch.dart';
 
 import 'core/theme/tokens.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -250,7 +249,9 @@ class PaymentCompleteReceiptScreen extends StatelessWidget {
                   spacing: 8,
                   children: [
                     Text(
-                      tableNo.isNotEmpty ? (tableNo.toLowerCase().contains('table') ? tableNo : 'Table $tableNo') : 'Counter / Takeaway',
+                      tableNo.isNotEmpty
+                          ? (tableNo.toLowerCase().contains('table') ? tableNo : 'Table $tableNo')
+                          : (orderData['tokenNo'] != null ? 'Takeaway · Token #${orderData['tokenNo']}' : 'Counter / Takeaway'),
                       style: const TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black),
                     ),
                     Text(
@@ -505,22 +506,7 @@ class PaymentCompleteReceiptScreen extends StatelessWidget {
       }
     }
     final text = buildWhatsAppBill(order: orderData, orderId: orderId, settings: businessSettings);
-    final mobile = defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
-    var ok = false;
-    try {
-      // Straight to the chat: WhatsApp app on phones, WhatsApp Web on
-      // computers (re-using one "whatsapp" tab instead of opening new ones).
-      ok = await launchUrl(
-        whatsAppDirectUri(number, text, mobile: mobile),
-        mode: LaunchMode.externalApplication,
-        webOnlyWindowName: mobile ? null : 'cafepos_whatsapp',
-      );
-    } catch (_) {
-      ok = false;
-    }
-    if (!ok) {
-      ok = await launchUrl(whatsAppUri(number, text), mode: LaunchMode.externalApplication);
-    }
+    final ok = await openWhatsAppChat(number, text);
     if (!ok && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open WhatsApp.')));
     }

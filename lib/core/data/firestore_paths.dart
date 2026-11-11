@@ -93,6 +93,10 @@ class FirestorePaths {
   static DocumentReference<Map<String, dynamic>> counter(String name) =>
       _db.collection('counters').doc(name);
 
+  /// Per-cafe counters, e.g. the daily takeaway token: cafes/{id}/counters/{name}.
+  static DocumentReference<Map<String, dynamic>> cafeCounter(String name, [String? cafeId]) =>
+      cafe(_cafeOrActive(cafeId)).collection('counters').doc(name);
+
   // ---------------------------------------------------------------------------
   // Legacy (pre-multi-tenant) collection names. Read only by the migration
   // script; the app no longer touches them. Kept for documentation.

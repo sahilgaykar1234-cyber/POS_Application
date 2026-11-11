@@ -79,3 +79,11 @@ Uri whatsAppDirectUri(String number, String text, {required bool mobile}) {
       ? Uri.parse('whatsapp://send?phone=$number&text=$t')
       : Uri.parse('https://web.whatsapp.com/send?phone=$number&text=$t');
 }
+
+/// "Your order is ready" message for takeaway customers.
+String buildReadyMessage({required String shopName, required String customerName, int? token, required String billNo}) {
+  final who = customerName.trim().isEmpty || customerName == 'Walk-in' ? '' : ' $customerName';
+  final ref = token != null ? 'Token #$token' : 'order $billNo';
+  final at = shopName.trim().isEmpty ? '' : ' at *${shopName.trim()}*';
+  return 'Hi$who, your takeaway ($ref) is *ready for pickup*$at. See you soon!';
+}

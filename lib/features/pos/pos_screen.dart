@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../../core/theme/app_theme.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/auth/auth_service.dart';
@@ -23,7 +25,10 @@ import 'print_helper.dart';
 /// Wide screens: categories | items | cart side by side.
 /// Phones: item list with a sticky "View order" bar opening the cart.
 class PosScreen extends StatefulWidget {
-  const PosScreen({super.key, this.editing, this.prefilledTable, this.standalone = false, this.onDone, this.menuStream, this.settingsStream, this.customerLookup});
+  const PosScreen({super.key, this.editing, this.prefilledTable, this.standalone = false, this.onDone, this.menuStream, this.settingsStream, this.customerLookup, this.initialOrderType});
+
+  /// 'Dine-In' or 'Takeaway' for a new order (default: cafe setting).
+  final String? initialOrderType;
 
   /// Test hooks (default: live Firestore).
   final Stream<MenuData>? menuStream;
@@ -57,6 +62,9 @@ class _PosScreenState extends State<PosScreen> {
   bool _lookingUp = false;
   bool _saving = false;
 
+  /// Takeaway: promised pickup in N minutes (null = as soon as possible).
+  int? _pickupMinutes;
+
   late final Stream<MenuData> _menu = widget.menuStream ?? MenuRepository(FirestorePaths.activeCafeId).watchMenu();
   late final Stream<BusinessSettings> _settings = widget.settingsStream ?? BusinessSettingsRepository.instance.watch();
   BusinessSettings _bs = BusinessSettings.empty;
@@ -70,7 +78,7 @@ class _PosScreenState extends State<PosScreen> {
       setState(() {
         final first = identical(_bs, BusinessSettings.empty);
         _bs = s;
-        if (first && widget.editing == null) cart.orderType = s.defaultOrderType;
+        if (first && widget.editing == null) cart.orderType = widget.initialOrderType ?? s.defaultOrderType;
       });
     });
     final e = widget.editing;
@@ -86,6 +94,7 @@ class _PosScreenState extends State<PosScreen> {
     } else if (widget.prefilledTable != null) {
       _table.text = int.tryParse(widget.prefilledTable!) != null ? 'Table ${widget.prefilledTable}' : widget.prefilledTable!;
     }
+    if (widget.editing == null && widget.initialOrderType != null) cart.orderType = widget.initialOrderType!;
     cart.addListener(_onCart);
   }
 
@@ -182,9 +191,11 @@ class _PosScreenState extends State<PosScreen> {
     setState(() => _saving = true);
     cart.touch();
     try {
-      await OrderService.instance.saveOrder(
+      final isTakeaway = cart.orderType == 'Takeaway';
+      final draft = _draft();
+      final saved = await OrderService.instance.saveOrder(
         existing: widget.editing,
-        tableNo: _table.text,
+        tableNo: isTakeaway ? '' : _table.text,
         rawName: _name.text,
         rawPhone: _phone.text,
         orderType: cart.orderType,
@@ -193,15 +204,22 @@ class _PosScreenState extends State<PosScreen> {
         gstEnabled: _bs.showGst,
         gstPercent: _bs.gstPercent,
         createdByRole: AuthService.instance.currentUser?.role?.claim,
+        pickupInMinutes: isTakeaway ? _pickupMinutes : null,
+        assignToken: _bs.autoGenTokenNumber,
       );
       if (!mounted) return;
       final msg = widget.editing == null ? 'Order sent to kitchen' : 'Order updated';
+      if (_sheetOpen) Navigator.of(context).pop();
+      // New takeaway: show the token big so it can be told/printed for the customer.
+      if (isTakeaway && widget.editing == null) {
+        await _showTokenDialog(saved.token, {...draft, 'tableNo': '', 'orderType': 'Takeaway', 'tokenNo': ?saved.token}, saved.id);
+        if (!mounted) return;
+      }
       if (widget.standalone) {
         Navigator.pop(context, true);
         showSuccess(context, msg);
         return;
       }
-      if (_sheetOpen) Navigator.of(context).pop();
       showSuccess(context, msg);
       setState(() {
         cart.clear(orderType: _bs.defaultOrderType);
@@ -210,6 +228,7 @@ class _PosScreenState extends State<PosScreen> {
         }
         _known = null;
         _autoName = null;
+        _pickupMinutes = null;
       });
       widget.onDone?.call();
     } catch (e) {
@@ -220,6 +239,42 @@ class _PosScreenState extends State<PosScreen> {
         cart.touch();
       }
     }
+  }
+
+  Future<void> _showTokenDialog(int? token, Map<String, dynamic> order, String orderId) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final p = ctx.palette;
+        return AlertDialog(
+          icon: Icon(Icons.shopping_bag_outlined, color: p.primary, size: 32),
+          title: const Text('Takeaway order placed', textAlign: TextAlign.center),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(token == null ? 'Bill' : 'Token', style: TextStyle(color: p.inkSubtle, fontWeight: FontWeight.w600)),
+              Text(
+                token == null ? '#${orderId.substring(0, 6).toUpperCase()}' : '#$token',
+                style: TextStyle(fontSize: 64, fontWeight: FontWeight.w800, color: p.primary, height: 1.1, letterSpacing: -1),
+              ),
+              if (_pickupMinutes != null)
+                Text('Ready in about $_pickupMinutes min', style: TextStyle(color: p.inkMuted))
+              else
+                Text('Ready as soon as possible', style: TextStyle(color: p.inkMuted)),
+            ],
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            OutlinedButton.icon(
+              onPressed: () => printBill(ctx, order: order, settings: _bs.receiptSettings, orderId: orderId),
+              icon: const Icon(Icons.print_outlined, size: 18),
+              label: const Text('Print token'),
+            ),
+            FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done')),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _confirmClear() async {
@@ -442,10 +497,19 @@ class _PosScreenState extends State<PosScreen> {
                     showSelectedIcon: false,
                   ),
                   const SizedBox(height: Space.md),
-                  TextField(
-                    controller: _table,
-                    decoration: const InputDecoration(labelText: 'Table / counter', prefixIcon: Icon(Icons.table_restaurant_outlined, size: 20)),
-                  ),
+                  if (cart.orderType == 'Takeaway')
+                    _PickupPicker(
+                      minutes: _pickupMinutes,
+                      onChanged: (m) {
+                        setState(() => _pickupMinutes = m);
+                        cart.touch();
+                      },
+                    )
+                  else
+                    TextField(
+                      controller: _table,
+                      decoration: const InputDecoration(labelText: 'Table / counter', prefixIcon: Icon(Icons.table_restaurant_outlined, size: 20)),
+                    ),
                   const SizedBox(height: Space.md),
                   Row(
                     children: [
@@ -941,6 +1005,42 @@ class _MobileCartBar extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Takeaway "Pickup in" selector: ASAP / 10 / 15 / 20 / 30 / 45 min.
+class _PickupPicker extends StatelessWidget {
+  const _PickupPicker({required this.minutes, required this.onChanged});
+  final int? minutes;
+  final ValueChanged<int?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Icon(Icons.schedule_rounded, size: 18, color: p.inkSubtle),
+          const SizedBox(width: 6),
+          Text('Pickup in', style: context.text.titleSmall),
+        ]),
+        const SizedBox(height: Space.sm),
+        Wrap(
+          spacing: Space.sm,
+          runSpacing: Space.sm,
+          children: [
+            for (final m in const <int?>[null, 10, 15, 20, 30, 45])
+              ChoiceChip(
+                label: Text(m == null ? 'ASAP' : '$m min'),
+                selected: minutes == m,
+                onSelected: (_) => onChanged(m),
+                labelStyle: TextStyle(fontFamily: AppTheme.fontFamily, color: minutes == m ? p.surface : p.inkMuted, fontWeight: FontWeight.w600),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }

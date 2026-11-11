@@ -50,8 +50,11 @@ class OrderService {
   Stream<PosOrder?> watchOne(String id) =>
       _orders.doc(id).snapshots().map((d) => d.exists ? PosOrder.fromDoc(d) : null);
 
-  /// Places a new order or updates [existing]. Returns the order id.
-  Future<String> saveOrder({
+  /// Places a new order or updates [existing].
+  ///
+  /// New takeaway orders get the next daily token number (atomically, so two
+  /// devices never share a token) and an optional promised pickup time.
+  Future<({String id, int? token})> saveOrder({
     PosOrder? existing,
     required String tableNo,
     required String rawName,
@@ -62,6 +65,8 @@ class OrderService {
     required bool gstEnabled,
     required double gstPercent,
     String? createdByRole,
+    int? pickupInMinutes,
+    bool assignToken = true,
   }) async {
     final c = CustomerInput.normalize(rawName, rawPhone);
     final displayName = formatCustomerDisplayName(c.name, tableNo.trim());
@@ -69,7 +74,8 @@ class OrderService {
 
     if (existing == null) {
       final initialItems = cart.map((e) => {...e, 'isDone': false}).toList();
-      final ref = await _orders.add({
+      final isTakeaway = orderType.toLowerCase().contains('takeaway');
+      final data = <String, dynamic>{
         'deviceId': 'counter_manager_${DateTime.now().millisecondsSinceEpoch}',
         'customerName': displayName,
         'tableNo': tableNo.trim(),
@@ -87,8 +93,32 @@ class OrderService {
         'hasNewItemsAdded': false,
         'createdByRole': ?createdByRole,
         'createdAt': FieldValue.serverTimestamp(),
-      });
-      return ref.id;
+        if (isTakeaway && pickupInMinutes != null)
+          'pickupAt': Timestamp.fromDate(DateTime.now().add(Duration(minutes: pickupInMinutes))),
+      };
+
+      if (isTakeaway && assignToken) {
+        final ref = _orders.doc();
+        final counter = FirestorePaths.cafeCounter('takeaway_${takeawayDayKey(DateTime.now())}');
+        try {
+          final token = await FirebaseFirestore.instance.runTransaction<int>((tx) async {
+            final snap = await tx.get(counter);
+            final next = (snap.data()?['next'] as num?)?.toInt() ?? 1;
+            tx.set(counter, {'next': next + 1, 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+            tx.set(ref, {...data, 'tokenNo': next});
+            return next;
+          });
+          return (id: ref.id, token: token);
+        } catch (_) {
+          // Offline / transaction failed: never lose the order — save it
+          // without a token (the bill number is shown instead).
+          await ref.set(data);
+          return (id: ref.id, token: null);
+        }
+      }
+
+      final ref = await _orders.add(data);
+      return (id: ref.id, token: null);
     }
 
     final hasAnyNew = cart.any((e) => (e['isDone'] ?? false) == false);
@@ -111,7 +141,7 @@ class OrderService {
       'discountValue': FieldValue.delete(),
       'discountGiven': FieldValue.delete(),
     });
-    return existing.id;
+    return (id: existing.id, token: existing.tokenNo);
   }
 
   Future<void> setStatus(String id, String status) =>
@@ -206,3 +236,7 @@ class OrderService {
     return KnownCustomer(validName, items, (last['createdAt'] as Timestamp?)?.toDate());
   }
 }
+
+/// yyyymmdd (local day) — token numbers restart every day.
+String takeawayDayKey(DateTime d) =>
+    '${d.year}${d.month.toString().padLeft(2, '0')}${d.day.toString().padLeft(2, '0')}';

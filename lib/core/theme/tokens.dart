@@ -151,5 +151,9 @@ const double kTouch = 44;
 
 extension PaletteX on BuildContext {
   Palette get palette => Theme.of(this).extension<Palette>() ?? Palette.light;
+
+  /// Text/icon colour on a solid success/info/danger fill: white in light
+  /// mode, near-black in dark mode (where those fills are light/bright).
+  Color get onStatusFill => Theme.of(this).brightness == Brightness.dark ? const Color(0xFF0B0F14) : Colors.white;
   TextTheme get text => Theme.of(this).textTheme;
 }

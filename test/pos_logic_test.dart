@@ -9,6 +9,7 @@ import 'package:pos_app/features/orders/order_model.dart';
 import 'package:pos_app/features/orders/order_service.dart';
 import 'package:pos_app/features/orders/orders_board_screen.dart';
 import 'package:pos_app/features/orders/whatsapp_bill.dart';
+import 'package:pos_app/features/takeaway/takeaway_board.dart';
 import 'package:flutter/material.dart';
 import 'package:pos_app/features/pos/pos_cart.dart';
 import 'package:pos_app/features/reports/reports_csv.dart';
@@ -272,6 +273,67 @@ void main() {
       expect(uri.host, 'wa.me');
       expect(uri.path, '/919825012345');
       expect(uri.queryParameters['text'], text);
+    });
+  });
+
+  group('Takeaway', () {
+    final now = DateTime(2026, 11, 11, 20, 0);
+    PosOrder t(String id, int? token, String status, {int? pickupIn, String table = '', String type = 'Takeaway', bool paid = false}) => PosOrder(id, {
+          'orderType': type,
+          'tableNo': table,
+          'tokenNo': ?token,
+          'status': status,
+          'customerName': 'Rahul',
+          'paymentStatus': paid ? 'paid_cash' : 'pending',
+          'createdAt': Timestamp.fromDate(now.subtract(const Duration(minutes: 10))),
+          if (pickupIn != null) 'pickupAt': Timestamp.fromDate(now.add(Duration(minutes: pickupIn))),
+        });
+
+    test('board groups by status and sorts by token; dine-in excluded', () {
+      final b = TakeawayBoard.from([
+        t('a', 3, 'pending'),
+        t('b', 1, 'pending'),
+        t('c', 2, 'preparing'),
+        t('d', 4, 'ready', paid: true),
+        t('e', 5, 'completed'),
+        t('f', null, 'pending', type: 'Dine-In', table: '4'),
+        t('g', 6, 'pending', table: 'Table 9'), // takeaway with a table → stays on Tables
+      ]);
+      expect(b.incoming.map((o) => o.tokenNo), [1, 3]);
+      expect(b.preparing.map((o) => o.tokenNo), [2]);
+      expect(b.ready.map((o) => o.tokenNo), [4]);
+      expect(b.pickedUp.map((o) => o.tokenNo), [5]);
+      expect(b.active, 4);
+      expect(readyTokens(b), [4]);
+    });
+
+    test('takeaway orders never land on the Tables board', () {
+      final board = TableBoard.build([t('x', 7, 'pending'), t('y', null, 'pending', type: 'Dine-In', table: '3')], 12);
+      expect(board.byTable.keys, [3]);
+      expect(board.virtuals, isEmpty);
+    });
+
+    test('pickup countdown', () {
+      expect(pickupStatus(t('a', 1, 'pending'), now).state, PickupState.asap);
+      expect(pickupStatus(t('a', 1, 'pending', pickupIn: 15), now).label, 'In 15 min');
+      expect(pickupStatus(t('a', 1, 'pending', pickupIn: 4), now).state, PickupState.dueSoon);
+      final late = pickupStatus(t('a', 1, 'preparing', pickupIn: -3), now);
+      expect(late.state, PickupState.late);
+      expect(late.label, 'Late by 3 min');
+      expect(pickupStatus(t('a', 1, 'ready', pickupIn: -3), now).state, PickupState.onTime, reason: 'ready → waiting, not late');
+    });
+
+    test('labels and ready message', () {
+      final o = t('abcdef1', 12, 'ready');
+      expect(o.isTakeaway, isTrue);
+      expect(o.tokenLabel, 'Token #12');
+      expect(o.displayName, 'Rahul (Token #12)');
+      expect(PosOrder('x', {'orderType': 'Takeaway', 'customerName': ''}).takeawayName, 'Walk-in');
+      expect(
+        buildReadyMessage(shopName: 'Pizza La Forno', customerName: 'Rahul', token: 12, billNo: '#ABC'),
+        'Hi Rahul, your takeaway (Token #12) is *ready for pickup* at *Pizza La Forno*. See you soon!',
+      );
+      expect(takeawayDayKey(DateTime(2026, 3, 5)), '20260305');
     });
   });
 }

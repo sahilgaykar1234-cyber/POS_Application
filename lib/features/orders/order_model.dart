@@ -42,6 +42,24 @@ class PosOrder {
   DateTime? get completedAt => (data['completedAt'] as Timestamp?)?.toDate();
   DateTime? get paidAt => (data['paidAt'] as Timestamp?)?.toDate();
 
+  // ---- Takeaway ----
+  bool get isTakeaway => orderType.toLowerCase().contains('takeaway');
+
+  /// Daily token number for takeaway orders (null for dine-in/old orders).
+  int? get tokenNo => (data['tokenNo'] as num?)?.toInt();
+
+  /// When the customer was promised the order (null = as soon as possible).
+  DateTime? get pickupAt => (data['pickupAt'] as Timestamp?)?.toDate();
+
+  /// "Token #12" or, without a token, the bill number.
+  String get tokenLabel => tokenNo != null ? 'Token #$tokenNo' : billNo;
+
+  /// Takeaway customer name ("Walk-in" when none was given).
+  String get takeawayName {
+    final n = customerName.replaceAll(RegExp(r'\(Table\s*\d+\)', caseSensitive: false), '').trim();
+    return n.isEmpty || n == 'Counter Customer' ? 'Walk-in' : n;
+  }
+
   /// Short bill number, same as receipts: first 6 chars of the id.
   String get billNo => '#${id.substring(0, id.length > 6 ? 6 : id.length).toUpperCase()}';
 
@@ -52,7 +70,9 @@ class PosOrder {
   }
 
   /// "Rahul (Table 4)" style label used across the app (unchanged logic).
-  String get displayName => formatCustomerDisplayName(customerName, tableNo.isEmpty ? null : tableNo);
+  String get displayName => isTakeaway && tableNo.isEmpty && tokenNo != null
+      ? '$takeawayName (Token #$tokenNo)'
+      : formatCustomerDisplayName(customerName, tableNo.isEmpty ? null : tableNo);
 
   /// Kitchen-facing status label.
   String get statusLabel => switch (status) {
@@ -100,6 +120,7 @@ class TableBoard {
     final virtuals = <PosOrder>[];
     for (final o in today) {
       if (o.isCompleted || o.isCancelled) continue;
+      if (o.isTakeaway && o.tableNo.trim().isEmpty) continue; // shown on the Takeaway board
       final customer = o.customerName.toLowerCase();
       final tNo = o.tableNo.trim();
       final explicitVirtual =

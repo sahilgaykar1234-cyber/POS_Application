@@ -16,6 +16,7 @@ import '../menu/menu_management_screen.dart';
 import '../orders/order_model.dart';
 import '../orders/order_service.dart';
 import '../orders/orders_board_screen.dart';
+import '../takeaway/takeaway_screen.dart';
 import '../pos/pos_screen.dart';
 import '../reports/reports_screen.dart';
 import '../settings/business_settings.dart';
@@ -55,7 +56,13 @@ Future<void> _confirmSignOut(BuildContext context) async {
 }
 
 /// Running orders count for the Tables badge.
-Stream<int> _runningCount() => OrderService.instance.watchAll().map((l) => todaysOrders(l).where((o) => o.isActive).length);
+/// Active orders today: (dine-in, takeaway) for the nav badges.
+typedef _Counts = ({int dineIn, int takeaway});
+Stream<_Counts> _runningCount() => OrderService.instance.watchAll().map((l) {
+      final active = todaysOrders(l).where((o) => o.isActive);
+      final take = active.where((o) => o.isTakeaway && o.tableNo.trim().isEmpty).length;
+      return (dineIn: active.length - take, takeaway: take);
+    });
 
 /// Browser tab: cafe name + uploaded logo as favicon (web only).
 Widget _brandTab({required BuildContext context, required BusinessSettings? settings, required Widget child}) {
@@ -83,7 +90,7 @@ class _ShellFrame extends StatelessWidget {
   final bool bottomNav;
 
   final String roleLabel;
-  final List<ShellDestination> Function(int running) destinations;
+  final List<ShellDestination> Function(_Counts running) destinations;
   final int index;
   final ValueChanged<int> onSelect;
   final List<WidgetBuilder> builders;
@@ -94,8 +101,9 @@ class _ShellFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     return StreamBuilder<BusinessSettings>(
       stream: BusinessSettingsRepository.instance.watch(),
-      builder: (context, s) => StreamBuilder<int>(
+      builder: (context, s) => StreamBuilder<_Counts>(
         stream: _runningCount(),
+        initialData: (dineIn: 0, takeaway: 0),
         builder: (context, running) {
           final name = s.data?.shopName ?? '';
           return _brandTab(
@@ -105,7 +113,7 @@ class _ShellFrame extends StatelessWidget {
               brandTitle: name.isEmpty ? 'My Cafe' : name,
               brandSubtitle: roleLabel,
               brandLogoBase64: s.data?.logoBase64,
-              destinations: destinations(running.data ?? 0),
+              destinations: destinations(running.data ?? (dineIn: 0, takeaway: 0)),
               selectedIndex: index,
               onSelect: onSelect,
               onLogout: () => _confirmSignOut(context),
@@ -156,7 +164,8 @@ class _ManagerShellState extends State<ManagerShell> {
       switchLabel: 'Captain view',
       destinations: (running) => [
         const ShellDestination(icon: Icons.space_dashboard_outlined, selectedIcon: Icons.space_dashboard, label: 'Dashboard', onMobileBar: true),
-        ShellDestination(icon: Icons.table_restaurant_outlined, selectedIcon: Icons.table_restaurant, label: 'Tables', badge: running, onMobileBar: true),
+        ShellDestination(icon: Icons.table_restaurant_outlined, selectedIcon: Icons.table_restaurant, label: 'Tables', badge: running.dineIn, onMobileBar: true),
+        ShellDestination(icon: Icons.shopping_bag_outlined, selectedIcon: Icons.shopping_bag, label: 'Takeaway', badge: running.takeaway, onMobileBar: true),
         const ShellDestination(icon: Icons.soup_kitchen_outlined, selectedIcon: Icons.soup_kitchen, label: 'Kitchen', onMobileBar: true),
         const ShellDestination(icon: Icons.restaurant_menu_outlined, selectedIcon: Icons.restaurant_menu, label: 'Menu', onMobileBar: true),
         const ShellDestination(icon: Icons.insights_outlined, selectedIcon: Icons.insights, label: 'Reports'),
@@ -166,6 +175,7 @@ class _ManagerShellState extends State<ManagerShell> {
       builders: [
         (_) => ManagerHomeScreen(onNewOrder: _newOrder, onOpenTables: () => _go(_tables)),
         (_) => const OrdersBoardScreen(canDelete: true),
+        (_) => const TakeawayScreen(),
         (_) => const KitchenScreen(),
         (_) => MenuManagementScreen(cafeId: cafeId),
         (_) => const ReportsScreen(),

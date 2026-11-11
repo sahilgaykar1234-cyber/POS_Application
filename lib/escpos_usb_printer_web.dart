@@ -411,7 +411,7 @@ class EscPosUsbPrinter {
     final tableNo = _s(order['tableNo']);
     final table = tableNo.isNotEmpty
         ? (tableNo.toLowerCase().contains('table') ? tableNo : 'Table $tableNo')
-        : 'Counter / Takeaway';
+        : (order['tokenNo'] != null ? 'Takeaway - Token #${order['tokenNo']}' : 'Counter / Takeaway');
     final rawStatus = _s(order['paymentStatus']);
     final mode = (rawStatus.isEmpty ? 'PAID' : rawStatus)
         .replaceAll('paid_', '')

@@ -323,12 +323,13 @@ class _SettleSheetState extends State<_SettleSheet> {
             SizedBox(
               height: 52,
               child: FilledButton.icon(
-                style: FilledButton.styleFrom(backgroundColor: p.success, foregroundColor: Colors.white),
+                style: FilledButton.styleFrom(backgroundColor: p.success, foregroundColor: context.onStatusFill),
                 onPressed: _busy ? null : () => _settle(complete: true),
                 icon: _busy
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.check_circle_outline),
-                label: const Text('Paid & free table', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                label: Text(widget.order.isTakeaway && widget.order.tableNo.isEmpty ? 'Paid & hand over' : 'Paid & free table',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
               ),
             ),
           ],

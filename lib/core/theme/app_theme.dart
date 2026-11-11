@@ -29,17 +29,13 @@ class AppTheme {
 
   /// The previous dark brown theme (Super Admin screens only).
   static ThemeData get legacyAdmin => ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: AppColors.background,
-        colorScheme: const ColorScheme.dark(
-          primary: AppColors.primary,
-          secondary: AppColors.accent,
-          surface: AppColors.surface,
-        ),
-        fontFamily: fontFamily,
-        useMaterial3: true,
-        extensions: const [Palette.dark],
-      );
+    brightness: Brightness.dark,
+    scaffoldBackgroundColor: AppColors.background,
+    colorScheme: const ColorScheme.dark(primary: AppColors.primary, secondary: AppColors.accent, surface: AppColors.surface),
+    fontFamily: fontFamily,
+    useMaterial3: true,
+    extensions: const [Palette.dark],
+  );
 
   static ThemeData _build(Palette p, Brightness b) {
     final scheme = ColorScheme(
@@ -86,8 +82,10 @@ class AppTheme {
     const minSize = Size(64, kTouch);
     const btnText = TextStyle(fontFamily: fontFamily, fontSize: 14, fontWeight: FontWeight.w600);
 
-    OutlineInputBorder ob(Color c, [double w = 1]) =>
-        OutlineInputBorder(borderRadius: Radii.controlR, borderSide: BorderSide(color: c, width: w));
+    OutlineInputBorder ob(Color c, [double w = 1]) => OutlineInputBorder(
+      borderRadius: Radii.controlR,
+      borderSide: BorderSide(color: c, width: w),
+    );
 
     return base.copyWith(
       colorScheme: scheme,
@@ -113,7 +111,10 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: Radii.cardR, side: BorderSide(color: p.border)),
+        shape: RoundedRectangleBorder(
+          borderRadius: Radii.cardR,
+          side: BorderSide(color: p.border),
+        ),
       ),
       dividerTheme: DividerThemeData(color: p.border, thickness: 1, space: 1),
       filledButtonTheme: FilledButtonThemeData(
@@ -176,19 +177,19 @@ class AppTheme {
         errorBorder: ob(p.danger),
         focusedErrorBorder: ob(p.danger, 2),
         disabledBorder: ob(p.border),
-        labelStyle: TextStyle(color: p.inkSubtle, fontSize: 14),
-        floatingLabelStyle: TextStyle(color: p.primary, fontWeight: FontWeight.w600),
-        hintStyle: TextStyle(color: p.inkSubtle),
+        labelStyle: TextStyle(fontFamily: fontFamily, color: p.inkSubtle, fontSize: 14),
+        floatingLabelStyle: TextStyle(fontFamily: fontFamily, color: p.primary, fontWeight: FontWeight.w600),
+        hintStyle: TextStyle(fontFamily: fontFamily, color: p.inkSubtle),
         prefixIconColor: p.inkSubtle,
         suffixIconColor: p.inkSubtle,
-        errorStyle: TextStyle(color: p.danger, fontSize: 12, fontWeight: FontWeight.w500),
+        errorStyle: TextStyle(fontFamily: fontFamily, color: p.danger, fontSize: 12, fontWeight: FontWeight.w500),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: p.surface,
         selectedColor: p.ink,
         disabledColor: p.surfaceAlt,
-        labelStyle: TextStyle(color: p.inkMuted, fontWeight: FontWeight.w500, fontSize: 13),
-        secondaryLabelStyle: TextStyle(color: p.surface, fontWeight: FontWeight.w600, fontSize: 13),
+        labelStyle: TextStyle(fontFamily: fontFamily, color: p.inkMuted, fontWeight: FontWeight.w500, fontSize: 13),
+        secondaryLabelStyle: TextStyle(fontFamily: fontFamily, color: p.surface, fontWeight: FontWeight.w600, fontSize: 13),
         side: BorderSide(color: p.borderStrong),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.pill)),
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
@@ -211,7 +212,7 @@ class AppTheme {
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: p.ink,
-        contentTextStyle: TextStyle(color: p.surface, fontFamily: fontFamily, fontSize: 14),
+        contentTextStyle: TextStyle(fontFamily: fontFamily, color: p.surface, fontSize: 14),
         shape: RoundedRectangleBorder(borderRadius: Radii.controlR),
         width: 420,
       ),
@@ -220,28 +221,30 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         indicatorColor: p.primaryTint,
         height: 68,
-        labelTextStyle: WidgetStateProperty.resolveWith((s) => TextStyle(
-              fontSize: 11,
-              fontWeight: s.contains(WidgetState.selected) ? FontWeight.w700 : FontWeight.w500,
-              color: s.contains(WidgetState.selected) ? p.primary : p.inkSubtle,
-            )),
-        iconTheme: WidgetStateProperty.resolveWith(
-            (s) => IconThemeData(color: s.contains(WidgetState.selected) ? p.primary : p.inkSubtle)),
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (s) => TextStyle(
+            fontFamily: fontFamily,
+            fontSize: 11,
+            fontWeight: s.contains(WidgetState.selected) ? FontWeight.w700 : FontWeight.w500,
+            color: s.contains(WidgetState.selected) ? p.primary : p.inkSubtle,
+          ),
+        ),
+        iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(color: s.contains(WidgetState.selected) ? p.primary : p.inkSubtle)),
       ),
       navigationRailTheme: NavigationRailThemeData(
         backgroundColor: p.surface,
         indicatorColor: p.primaryTint,
         selectedIconTheme: IconThemeData(color: p.primary),
         unselectedIconTheme: IconThemeData(color: p.inkSubtle),
-        selectedLabelTextStyle: TextStyle(color: p.primary, fontWeight: FontWeight.w700, fontSize: 12),
-        unselectedLabelTextStyle: TextStyle(color: p.inkSubtle, fontSize: 12),
+        selectedLabelTextStyle: TextStyle(fontFamily: fontFamily, color: p.primary, fontWeight: FontWeight.w700, fontSize: 12),
+        unselectedLabelTextStyle: TextStyle(fontFamily: fontFamily, color: p.inkSubtle, fontSize: 12),
       ),
       tabBarTheme: TabBarThemeData(
         labelColor: p.primary,
         unselectedLabelColor: p.inkSubtle,
         indicatorColor: p.primary,
         dividerColor: p.border,
-        labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+        labelStyle: const TextStyle(fontFamily: fontFamily, fontWeight: FontWeight.w600, fontSize: 14),
       ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? p.surface : p.surface),
@@ -267,19 +270,22 @@ class AppTheme {
       listTileTheme: ListTileThemeData(
         iconColor: p.inkSubtle,
         textColor: p.ink,
-        subtitleTextStyle: TextStyle(color: p.inkSubtle, fontSize: 13),
+        subtitleTextStyle: TextStyle(fontFamily: fontFamily, color: p.inkSubtle, fontSize: 13),
         shape: RoundedRectangleBorder(borderRadius: Radii.controlR),
       ),
       popupMenuTheme: PopupMenuThemeData(
         color: p.surface,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: Radii.controlR, side: BorderSide(color: p.border)),
-        textStyle: TextStyle(color: p.ink, fontSize: 14, fontFamily: fontFamily),
+        shape: RoundedRectangleBorder(
+          borderRadius: Radii.controlR,
+          side: BorderSide(color: p.border),
+        ),
+        textStyle: TextStyle(fontFamily: fontFamily, color: p.ink, fontSize: 14),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(color: p.primary, linearTrackColor: p.surfaceAlt),
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(color: p.ink, borderRadius: BorderRadius.circular(6)),
-        textStyle: TextStyle(color: p.surface, fontSize: 12),
+        textStyle: TextStyle(fontFamily: fontFamily, color: p.surface, fontSize: 12),
       ),
       drawerTheme: DrawerThemeData(backgroundColor: p.surface, surfaceTintColor: Colors.transparent),
       datePickerTheme: DatePickerThemeData(backgroundColor: p.surface, surfaceTintColor: Colors.transparent),

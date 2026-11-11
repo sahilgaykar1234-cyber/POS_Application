@@ -187,7 +187,20 @@ class _TicketCard extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(o.displayName, style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                          child: Row(
+                            children: [
+                              if (o.isTakeaway && o.tableNo.isEmpty) ...[
+                                Icon(Icons.shopping_bag_outlined, size: 18, color: p.primary),
+                                const SizedBox(width: 4),
+                              ],
+                              Flexible(
+                                child: Text(
+                                  o.isTakeaway && o.tableNo.isEmpty ? '${o.tokenLabel} · ${o.takeawayName}' : o.displayName,
+                                  style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -256,14 +269,14 @@ class _TicketCard extends StatelessWidget {
                     const SizedBox(height: Space.md),
                     if (o.status == 'pending')
                       FilledButton.icon(
-                        style: FilledButton.styleFrom(backgroundColor: p.info, foregroundColor: Colors.white),
+                        style: FilledButton.styleFrom(backgroundColor: p.info, foregroundColor: context.onStatusFill),
                         onPressed: () => onAdvance(o, 'preparing'),
                         icon: const Icon(Icons.local_fire_department_outlined),
                         label: const Text('Start cooking'),
                       )
                     else if (o.status == 'preparing')
                       FilledButton.icon(
-                        style: FilledButton.styleFrom(backgroundColor: p.success, foregroundColor: Colors.white),
+                        style: FilledButton.styleFrom(backgroundColor: p.success, foregroundColor: context.onStatusFill),
                         onPressed: () => onAdvance(o, 'ready'),
                         icon: const Icon(Icons.check_circle_outline),
                         label: const Text('Mark ready'),

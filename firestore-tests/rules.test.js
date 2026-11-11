@@ -101,6 +101,14 @@ test('captain: kitchen status only (no new orders, no billing, no delete)', asyn
   await assertFails(getDoc(doc(db, 'cafes/B/orders/o1')));
 });
 
+test('takeaway token counter: own cafe manager only', async () => {
+  await seed();
+  await assertSucceeds(setDoc(doc(ctx.managerA(), 'cafes/A/counters/takeaway_20261111'), { next: 2 }));
+  await assertSucceeds(getDoc(doc(ctx.captainA(), 'cafes/A/counters/takeaway_20261111')));
+  await assertFails(setDoc(doc(ctx.captainA(), 'cafes/A/counters/takeaway_20261111'), { next: 99 }));
+  await assertFails(setDoc(doc(ctx.managerB(), 'cafes/A/counters/takeaway_20261111'), { next: 99 }));
+});
+
 test('users collection: managers see only their cafe staff; nobody writes', async () => {
   await seed();
   const db = ctx.managerA();

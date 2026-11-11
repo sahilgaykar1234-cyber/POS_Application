@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 import '../layout/breakpoints.dart';
 import '../theme/tokens.dart';
 import '../utils/formatters.dart';
@@ -99,7 +101,10 @@ class StatCard extends StatelessWidget {
     final fg = highlight ? p.surface : p.ink;
     return Material(
       color: bg,
-      shape: RoundedRectangleBorder(borderRadius: Radii.cardR, side: BorderSide(color: highlight ? bg : p.border)),
+      shape: RoundedRectangleBorder(
+        borderRadius: Radii.cardR,
+        side: BorderSide(color: highlight ? bg : p.border),
+      ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
@@ -111,31 +116,37 @@ class StatCard extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Text(label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: highlight ? p.border : p.inkSubtle)),
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: highlight ? p.border : p.inkSubtle),
+                    ),
                   ),
                   Icon(icon, size: 18, color: highlight ? p.border : c),
                 ],
               ),
               const SizedBox(height: Space.sm),
-              Text(value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: fg,
-                    letterSpacing: -0.4,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  )),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  color: fg,
+                  letterSpacing: -0.4,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
               if (caption != null) ...[
                 const SizedBox(height: 2),
-                Text(caption!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: highlight ? p.border : c)),
+                Text(
+                  caption!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: highlight ? p.border : c),
+                ),
               ],
             ],
           ),
@@ -156,15 +167,17 @@ class ResponsiveGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, c) {
-      final cols = (c.maxWidth / minTileWidth).floor().clamp(1, maxColumns);
-      final w = (c.maxWidth - spacing * (cols - 1)) / cols;
-      return Wrap(
-        spacing: spacing,
-        runSpacing: spacing,
-        children: [for (final child in children) SizedBox(width: w, child: child)],
-      );
-    });
+    return LayoutBuilder(
+      builder: (context, c) {
+        final cols = (c.maxWidth / minTileWidth).floor().clamp(1, maxColumns);
+        final w = (c.maxWidth - spacing * (cols - 1)) / cols;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [for (final child in children) SizedBox(width: w, child: child)],
+        );
+      },
+    );
   }
 }
 
@@ -193,7 +206,10 @@ class StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
       decoration: BoxDecoration(color: tint ?? t, borderRadius: BorderRadius.circular(Radii.pill)),
-      child: Text(label, style: TextStyle(color: color ?? c, fontSize: 12, fontWeight: FontWeight.w600)),
+      child: Text(
+        label,
+        style: TextStyle(color: color ?? c, fontSize: 12, fontWeight: FontWeight.w600),
+      ),
     );
   }
 }
@@ -225,7 +241,11 @@ class EmptyState extends StatelessWidget {
             Text(title, textAlign: TextAlign.center, style: context.text.titleMedium),
             if (message != null) ...[
               const SizedBox(height: 4),
-              Text(message!, textAlign: TextAlign.center, style: context.text.bodyMedium?.copyWith(color: p.inkSubtle)),
+              Text(
+                message!,
+                textAlign: TextAlign.center,
+                style: context.text.bodyMedium?.copyWith(color: p.inkSubtle),
+              ),
             ],
             if (action != null) ...[const SizedBox(height: Space.lg), action!],
           ],
@@ -243,11 +263,11 @@ class ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => EmptyState(
-        icon: Icons.cloud_off_rounded,
-        title: 'Something went wrong',
-        message: message,
-        action: onRetry == null ? null : OutlinedButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('Retry')),
-      );
+    icon: Icons.cloud_off_rounded,
+    title: 'Something went wrong',
+    message: message,
+    action: onRetry == null ? null : OutlinedButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('Retry')),
+  );
 }
 
 /// Centered spinner.
@@ -257,17 +277,14 @@ class LoadingState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 3)),
-            if (label != null) ...[
-              const SizedBox(height: Space.md),
-              Text(label!, style: TextStyle(color: context.palette.inkSubtle)),
-            ],
-          ],
-        ),
-      );
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 3)),
+        if (label != null) ...[const SizedBox(height: Space.md), Text(label!, style: TextStyle(color: context.palette.inkSubtle))],
+      ],
+    ),
+  );
 }
 
 /// White (surface) card that hosts ListTiles/InkWells correctly (ripples
@@ -282,7 +299,10 @@ class SurfaceCard extends StatelessWidget {
     final p = context.palette;
     final card = Material(
       color: p.surface,
-      shape: RoundedRectangleBorder(borderRadius: Radii.cardR, side: BorderSide(color: p.border)),
+      shape: RoundedRectangleBorder(
+        borderRadius: Radii.cardR,
+        side: BorderSide(color: p.border),
+      ),
       clipBehavior: Clip.antiAlias,
       child: child,
     );
@@ -347,7 +367,10 @@ class InfoRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 140, child: Text(label, style: TextStyle(color: context.palette.inkSubtle))),
+          SizedBox(
+            width: 140,
+            child: Text(label, style: TextStyle(color: context.palette.inkSubtle)),
+          ),
           Expanded(child: SelectableText(value.isEmpty ? '—' : value)),
         ],
       ),
@@ -364,9 +387,9 @@ class MoneyText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-        Fmt.money(amount, symbol: symbol),
-        style: (style ?? const TextStyle()).copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
-      );
+    Fmt.money(amount, symbol: symbol),
+    style: (style ?? const TextStyle()).copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+  );
 }
 
 /// − qty + control with 44px targets.
@@ -403,9 +426,11 @@ class QuantityStepper extends StatelessWidget {
           ),
           SizedBox(
             width: 28,
-            child: Text('$qty',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: fg, fontFeatures: const [FontFeature.tabularFigures()])),
+            child: Text(
+              '$qty',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: fg, fontFeatures: const [FontFeature.tabularFigures()]),
+            ),
           ),
           SizedBox(
             width: 40,
@@ -462,6 +487,7 @@ class FilterPills<T> extends StatelessWidget {
             selected: o.$1 == selected,
             onSelected: (_) => onSelected(o.$1),
             labelStyle: TextStyle(
+              fontFamily: AppTheme.fontFamily,
               color: o.$1 == selected ? p.surface : p.inkMuted,
               fontWeight: o.$1 == selected ? FontWeight.w600 : FontWeight.w500,
             ),
@@ -469,25 +495,36 @@ class FilterPills<T> extends StatelessWidget {
         ),
     ];
     if (!scroll) return Wrap(runSpacing: Space.sm, children: chips);
-    return SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: chips));
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(children: chips),
+    );
   }
 }
 
-void showSuccess(BuildContext context, String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Row(children: [
+void showSuccess(BuildContext context, String msg) => ScaffoldMessenger.of(context).showSnackBar(
+  SnackBar(
+    content: Row(
+      children: [
         Icon(Icons.check_circle_rounded, color: context.palette.success, size: 20),
         const SizedBox(width: 10),
         Expanded(child: Text(msg)),
-      ]),
-    ));
+      ],
+    ),
+  ),
+);
 
-void showError(BuildContext context, String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Row(children: [
+void showError(BuildContext context, String msg) => ScaffoldMessenger.of(context).showSnackBar(
+  SnackBar(
+    content: Row(
+      children: [
         Icon(Icons.error_rounded, color: context.palette.danger, size: 20),
         const SizedBox(width: 10),
         Expanded(child: Text(msg)),
-      ]),
-    ));
+      ],
+    ),
+  ),
+);
 
 /// Date picker with app defaults.
 Future<DateTime?> pickDate(BuildContext context, {DateTime? initial, DateTime? first, DateTime? last}) {

@@ -23,6 +23,7 @@ import 'package:pos_app/features/reports/reports_screen.dart';
 import 'package:pos_app/features/settings/business_settings.dart';
 import 'package:pos_app/features/settings/settings_screen.dart';
 import 'package:pos_app/receipt_screen.dart';
+import 'package:pos_app/features/takeaway/takeaway_screen.dart';
 
 const sizes = {
   'small phone': Size(360, 740),
@@ -64,6 +65,14 @@ MenuData menu() {
     ],
   );
 }
+
+List<PosOrder> takeawayOrders() => [
+      PosOrder('TKW00001', {'orderType': 'Takeaway', 'tableNo': '', 'tokenNo': 14, 'customerName': 'Rahul', 'customerPhone': '9825012345', 'status': 'pending', 'paymentStatus': 'pending', 'totalPrice': 540.0, 'items': [{'name': 'Margherita', 'size': '10 inch', 'price': 300.0, 'qty': 1}, {'name': 'Paneer ,Red Peprika & Chilly Thecha', 'size': 'Stuffed', 'price': 240.0, 'qty': 1}], 'createdAt': ago(2), 'pickupAt': Timestamp.fromDate(now.add(const Duration(minutes: 13)))}),
+      PosOrder('TKW00002', {'orderType': 'Takeaway', 'tableNo': '', 'tokenNo': 12, 'customerName': 'Anita Desai', 'status': 'preparing', 'paymentStatus': 'paid_upi', 'totalPrice': 650.0, 'specialRequest': 'Extra napkins', 'items': [{'name': 'Seven Cheese Wonder', 'size': '12 inch', 'price': 650.0, 'qty': 1}], 'createdAt': ago(18), 'paidAt': ago(17), 'pickupAt': Timestamp.fromDate(now.subtract(const Duration(minutes: 3)))}),
+      PosOrder('TKW00003', {'orderType': 'Takeaway', 'tableNo': '', 'tokenNo': 11, 'customerName': '', 'status': 'ready', 'paymentStatus': 'pending', 'totalPrice': 40.0, 'items': [{'name': 'Thums Up', 'size': 'Standard', 'price': 20.0, 'qty': 2}], 'createdAt': ago(25)}),
+      PosOrder('TKW00004', {'orderType': 'Takeaway', 'tableNo': '', 'tokenNo': 10, 'customerName': 'Vikram', 'customerPhone': '9000011111', 'status': 'ready', 'paymentStatus': 'paid_cash', 'totalPrice': 300.0, 'items': [{'name': 'Margherita', 'size': '10 inch', 'price': 300.0, 'qty': 1}], 'createdAt': ago(30), 'paidAt': ago(29)}),
+      PosOrder('TKW00005', {'orderType': 'Takeaway', 'tableNo': '', 'tokenNo': 9, 'customerName': 'Sonal', 'status': 'completed', 'paymentStatus': 'paid_card', 'totalPrice': 480.0, 'items': [{'name': 'Chili Cheese Corn', 'size': '8 inch', 'price': 240.0, 'qty': 2}], 'createdAt': ago(60), 'completedAt': ago(40)}),
+    ];
 
 List<PosOrder> orders() => [
       PosOrder('ORD000001', {
@@ -170,6 +179,9 @@ void main() {
   checkScreen('Reports', () => ReportsScreen(ordersStream: Stream.value(orders())));
   checkScreen('Customers', () => CustomersScreen(ordersStream: Stream.value(orders())));
   checkScreen('Receipt with WhatsApp', () => PaymentCompleteReceiptScreen(orderData: orders()[3].data, orderId: 'ORD000004', businessSettings: settings.receiptSettings));
+  checkScreen('Takeaway', () => TakeawayScreen(ordersStream: Stream.value([...orders(), ...takeawayOrders()]), settingsStream: Stream.value(settings)));
+  checkScreen('Takeaway (empty)', () => TakeawayScreen(ordersStream: Stream.value(orders()), settingsStream: Stream.value(settings)));
+  checkScreen('POS takeaway mode', () => PosScreen(initialOrderType: 'Takeaway', menuStream: Stream.value(menu()), settingsStream: Stream.value(settings)));
   checkScreen('Menu management', () => MenuManagementScreen(cafeId: 'test', menuStream: Stream.value(menu())));
   checkScreen('Settings', () => SettingsScreen(loader: () async => settings));
 
@@ -334,6 +346,17 @@ void main() {
     await t.enterText(phone, '6353268656');
     await t.pumpAndSettle();
     expect(nameText(), 'Ravi');
+    expect(t.takeException(), isNull);
+  });
+
+  testWidgets('POS takeaway: pickup picker replaces the table field', (t) async {
+    await pumpAt(t, sizes['desktop']!, PosScreen(initialOrderType: 'Takeaway', menuStream: Stream.value(menu()), settingsStream: Stream.value(settings)), AppTheme.light());
+    expect(find.text('Pickup in'), findsOneWidget);
+    expect(find.text('ASAP'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Table / counter'), findsNothing);
+    await t.tap(find.text('Dine-in'));
+    await t.pumpAndSettle();
+    expect(find.widgetWithText(TextField, 'Table / counter'), findsOneWidget);
     expect(t.takeException(), isNull);
   });
 
