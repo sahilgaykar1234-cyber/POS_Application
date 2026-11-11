@@ -16,6 +16,7 @@ import 'package:pos_app/features/menu/menu_management_screen.dart';
 import 'package:pos_app/features/menu/menu_models.dart';
 import 'package:pos_app/features/orders/order_details_sheet.dart';
 import 'package:pos_app/features/orders/order_model.dart';
+import 'package:pos_app/features/orders/order_service.dart';
 import 'package:pos_app/features/orders/orders_board_screen.dart';
 import 'package:pos_app/features/orders/settle_bill_sheet.dart';
 import 'package:pos_app/features/pos/pos_screen.dart';
@@ -278,6 +279,50 @@ void main() {
     await t.tap(find.text('View order'));
     await t.pumpAndSettle();
     expect(find.text('Send to kitchen'), findsOneWidget);
+    expect(t.takeException(), isNull);
+  });
+
+  testWidgets('POS: phone lookup fills, replaces and clears the customer name', (t) async {
+    final known = {
+      '6353268656': KnownCustomer('Sahil', const [], DateTime(2026, 11, 1)),
+      '6353268655': KnownCustomer('Sahil 2', const [], DateTime(2026, 11, 1)),
+    };
+    await pumpAt(
+      t,
+      sizes['desktop']!,
+      PosScreen(
+        menuStream: Stream.value(menu()),
+        settingsStream: Stream.value(settings),
+        customerLookup: (p) async => known[p],
+      ),
+      AppTheme.light(),
+    );
+    final phone = find.widgetWithText(TextField, 'Mobile');
+    final name = find.widgetWithText(TextField, 'Customer name');
+    String nameText() => (t.widget<TextField>(name)).controller!.text;
+
+    await t.enterText(phone, '6353268656');
+    await t.pumpAndSettle();
+    expect(nameText(), 'Sahil');
+
+    await t.enterText(phone, '635326865'); // deleting a digit clears the auto name
+    await t.pumpAndSettle();
+    expect(nameText(), '');
+
+    await t.enterText(phone, '6353268655'); // other known customer → replaced
+    await t.pumpAndSettle();
+    expect(nameText(), 'Sahil 2');
+    expect(find.textContaining('Welcome back, Sahil 2'), findsOneWidget);
+
+    await t.enterText(phone, '6353268658'); // unknown number → blank
+    await t.pumpAndSettle();
+    expect(nameText(), '');
+    expect(find.textContaining('Welcome back'), findsNothing);
+
+    await t.enterText(name, 'Ravi'); // typed by hand → never overwritten
+    await t.enterText(phone, '6353268656');
+    await t.pumpAndSettle();
+    expect(nameText(), 'Ravi');
     expect(t.takeException(), isNull);
   });
 

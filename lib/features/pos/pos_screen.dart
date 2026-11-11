@@ -23,10 +23,11 @@ import 'print_helper.dart';
 /// Wide screens: categories | items | cart side by side.
 /// Phones: item list with a sticky "View order" bar opening the cart.
 class PosScreen extends StatefulWidget {
-  const PosScreen({super.key, this.editing, this.prefilledTable, this.standalone = false, this.onDone, this.menuStream, this.settingsStream});
+  const PosScreen({super.key, this.editing, this.prefilledTable, this.standalone = false, this.onDone, this.menuStream, this.settingsStream, this.customerLookup});
 
   /// Test hooks (default: live Firestore).
   final Stream<MenuData>? menuStream;
+  final Future<KnownCustomer?> Function(String phone)? customerLookup;
   final Stream<BusinessSettings>? settingsStream;
 
   final PosOrder? editing;
@@ -110,33 +111,49 @@ class _PosScreenState extends State<PosScreen> {
     cart.add(line);
   }
 
+  /// Name we filled in automatically from a phone lookup (null = the name
+  /// field holds nothing auto-filled, e.g. the user typed it).
+  String? _autoName;
+  int _lookupSeq = 0;
+
+  /// True when the name field is empty or still shows our auto-filled name,
+  /// i.e. it is safe to replace/clear it.
+  bool get _nameIsAuto => _name.text.trim().isEmpty || (_autoName != null && _name.text.trim() == _autoName);
+
+  void _setAutoName(String? name) {
+    if (!_nameIsAuto) return; // never overwrite a name the user typed
+    _name.text = name ?? '';
+    _autoName = name;
+  }
+
   Future<void> _lookup(String v) async {
     final digits = v.replaceAll(RegExp(r'\D'), '');
+    final seq = ++_lookupSeq; // ignore results of older lookups
     if (digits.length != 10) {
-      if (_known != null) {
-        setState(() => _known = null);
-        cart.touch();
-      }
+      setState(() {
+        _known = null;
+        _lookingUp = false;
+        _setAutoName(null);
+      });
+      cart.touch();
       return;
     }
     setState(() => _lookingUp = true);
     cart.touch();
+    KnownCustomer? k;
     try {
-      final k = await OrderService.instance.lookupByPhone(digits);
-      if (!mounted) return;
-      setState(() {
-        _known = k;
-        if (k != null && _name.text.trim().isEmpty) _name.text = k.name;
-      });
-      cart.touch();
+      k = await (widget.customerLookup ?? OrderService.instance.lookupByPhone)(digits);
     } catch (_) {
-      // Lookup is a convenience only.
-    } finally {
-      if (mounted) {
-        setState(() => _lookingUp = false);
-        cart.touch();
-      }
+      k = null; // lookup is a convenience only
     }
+    if (!mounted || seq != _lookupSeq) return;
+    setState(() {
+      _lookingUp = false;
+      _known = k;
+      // Found → show this customer's name; not found → clear the old one.
+      _setAutoName(k?.name);
+    });
+    cart.touch();
   }
 
   Map<String, dynamic> _draft() {
@@ -192,6 +209,7 @@ class _PosScreenState extends State<PosScreen> {
           c.clear();
         }
         _known = null;
+        _autoName = null;
       });
       widget.onDone?.call();
     } catch (e) {
@@ -451,6 +469,9 @@ class _PosScreenState extends State<PosScreen> {
                         child: TextField(
                           controller: _name,
                           textCapitalization: TextCapitalization.words,
+                          onChanged: (v) {
+                            if (v.trim() != _autoName) _autoName = null;
+                          },
                           decoration: const InputDecoration(labelText: 'Customer name'),
                         ),
                       ),
