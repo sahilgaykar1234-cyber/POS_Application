@@ -91,7 +91,7 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               Text(
                 'Enter your account email. We will send you a link to set a new password.\n\n'
-                'Cafe username logins (like "flammywood"): please ask the owner to reset the password.',
+                'If you sign in with a username (not an email), please ask the owner to reset your password.',
                 style: TextStyle(color: ctx.palette.inkMuted),
               ),
               const SizedBox(height: 14),
@@ -160,7 +160,7 @@ class _LoginScreenState extends State<LoginScreen> {
               textInputAction: TextInputAction.next,
               enabled: !_loading,
               validator: LoginValidators.usernameOrEmail,
-              decoration: const InputDecoration(labelText: 'Username', hintText: 'e.g. flammywood', prefixIcon: Icon(Icons.person_outline)),
+              decoration: const InputDecoration(labelText: 'Username', hintText: 'Enter your username', prefixIcon: Icon(Icons.person_outline)),
             ),
             const SizedBox(height: Space.md),
             TextFormField(
