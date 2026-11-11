@@ -430,103 +430,86 @@ class _RecentBill extends StatelessWidget {
     final p = context.palette;
     final o = order;
     final time = Fmt.dateTime(o.createdAt).split(', ').last;
+    final count = o.items.fold<int>(0, (n, it) => n + ((it['qty'] ?? 1) as num).toInt());
+
+    final title = Text(o.displayName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15));
+    final meta = Text('${o.billNo} · $time · ${o.paymentLabel}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: p.inkSubtle, fontSize: 12));
+    final items = Text.rich(
+      TextSpan(children: [
+        TextSpan(text: '$count item${count == 1 ? '' : 's'}  ', style: TextStyle(color: p.inkSubtle, fontWeight: FontWeight.w600)),
+        TextSpan(text: itemsSummary(o.items)),
+      ]),
+      style: TextStyle(color: p.inkMuted, fontSize: 13, height: 1.35),
+    );
+    final chip = StatusChip(o.isActive ? o.statusLabel : (o.isPaid ? 'Paid' : o.statusLabel));
+    final total = Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        MoneyText(o.totalPrice, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+        if (o.discount > 0 || o.gstAmount > 0)
+          Text(
+            [if (o.discount > 0) '−₹${formatPrice(o.discount)} off', if (o.gstAmount > 0) 'incl. GST'].join(' · '),
+            style: TextStyle(color: p.inkSubtle, fontSize: 11),
+          ),
+      ],
+    );
+    final actions = Row(mainAxisSize: MainAxisSize.min, children: [
+      if (onEdit != null)
+        IconButton(
+          key: Key('recent-edit-${o.id}'),
+          tooltip: 'Edit bill',
+          visualDensity: VisualDensity.compact,
+          onPressed: onEdit,
+          icon: Icon(Icons.edit_outlined, size: 19, color: p.inkMuted),
+        ),
+      if (onDelete != null)
+        IconButton(
+          key: Key('recent-delete-${o.id}'),
+          tooltip: 'Delete bill',
+          visualDensity: VisualDensity.compact,
+          onPressed: onDelete,
+          icon: Icon(Icons.delete_outline, size: 19, color: p.danger),
+        ),
+    ]);
+
     return InkWell(
       onTap: onTap,
       borderRadius: Radii.controlR,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: Space.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
+        child: LayoutBuilder(builder: (context, c) {
+          if (c.maxWidth >= 640) {
+            // One line per bill: who | what | status | amount | actions
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(o.displayName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                      Text('${o.billNo} · $time · ${o.paymentLabel}', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
-                    ],
-                  ),
-                ),
-                StatusChip(o.isActive ? o.statusLabel : (o.isPaid ? 'Paid' : o.statusLabel)),
+                SizedBox(width: 200, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [title, const SizedBox(height: 2), meta])),
+                const SizedBox(width: Space.lg),
+                Expanded(child: items),
+                const SizedBox(width: Space.lg),
+                SizedBox(width: 96, child: Align(alignment: Alignment.centerRight, child: chip)),
+                SizedBox(width: 110, child: total),
+                const SizedBox(width: Space.sm),
+                actions,
               ],
-            ),
-            const SizedBox(height: Space.sm),
-            for (final it in o.items)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(width: 32, child: Text('${it['qty'] ?? 1}×', style: TextStyle(color: p.inkSubtle, fontWeight: FontWeight.w600))),
-                    Expanded(
-                      child: Text(
-                        '${it['name']}${(it['size'] ?? 'Standard') != 'Standard' ? ' (${it['size']})' : ''}'
-                        '  ·  ₹${formatPrice(((it['price'] ?? 0) as num).toDouble())} each',
-                        style: TextStyle(color: p.inkMuted, fontSize: 13),
-                      ),
-                    ),
-                    Text(
-                      Fmt.money(((it['price'] ?? 0) as num) * ((it['qty'] ?? 1) as num)),
-                      style: const TextStyle(fontSize: 13, fontFeatures: [FontFeature.tabularFigures()]),
-                    ),
-                  ],
-                ),
-              ),
-            if (o.discount > 0)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Row(children: [
-                  const SizedBox(width: 32),
-                  Expanded(child: Text('Discount', style: TextStyle(color: p.primaryHover, fontSize: 13))),
-                  Text('− ₹${o.discount.toStringAsFixed(2)}', style: TextStyle(color: p.primaryHover, fontSize: 13)),
-                ]),
-              ),
-            if (o.gstAmount > 0)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Row(children: [
-                  const SizedBox(width: 32),
-                  Expanded(child: Text('GST', style: TextStyle(color: p.inkSubtle, fontSize: 13))),
-                  Text('₹${o.gstAmount.toStringAsFixed(2)}', style: TextStyle(color: p.inkSubtle, fontSize: 13)),
-                ]),
-              ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const SizedBox(width: 32),
-                const Expanded(child: Text('Total', style: TextStyle(fontWeight: FontWeight.w700))),
-                MoneyText(o.totalPrice, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-              ],
-            ),
-            if (onEdit != null || onDelete != null)
-              Padding(
-                padding: const EdgeInsets.only(top: Space.xs),
-                child: Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: Space.xs,
-                  children: [
-                    if (onEdit != null)
-                      TextButton.icon(
-                        key: Key('recent-edit-${o.id}'),
-                        onPressed: onEdit,
-                        icon: const Icon(Icons.edit_outlined, size: 18),
-                        label: const Text('Edit'),
-                      ),
-                    if (onDelete != null)
-                      TextButton.icon(
-                        key: Key('recent-delete-${o.id}'),
-                        style: TextButton.styleFrom(foregroundColor: p.danger),
-                        onPressed: onDelete,
-                        icon: const Icon(Icons.delete_outline, size: 18),
-                        label: const Text('Delete'),
-                      ),
-                  ],
-                ),
-              ),
-          ],
-        ),
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [title, const SizedBox(height: 2), meta])),
+                const SizedBox(width: Space.sm),
+                total,
+              ]),
+              const SizedBox(height: 6),
+              items,
+              const SizedBox(height: 2),
+              Row(children: [chip, const Spacer(), actions]),
+            ],
+          );
+        }),
       ),
     );
   }

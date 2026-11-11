@@ -436,4 +436,16 @@ void main() {
       expect(statusAfterEdit('weird', hasNewItems: false), 'pending');
     });
   });
+
+  test('itemsSummary lists every item compactly', () {
+    expect(
+      itemsSummary([
+        {'name': 'Farm Villa', 'size': 'Regular', 'qty': 1},
+        {'name': 'Pani', 'size': 'Standard', 'qty': 2},
+        {'name': 'Coke'},
+      ]),
+      'Farm Villa (Regular) · 2× Pani · Coke',
+    );
+    expect(itemsSummary([]), '');
+  });
 }

@@ -144,3 +144,10 @@ class TableBoard {
     return TableBoard(byTable, virtuals);
   }
 }
+
+/// Compact one-paragraph list of all items: "Farm Villa (Regular) · 2× Pani".
+String itemsSummary(Iterable<Map<String, dynamic>> items) => [
+      for (final it in items)
+        '${((it['qty'] ?? 1) as num) > 1 ? '${it['qty']}× ' : ''}'
+            '${it['name']}${(it['size'] ?? 'Standard') != 'Standard' ? ' (${it['size']})' : ''}',
+    ].join(' · ');
