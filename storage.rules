@@ -1,0 +1,21 @@
+rules_version = '2';
+
+// Menu photos and cafe logos live under cafes/{cafeId}/...
+// Only that cafe's Manager (or the Super Admin) can upload; images only, max 2 MB.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function role() { return request.auth != null ? request.auth.token.get('role', null) : null; }
+    function myCafe() { return request.auth != null ? request.auth.token.get('cafeId', null) : null; }
+
+    match /cafes/{cafeId}/{allPaths=**} {
+      allow read: if role() == 'superAdmin' || (role() in ['manager', 'captain'] && myCafe() == cafeId);
+      allow write: if (role() == 'superAdmin' || (role() == 'manager' && myCafe() == cafeId))
+        && (request.resource == null
+            || (request.resource.size < 2 * 1024 * 1024 && request.resource.contentType.matches('image/.*')));
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

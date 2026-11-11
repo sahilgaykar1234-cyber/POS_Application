@@ -6,12 +6,14 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:file_picker/file_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'core/data/firestore_paths.dart';
-import 'core/widgets/confirm_dialog.dart';
 import 'core/widgets/app_logo.dart';
 import 'core/auth/auth_service.dart';
 import 'features/staff/staff_management_screen.dart';
 import 'core/auth/auth_gate.dart';
-import 'menu_data.dart';
+import 'features/menu/item_picker_sheet.dart';
+import 'features/menu/menu_management_screen.dart';
+import 'features/menu/menu_models.dart';
+import 'features/menu/menu_repository.dart';
 import 'receipt_screen.dart';
 import 'escpos_usb_printer_stub.dart'
     if (dart.library.js_interop) 'escpos_usb_printer_web.dart';
@@ -55,16 +57,17 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   String previousOrderDateStr = '';
 
   List tempCart = [];
-  String selectedSize = 'Medium';
+  /// Live menu for the order form; recreated each time the form opens.
+  Stream<MenuData>? _posMenuStream;
   int totalTablesCount = 12; // Dynamic table count
 
   // Settings Controllers
-  final TextEditingController shopNameController = TextEditingController(text: 'Pizza La Forno');
-  final TextEditingController taglineController = TextEditingController(text: 'Wood Fired Pizza');
-  final TextEditingController ownerNameController = TextEditingController(text: 'manish');
-  final TextEditingController mobileNumberController = TextEditingController(text: '857585758575');
-  final TextEditingController emailController = TextEditingController(text: 'manish.patel881998@gmail.com');
-  final TextEditingController gstNumberController = TextEditingController(text: '645746475656');
+  final TextEditingController shopNameController = TextEditingController();
+  final TextEditingController taglineController = TextEditingController();
+  final TextEditingController ownerNameController = TextEditingController();
+  final TextEditingController mobileNumberController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController gstNumberController = TextEditingController();
   final TextEditingController addressController = TextEditingController();
 
   final TextEditingController receiptHeaderController = TextEditingController(text: 'Thank you for your order!');
@@ -522,39 +525,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     }
   }
 
-  Future<void> _uploadMenuToFirebase(BuildContext context) async {
-    // Safety guard: this replaces the ENTIRE live menu with the static file.
-    // Any category/item added or deleted from the app would be lost.
-    final confirmed = await showDangerConfirmDialog(
-      context,
-      title: 'Reset Live Menu?',
-      message: 'Yeh poora live menu DELETE karke code wala default menu daal dega. '
-          'App se add/delete kiye gaye saare categories aur items permanently chale jayenge.\n\n'
-          'Agar aapko sirf ek item badalna hai, to yeh button mat dabayein.',
-      confirmLabel: 'Reset Menu',
-      confirmText: 'RESET',
-    );
-    if (!confirmed) return;
-
-    try {
-      var collection = FirestorePaths.menuCategories();
-      var snapshots = await collection.get();
-      for (var doc in snapshots.docs) {
-        await doc.reference.delete();
-      }
-
-      for (var category in restaurantMenuCategories) {
-        await collection.add(category);
-      }
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Default menu restored!')));
-      setState(() {});
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error uploading: $e')));
-    }
-  }
-
   void _logout(BuildContext context) {
     signOutToLogin(context);
   }
@@ -595,44 +565,35 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
         specialRequestController.clear();
         tempCart.clear();
       }
+      _posMenuStream = null;
       currentView = 'NewOrder';
     });
   }
 
-  bool _isMultiPriceCategory(String categoryName) {
-    String lower = categoryName.toLowerCase();
-    return lower.contains('pizza') || lower.contains('fries') || lower.contains('signature') || lower.contains('exotic') || lower.contains('speciality');
+  /// Tapping a menu item: single-price items go straight to the cart; items
+  /// with sizes/add-ons ask first. Prices come from the item's own variants.
+  Future<void> _onPosItemTap(MenuItem item) async {
+    if (item.variants.isEmpty || !item.isAvailable) return;
+    final CartLine? line = item.hasChoices
+        ? await showItemPickerSheet(context, item)
+        : CartLine.build(item, item.variants.first, const []);
+    if (line == null || !mounted) return;
+    addToTempCart(line);
   }
 
-  void addToTempCart(Map<String, dynamic> item, String categoryName) {
+  void addToTempCart(CartLine line) {
     setState(() {
-      String itemName = item['name'];
-      bool isMultiPrice = _isMultiPriceCategory(categoryName);
-      double itemPrice = 0.0;
-      String itemSize = 'Standard';
-
-      double regPrice = (item['regularPrice'] ?? item['price'] ?? 0.0).toDouble();
-      double medPrice = (item['mediumPrice'] ?? item['regularPrice'] ?? item['price'] ?? 0.0).toDouble();
-
-      if (isMultiPrice && (item.containsKey('regularPrice') || item.containsKey('mediumPrice'))) {
-        itemSize = selectedSize;
-        itemPrice = selectedSize == 'Regular' ? regPrice : (medPrice > 0 ? medPrice : regPrice);
-      } else {
-        itemPrice = (item['price'] ?? regPrice).toDouble();
-        itemSize = 'Standard';
-      }
-
       var existingIndex = tempCart.indexWhere((element) {
-        return element['name'] == itemName && element['size'] == itemSize;
+        return element['name'] == line.name && element['size'] == line.size;
       });
 
       if (existingIndex != -1) {
         tempCart[existingIndex]['qty'] += 1;
       } else {
         tempCart.add({
-          'name': itemName,
-          'price': itemPrice,
-          'size': itemSize,
+          'name': line.name,
+          'price': line.unitPrice,
+          'size': line.size,
           'qty': 1,
           'isDone': false
         });
@@ -872,7 +833,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       case 2:
         return const ReportsAnalyticsScreen();
       case 3:
-        return _buildMenuManagementBody();
+        return MenuManagementScreen(cafeId: FirestorePaths.activeCafeId);
       case 4:
         return _buildSettingsBody();
       default:
@@ -2013,364 +1974,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     );
   }
 
-  Widget _buildMenuManagementBody() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirestorePaths.menuCategories().snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator(color: Color(0xFFE65C00)));
-        }
-
-        var categoryDocs = snapshot.data!.docs;
-
-        return Scaffold(
-          backgroundColor: Colors.transparent,
-          floatingActionButton: FloatingActionButton.extended(
-            backgroundColor: const Color(0xFFE65C00),
-            foregroundColor: Colors.white,
-            icon: const Icon(Icons.add),
-            label: const Text('Add Category', style: TextStyle(fontWeight: FontWeight.bold)),
-            onPressed: () => _showAddCategoryDialog(context),
-          ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 80),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E1A17),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF2C2520)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text('Default Menu Sync', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                          Text('Code ka default menu restore karein', style: TextStyle(color: Colors.white54, fontSize: 11)),
-                        ],
-                      ),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFF7B731),
-                          side: const BorderSide(color: Color(0xFFF7B731)),
-                        ),
-                        onPressed: () => _uploadMenuToFirebase(context),
-                        icon: const Icon(Icons.sync, size: 16),
-                        label: const Text('Sync Default', style: TextStyle(fontSize: 12)),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                if (categoryDocs.isEmpty)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(40.0),
-                      child: Text('Menu khali hai! Sync dabayein ya nayi Category add karein.', style: TextStyle(color: Colors.white38)),
-                    ),
-                  )
-                else
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: categoryDocs.length,
-                    itemBuilder: (context, catIndex) {
-                      var catDoc = categoryDocs[catIndex];
-                      var catData = catDoc.data() as Map<String, dynamic>;
-                      String catName = catData['categoryName'] ?? 'Unnamed Category';
-                      List items = List.from(catData['items'] ?? []);
-
-                      return Card(
-                        color: const Color(0xFF1E1A17),
-                        margin: const EdgeInsets.only(bottom: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: const BorderSide(color: Color(0xFF2C2520)),
-                        ),
-                        child: ExpansionTile(
-                          collapsedIconColor: Colors.white54,
-                          iconColor: const Color(0xFFF7B731),
-                          title: Row(
-                            children: [
-                              Text(
-                                catName,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFFF7B731)),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF2C2520),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text('${items.length} items', style: const TextStyle(color: Colors.white60, fontSize: 11)),
-                              ),
-                            ],
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.add_circle_outline, color: Colors.greenAccent, size: 22),
-                                tooltip: 'Add Item to $catName',
-                                onPressed: () => _showAddItemDialog(context, catDoc.id, catName, items),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-                                tooltip: 'Delete Category',
-                                onPressed: () => _deleteCategory(catDoc.id, catName),
-                              ),
-                            ],
-                          ),
-                          children: [
-                            const Divider(color: Color(0xFF2C2520), height: 1),
-                            if (items.isEmpty)
-                              const Padding(
-                                padding: EdgeInsets.all(14.0),
-                                child: Text('Is category me koi item nahi hai. (+) dabakar add karein.', style: TextStyle(color: Colors.white38, fontSize: 12)),
-                              )
-                            else
-                              ListView.separated(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                itemCount: items.length,
-                                separatorBuilder: (_, __) => const Divider(color: Color(0xFF26211D), height: 1),
-                                itemBuilder: (context, itemIdx) {
-                                  var item = items[itemIdx];
-                                  var regP = item['regularPrice'];
-                                  var medP = item['mediumPrice'];
-                                  var stdP = item['price'];
-
-                                  String priceDisplay = '';
-                                  if (regP != null && medP != null) {
-                                    priceDisplay = '₹$regP / ₹$medP';
-                                  } else {
-                                    priceDisplay = '₹${stdP ?? regP ?? 0}';
-                                  }
-
-                                  return ListTile(
-                                    dense: true,
-                                    title: Text(item['name'] ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
-                                    subtitle: (item['desc'] != null && item['desc'].toString().isNotEmpty)
-                                        ? Text(item['desc'].toString(), style: const TextStyle(color: Colors.white38, fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis)
-                                        : null,
-                                    trailing: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(priceDisplay, style: const TextStyle(color: Color(0xFFF7B731), fontWeight: FontWeight.bold, fontSize: 13)),
-                                        IconButton(
-                                          icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
-                                          onPressed: () => _deleteMenuItem(catDoc.id, items, itemIdx),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showAddCategoryDialog(BuildContext context) {
-    final TextEditingController categoryController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1A17),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Color(0xFFE65C00))),
-        title: const Text('Add New Category', style: TextStyle(color: Color(0xFFF7B731), fontSize: 16, fontWeight: FontWeight.bold)),
-        content: TextField(
-          controller: categoryController,
-          autofocus: true,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
-            labelText: 'Category Name',
-            hintText: 'e.g. Cold Drinks, Dips, Desserts',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE65C00), foregroundColor: Colors.white),
-            onPressed: () async {
-              String catName = categoryController.text.trim();
-              if (catName.isEmpty) return;
-              Navigator.pop(ctx);
-
-              await FirestorePaths.menuCategories().add({
-                'categoryName': catName,
-                'items': [],
-              });
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Category "$catName" add ho gayi!'), backgroundColor: Colors.green));
-            },
-            child: const Text('Save Category'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAddItemDialog(BuildContext context, String catDocId, String catName, List currentItems) {
-    final TextEditingController itemNameController = TextEditingController();
-    final TextEditingController itemDescController = TextEditingController();
-    final TextEditingController regPriceController = TextEditingController();
-    final TextEditingController medPriceController = TextEditingController();
-    final TextEditingController singlePriceController = TextEditingController();
-
-    bool isMultiPrice = catName.toLowerCase().contains('pizza') || catName.toLowerCase().contains('fries') || catName.toLowerCase().contains('bread');
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: const Color(0xFF1E1A17),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Color(0xFFE65C00))),
-          title: Text('Add Item in "$catName"', style: const TextStyle(color: Color(0xFFF7B731), fontSize: 15, fontWeight: FontWeight.bold)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: itemNameController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(labelText: 'Item Name', border: OutlineInputBorder(), isDense: true),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: itemDescController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(labelText: 'Description (Optional)', border: OutlineInputBorder(), isDense: true),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    const Text('Regular & Medium Size?', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                    const Spacer(),
-                    Switch(
-                      value: isMultiPrice,
-                      activeColor: const Color(0xFFE65C00),
-                      onChanged: (val) => setDialogState(() => isMultiPrice = val),
-                    ),
-                  ],
-                ),
-                if (isMultiPrice) ...[
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: regPriceController,
-                          keyboardType: TextInputType.number,
-                          style: const TextStyle(color: Colors.white),
-                          decoration: const InputDecoration(labelText: 'Regular ₹', border: OutlineInputBorder(), isDense: true),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: medPriceController,
-                          keyboardType: TextInputType.number,
-                          style: const TextStyle(color: Colors.white),
-                          decoration: const InputDecoration(labelText: 'Medium ₹', border: OutlineInputBorder(), isDense: true),
-                        ),
-                      ),
-                    ],
-                  ),
-                ] else ...[
-                  TextField(
-                    controller: singlePriceController,
-                    keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(labelText: 'Price (₹)', border: OutlineInputBorder(), isDense: true),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE65C00), foregroundColor: Colors.white),
-              onPressed: () async {
-                String name = itemNameController.text.trim();
-                if (name.isEmpty) return;
-
-                Map<String, dynamic> newItem = {
-                  'name': name,
-                  'desc': itemDescController.text.trim(),
-                };
-
-                if (isMultiPrice) {
-                  double regP = double.tryParse(regPriceController.text.trim()) ?? 0.0;
-                  double medP = double.tryParse(medPriceController.text.trim()) ?? 0.0;
-                  newItem['regularPrice'] = regP;
-                  newItem['mediumPrice'] = medP;
-                } else {
-                  double p = double.tryParse(singlePriceController.text.trim()) ?? 0.0;
-                  newItem['price'] = p;
-                }
-
-                Navigator.pop(ctx);
-                List updated = List.from(currentItems)..add(newItem);
-                await FirestorePaths.menuCategories().doc(catDocId).update({'items': updated});
-
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Item "$name" add ho gaya!'), backgroundColor: Colors.green));
-              },
-              child: const Text('Add Item'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _deleteCategory(String catDocId, String catName) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1A17),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: const Text('Delete Category', style: TextStyle(color: Color(0xFFF7B731))),
-        content: Text('Kya aap "$catName" category aur uske sabhi items ko delete karna chahte hain?', style: const TextStyle(color: Colors.white70)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await FirestorePaths.menuCategories().doc(catDocId).delete();
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _deleteMenuItem(String catDocId, List currentItems, int itemIndex) async {
-    List updated = List.from(currentItems)..removeAt(itemIndex);
-    await FirestorePaths.menuCategories().doc(catDocId).update({'items': updated});
-  }
-
   Widget _buildSettingsBody() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
@@ -2740,13 +2343,10 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   }
 
   Widget _buildOrderFormBody() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirestorePaths.menuCategories().snapshots(),
+    _posMenuStream ??= MenuRepository(FirestorePaths.activeCafeId).watchMenu();
+    return StreamBuilder<MenuData>(
+      stream: _posMenuStream,
       builder: (context, menuSnapshot) {
-        List liveMenuCategories = restaurantMenuCategories;
-        if (menuSnapshot.hasData && menuSnapshot.data!.docs.isNotEmpty) {
-          liveMenuCategories = menuSnapshot.data!.docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
-        }
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
@@ -2983,29 +2583,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
               ),
               const SizedBox(height: 12),
 
-              Wrap(
-                spacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  const Text('Size:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFF7B731))),
-                  ChoiceChip(
-                    label: const Text('Regular'),
-                    selected: selectedSize == 'Regular',
-                    selectedColor: const Color(0xFFE65C00),
-                    backgroundColor: const Color(0xFF26211D),
-                    onSelected: (selected) => setState(() => selectedSize = 'Regular'),
-                  ),
-                  ChoiceChip(
-                    label: const Text('Medium'),
-                    selected: selectedSize == 'Medium',
-                    selectedColor: const Color(0xFFE65C00),
-                    backgroundColor: const Color(0xFF26211D),
-                    onSelected: (selected) => setState(() => selectedSize = 'Medium'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-
               TextField(
                 controller: menuSearchController,
                 style: const TextStyle(color: Colors.white),
@@ -3014,58 +2591,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
               ),
               const Divider(color: Color(0xFF2C2520), height: 22),
 
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: liveMenuCategories.length,
-                itemBuilder: (context, catIndex) {
-                  var category = liveMenuCategories[catIndex];
-                  String catName = category['categoryName'] ?? '';
-                  List items = category['items'] ?? [];
-
-                  var filteredItems = items.where((item) {
-                    if (menuSearchQuery.isEmpty) return true;
-                    return item['name'].toString().toLowerCase().contains(menuSearchQuery);
-                  }).toList();
-
-                  if (filteredItems.isEmpty) return const SizedBox.shrink();
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4.0),
-                        child: Text(catName, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFF7B731), fontSize: 13)),
-                      ),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: filteredItems.map<Widget>((item) {
-                          bool isSelected = tempCart.any((element) => element['name'] == item['name']);
-                          var regP = item['regularPrice'];
-                          var medP = item['mediumPrice'];
-                          var stdP = item['price'];
-
-                          String priceDisplay = '';
-                          if (regP != null && medP != null) {
-                            priceDisplay = '₹$regP/₹$medP';
-                          } else if (stdP != null) {
-                            priceDisplay = '₹$stdP';
-                          }
-
-                          return ActionChip(
-                            label: Text('${item['name']} ($priceDisplay)', style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : const Color(0xFFF7B731))),
-                            backgroundColor: isSelected ? const Color(0xFFE65C00) : const Color(0xFF26211D),
-                            side: BorderSide(color: isSelected ? const Color(0xFFE65C00) : const Color(0xFF382F2A)),
-                            onPressed: () => addToTempCart(item, catName),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                  );
-                },
-              ),
+              _buildPosMenu(menuSnapshot),
               const Divider(color: Color(0xFF2C2520), height: 20),
               const Text('Current Cart:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFFF7B731))),
               const SizedBox(height: 6),
@@ -3154,6 +2680,83 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
         );
       },
     );
+  }
+
+  Widget _buildPosMenu(AsyncSnapshot<MenuData> snap) {
+    if (snap.hasError) {
+      return const Padding(
+        padding: EdgeInsets.all(12),
+        child: Text('Menu load nahi hua. Internet check karein.', style: TextStyle(color: Colors.redAccent)),
+      );
+    }
+    if (!snap.hasData) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(child: CircularProgressIndicator(color: Color(0xFFE65C00))),
+      );
+    }
+    final menu = snap.data!;
+    if (menu.items.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(12),
+        child: Text('Menu khali hai. "Menu" tab se items add karein.', style: TextStyle(color: Colors.white54)),
+      );
+    }
+
+    bool matches(MenuItem i) => menuSearchQuery.isEmpty || i.name.toLowerCase().contains(menuSearchQuery);
+
+    Widget chips(List<MenuItem> items) => Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: items.map<Widget>((item) {
+            final isSelected = tempCart.any((e) => e['name'] == item.name || e['name'].toString().startsWith('${item.name} + '));
+            if (!item.isAvailable) {
+              return Chip(
+                label: Text('${item.name} (Sold out)',
+                    style: const TextStyle(fontSize: 11, color: Colors.white38, decoration: TextDecoration.lineThrough)),
+                backgroundColor: const Color(0xFF1E1A17),
+                side: const BorderSide(color: Color(0xFF2C2520)),
+              );
+            }
+            return ActionChip(
+              label: Text('${item.name} (${item.priceSummary})',
+                  style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : const Color(0xFFF7B731))),
+              backgroundColor: isSelected ? const Color(0xFFE65C00) : const Color(0xFF26211D),
+              side: BorderSide(color: isSelected ? const Color(0xFFE65C00) : const Color(0xFF382F2A)),
+              onPressed: () => _onPosItemTap(item),
+            );
+          }).toList(),
+        );
+
+    final sections = <Widget>[];
+    for (final cat in menu.categories) {
+      final direct = menu.itemsOf(cat.id, directOnly: true).where(matches).toList();
+      final subs = menu.subcategoriesOf(cat.id)
+          .map((s) => (s, menu.itemsOf(cat.id, subcategoryId: s.id).where(matches).toList()))
+          .where((e) => e.$2.isNotEmpty)
+          .toList();
+      if (direct.isEmpty && subs.isEmpty) continue;
+      sections.add(Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4.0),
+        child: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFF7B731), fontSize: 13)),
+      ));
+      if (direct.isNotEmpty) sections.add(chips(direct));
+      for (final (sub, items) in subs) {
+        sections.add(Padding(
+          padding: const EdgeInsets.only(top: 6, bottom: 4),
+          child: Text(sub.name, style: const TextStyle(color: Colors.white60, fontSize: 12, fontWeight: FontWeight.w600)),
+        ));
+        sections.add(chips(items));
+      }
+      sections.add(const SizedBox(height: 8));
+    }
+    if (sections.isEmpty) {
+      sections.add(const Padding(
+        padding: EdgeInsets.all(8),
+        child: Text('Koi item nahi mila.', style: TextStyle(color: Colors.white38)),
+      ));
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: sections);
   }
 
   Widget _buildDarkThemeMetricCard(String title, String value, IconData icon, Color color) {

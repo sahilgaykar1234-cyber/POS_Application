@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../config/app_config.dart';
+import '../data/firestore_paths.dart';
 import 'app_user.dart';
 
 /// All authentication goes through here. Passwords are handled entirely by
@@ -52,6 +53,7 @@ class AuthService {
 
   Future<void> signOut() async {
     currentUser = null;
+    FirestorePaths.setActiveCafe(null);
     await _auth.signOut();
   }
 

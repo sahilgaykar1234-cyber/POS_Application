@@ -34,31 +34,7 @@ if (!credPath || !fs.existsSync(credPath)) {
 
 admin.initializeApp({ credential: admin.credential.applicationDefault() });
 const db = admin.firestore();
-const { Timestamp, GeoPoint, DocumentReference } = admin.firestore;
-
-/** Convert Firestore values into plain JSON with explicit type tags. */
-function encode(value) {
-  if (value === null || value === undefined) return value ?? null;
-  if (value instanceof Timestamp) {
-    return { __type: 'timestamp', seconds: value.seconds, nanoseconds: value.nanoseconds };
-  }
-  if (value instanceof GeoPoint) {
-    return { __type: 'geopoint', latitude: value.latitude, longitude: value.longitude };
-  }
-  if (value instanceof DocumentReference) {
-    return { __type: 'reference', path: value.path };
-  }
-  if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
-    return { __type: 'bytes', base64: Buffer.from(value).toString('base64') };
-  }
-  if (Array.isArray(value)) return value.map(encode);
-  if (typeof value === 'object') {
-    const out = {};
-    for (const [k, v] of Object.entries(value)) out[k] = encode(v);
-    return out;
-  }
-  return value; // string, number, boolean
-}
+const { encode } = require('./lib/firestore_json');
 
 async function exportCollection(colRef, outDir, manifest) {
   const snap = await colRef.get();

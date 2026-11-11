@@ -4,7 +4,9 @@
   "description": "Local admin scripts (backup, bootstrap). Admin credentials stay on this machine only.",
   "scripts": {
     "backup": "node backup.js",
-    "admin": "node admin.js"
+    "admin": "node admin.js",
+    "migrate": "node migrate_legacy.js",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "firebase-admin": "^12.7.0"

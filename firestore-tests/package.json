@@ -1,0 +1,12 @@
+{
+  "name": "pos-firestore-rules-tests",
+  "private": true,
+  "description": "Security-rules tests for tenant isolation. Runs against the local Firestore emulator.",
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore --project demo-cafe-pos 'node --test rules.test.js'"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^11.0.0"
+  }
+}

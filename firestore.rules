@@ -1,0 +1,144 @@
+rules_version = '2';
+
+// Cafe POS — multi-tenant security rules.
+//
+// Identity comes from Firebase Auth custom claims {role, cafeId}, which only
+// the backend (Cloud Functions / local admin script) can set. A user can never
+// change their own role or cafe, and every cafe-scoped path is checked against
+// the user's cafeId claim, so one cafe can never read another cafe's data.
+//
+// Test: cd firestore-tests && npm test   (runs against the local emulator)
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------- helpers
+
+    function signedIn() { return request.auth != null; }
+    function role() { return signedIn() ? request.auth.token.get('role', null) : null; }
+    function myCafe() { return signedIn() ? request.auth.token.get('cafeId', null) : null; }
+
+    function isSuper() { return role() == 'superAdmin'; }
+    function isStaffOf(cafeId) { return role() in ['manager', 'captain'] && myCafe() == cafeId; }
+    function isManagerOf(cafeId) { return role() == 'manager' && myCafe() == cafeId; }
+
+    function cafeData(cafeId) { return get(/databases/$(database)/documents/cafes/$(cafeId)).data; }
+
+    // Same policy as lib/core/subscription/cafe_access.dart:
+    // cafe active, subscription not expired/suspended, expiry (if any) in future.
+    function cafeOperational(cafeId) {
+      let c = cafeData(cafeId);
+      let sub = c.get('subscription', {});
+      let exp = sub.get('expiryDate', null);
+      return c.get('status', 'active') == 'active'
+        && c.get('legacyData', false) != true
+        && !(sub.get('status', 'active') in ['expired', 'suspended'])
+        && (exp == null || exp > request.time);
+    }
+
+    function canReadCafe(cafeId) { return isSuper() || isStaffOf(cafeId); }
+    function canManageCafe(cafeId) { return isSuper() || (isManagerOf(cafeId) && cafeOperational(cafeId)); }
+
+    // ------------------------------------------------------------------ cafes
+
+    match /cafes/{cafeId} {
+      allow read: if canReadCafe(cafeId);
+      // Creation/deletion/status/subscription changes are Super Admin only.
+      allow create, update, delete: if isSuper();
+
+      match /settings/{docId} {
+        allow read: if canReadCafe(cafeId);
+        allow write: if canManageCafe(cafeId);
+      }
+
+      match /categories/{id} {
+        allow read: if canReadCafe(cafeId);
+        allow write: if canManageCafe(cafeId);
+      }
+      match /subcategories/{id} {
+        allow read: if canReadCafe(cafeId);
+        allow write: if canManageCafe(cafeId);
+      }
+      match /menuItems/{id} {
+        allow read: if canReadCafe(cafeId);
+        allow write: if canManageCafe(cafeId);
+      }
+
+      match /orders/{orderId} {
+        allow read: if canReadCafe(cafeId);
+        // Managers run the POS: create, edit, bill, complete, delete.
+        allow create, update, delete: if isManagerOf(cafeId) && cafeOperational(cafeId);
+        // Captains (kitchen screen) may only change the cooking status.
+        allow update: if role() == 'captain' && myCafe() == cafeId && cafeOperational(cafeId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'kitchenStatus'])
+          && request.resource.data.status in ['pending', 'preparing', 'ready'];
+      }
+
+      // Anything else under a cafe: Super Admin only.
+      match /{other=**} {
+        allow read, write: if isSuper();
+      }
+    }
+
+    // ------------------------------------------------------------------ users
+    // Written ONLY by Cloud Functions (Admin SDK bypasses rules).
+    match /users/{uid} {
+      allow read: if isSuper()
+        || (signedIn() && request.auth.uid == uid)
+        || (role() == 'manager' && resource.data.cafeId == myCafe());
+      allow write: if false;
+    }
+
+    // -------------------------------------------------- SaaS billing (platform)
+    match /plans/{planId} {
+      allow read: if signedIn();
+      allow write: if isSuper();
+    }
+
+    match /subscriptionPayments/{paymentId} {
+      allow read: if isSuper() || (role() == 'manager' && resource.data.cafeId == myCafe());
+      allow write: if isSuper();
+    }
+
+    match /counters/{name} {
+      allow read, write: if isSuper();
+    }
+
+    // --------------------------------------------------------- audit & alerts
+    match /auditLogs/{id} {
+      allow read: if isSuper() || (role() == 'manager' && resource.data.cafeId == myCafe());
+      // Clients may only append entries in their own name; never edit/delete.
+      allow create: if signedIn()
+        && request.resource.data.actorUid == request.auth.uid
+        && (isSuper() || (role() in ['manager', 'captain'] && request.resource.data.cafeId == myCafe()));
+      allow update, delete: if false;
+    }
+
+    match /notifications/{id} {
+      allow read: if isSuper()
+        || (role() == 'manager' && resource.data.audience == 'cafe' && resource.data.cafeId == myCafe());
+      // Created by the scheduled Cloud Function; readers may only mark as read.
+      allow update: if (isSuper() || (role() == 'manager' && resource.data.cafeId == myCafe()))
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
+      allow create, delete: if isSuper();
+    }
+
+    // ------------------------------------------------- legacy (pre-migration)
+    // The old shared collections stay intact as a backup. After the migration
+    // only the Super Admin can read them and nobody can change them.
+    match /orders/{id} {
+      allow read: if isSuper();
+      allow write: if false;
+    }
+    match /menu_categories/{id} {
+      allow read: if isSuper();
+      allow write: if false;
+    }
+    match /settings/{id} {
+      allow read: if isSuper();
+      allow write: if false;
+    }
+
+    // Everything else is denied by default.
+  }
+}

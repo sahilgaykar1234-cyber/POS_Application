@@ -9,11 +9,26 @@ import 'package:pos_app/core/theme/app_theme.dart';
 import 'package:pos_app/core/widgets/confirm_dialog.dart';
 
 void main() {
-  test('legacy Firestore paths are unchanged (must match live data)', () {
-    expect(FirestorePaths.ordersCollection, 'orders');
-    expect(FirestorePaths.menuCategoriesCollection, 'menu_categories');
-    expect(FirestorePaths.settingsCollection, 'settings');
-    expect(FirestorePaths.businessSettingsDocId, 'business_settings');
+  group('FirestorePaths tenant scoping', () {
+    tearDown(() => FirestorePaths.setActiveCafe(null));
+
+    test('no active cafe -> refuses instead of falling back to shared data', () {
+      FirestorePaths.setActiveCafe(null);
+      expect(() => FirestorePaths.activeCafeId, throwsStateError);
+      FirestorePaths.setActiveCafe('');
+      expect(() => FirestorePaths.activeCafeId, throwsStateError);
+    });
+
+    test('active cafe is the one set at sign-in', () {
+      FirestorePaths.setActiveCafe('cafe123');
+      expect(FirestorePaths.activeCafeId, 'cafe123');
+    });
+
+    test('legacy names documented for the migration', () {
+      expect(FirestorePaths.legacyOrders, 'orders');
+      expect(FirestorePaths.legacyMenuCategories, 'menu_categories');
+      expect(FirestorePaths.legacySettingsDoc, 'settings/business_settings');
+    });
   });
 
   test('AppTheme keeps the original brand colours', () {

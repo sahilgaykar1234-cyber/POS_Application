@@ -49,3 +49,8 @@ app.*.map.json
 *-firebase-adminsdk-*.json
 /backups/
 tools/**/node_modules/
+functions/node_modules/
+firestore-tests/node_modules/
+firestore-debug.log
+firebase-debug.log
+ui-debug.log

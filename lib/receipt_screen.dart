@@ -20,7 +20,7 @@ class PaymentCompleteReceiptScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     // 1. Fetch dynamic settings from businessSettings or Fallback
     final String? shopLogoBase64 = businessSettings?['shopLogoBase64'];
-    final String shopName = (businessSettings?['shopName'] ?? 'Pizza La Forno').toString();
+    final String shopName = (businessSettings?['shopName'] ?? '').toString();
     final String tagline = (businessSettings?['tagline'] ?? 'Wood Fired Pizza').toString();
     final String address = (businessSettings?['address'] ?? '').toString();
     final String mobileNumber = (businessSettings?['mobileNumber'] ?? '').toString();

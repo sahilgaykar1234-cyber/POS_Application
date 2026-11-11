@@ -7,6 +7,7 @@ import '../../features/admin/super_admin_home_screen.dart';
 import '../../features/auth/login_screen.dart';
 import '../../manager_dashboard.dart';
 import '../data/firestore_paths.dart';
+import '../subscription/cafe_access.dart';
 import '../theme/app_theme.dart';
 import '../widgets/message_screen.dart';
 import 'app_user.dart';
@@ -123,34 +124,59 @@ class _CafeGate extends StatelessWidget {
           );
         }
 
-        final data = cafe.data() ?? const {};
-        final status = (data['status'] ?? 'active').toString();
-        final cafeName = (data['name'] ?? 'Your cafe').toString();
-
-        if (status == 'suspended' || status == 'inactive' || status == 'deleted') {
-          return _SignOutMessage(
-            icon: Icons.block_rounded,
-            title: '$cafeName is currently unavailable',
-            message: 'Access to this cafe has been paused. Your data is safe. '
-                'Please contact the administrator.',
-          );
+        final access = evaluateCafeAccess(cafe.data() ?? const {}, DateTime.now());
+        switch (access.state) {
+          case CafeAccessState.blocked:
+            return _SignOutMessage(icon: Icons.block_rounded, title: access.title, message: access.message);
+          case CafeAccessState.migrating:
+            return _SignOutMessage(icon: Icons.construction_rounded, title: access.title, message: access.message);
+          case CafeAccessState.allowed:
+          case CafeAccessState.allowedWithWarning:
+            break;
         }
 
-        // SAFETY (until the Phase 3 migration): existing POS screens still use
-        // the old shared collections, which hold Flamy Wood's data. Only the
-        // cafe flagged `legacyData` may open them, so no other cafe can ever
-        // see that data.
-        if (data['legacyData'] != true) {
-          return _SignOutMessage(
-            icon: Icons.construction_rounded,
-            title: '$cafeName is being set up',
-            message: 'Your account is ready, but your cafe\'s POS is not live yet. '
-                'You will be able to use it soon.',
-          );
-        }
+        // Every cafe-scoped query (orders, menu, settings) now resolves under
+        // cafes/{this user's cafeId}. Firestore rules enforce the same.
+        FirestorePaths.setActiveCafe(user.cafeId);
 
-        return user.isManager ? const ManagerDashboardScreen() : const CaptainDashboardScreen();
+        final dashboard = user.isManager ? const ManagerDashboardScreen() : const CaptainDashboardScreen();
+        if (access.state != CafeAccessState.allowedWithWarning) return dashboard;
+        return _WarningBanner(message: access.message, child: dashboard);
       },
+    );
+  }
+}
+
+/// Thin banner above the dashboard (e.g. "Subscription expires in 3 days").
+class _WarningBanner extends StatelessWidget {
+  const _WarningBanner({required this.message, required this.child});
+  final String message;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.background,
+      child: Column(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Container(
+              width: double.infinity,
+              color: const Color(0xFF8A5A00),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(message, style: const TextStyle(color: Colors.white, fontSize: 13))),
+                ],
+              ),
+            ),
+          ),
+          Expanded(child: MediaQuery.removePadding(context: context, removeTop: true, child: child)),
+        ],
+      ),
     );
   }
 }
