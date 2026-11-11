@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../core/auth/auth_gate.dart';
-import '../../core/auth/auth_service.dart';
 import '../../core/data/firestore_paths.dart';
 import '../../core/config/app_config.dart';
 import '../../core/layout/app_shell.dart';
@@ -21,7 +20,6 @@ import '../pos/pos_screen.dart';
 import '../reports/reports_screen.dart';
 import '../settings/business_settings.dart';
 import '../settings/settings_screen.dart';
-import '../staff/staff_management_screen.dart';
 
 /// Keeps every page that has been opened alive (so a half-built order or a
 /// scrolled list survives switching sections) but only builds a page the
@@ -148,7 +146,6 @@ class _ManagerShellState extends State<ManagerShell> {
   @override
   Widget build(BuildContext context) {
     final cafeId = FirestorePaths.activeCafeId;
-    final me = AuthService.instance.currentUser;
     return _ShellFrame(
       roleLabel: 'Manager',
       // Navigation at the bottom on every screen size (as in the original app).
@@ -164,7 +161,6 @@ class _ManagerShellState extends State<ManagerShell> {
         const ShellDestination(icon: Icons.restaurant_menu_outlined, selectedIcon: Icons.restaurant_menu, label: 'Menu', onMobileBar: true),
         const ShellDestination(icon: Icons.insights_outlined, selectedIcon: Icons.insights, label: 'Reports'),
         const ShellDestination(icon: Icons.groups_outlined, selectedIcon: Icons.groups, label: 'Customers'),
-        const ShellDestination(icon: Icons.badge_outlined, selectedIcon: Icons.badge, label: 'Staff'),
         const ShellDestination(icon: Icons.settings_outlined, selectedIcon: Icons.settings, label: 'Settings'),
       ],
       builders: [
@@ -174,7 +170,6 @@ class _ManagerShellState extends State<ManagerShell> {
         (_) => MenuManagementScreen(cafeId: cafeId),
         (_) => const ReportsScreen(),
         (_) => const CustomersScreen(),
-        (_) => StaffManagementScreen(cafeId: cafeId, cafeName: me?.displayName ?? 'My Cafe', embedded: true),
         (_) => const SettingsScreen(),
       ],
     );
