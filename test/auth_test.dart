@@ -54,7 +54,7 @@ void main() {
     test('username maps to Firebase account and 6+ char password', () {
       expect(AppConfig.loginEmail(' FlammyWood '), 'flammywood@pos.example.com');
       expect(AppConfig.loginPassword('flammywood', '123'), 'cafepos-123');
-      expect(AppConfig.displayLogin('laferno@pos.example.com'), 'laferno');
+      expect(AppConfig.displayLogin('laforno@pos.example.com'), 'laforno');
     });
     test('email logins unchanged', () {
       expect(AppConfig.loginEmail('Owner@Gmail.com'), 'owner@gmail.com');
@@ -62,7 +62,7 @@ void main() {
     });
     test('validator accepts usernames and emails', () {
       expect(LoginValidators.usernameOrEmail('flammywood'), isNull);
-      expect(LoginValidators.usernameOrEmail('laferno'), isNull);
+      expect(LoginValidators.usernameOrEmail('laforno'), isNull);
       expect(LoginValidators.usernameOrEmail('a@b.co'), isNull);
       expect(LoginValidators.usernameOrEmail('ab'), isNotNull);
       expect(LoginValidators.usernameOrEmail('has space'), isNotNull);

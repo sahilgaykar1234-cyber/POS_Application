@@ -5,7 +5,7 @@
  *   1. Backup of the whole database (backups/…)
  *   2. Flammy Wood: create cafe + move existing data into it (same bill numbers)
  *   3. Pizza La Forno: create cafe + import the full menu from the PDF
- *   4. Simple cafe logins: username + password (default flammywood / laferno);
+ *   4. Simple cafe logins: username + password (default flammywood / laforno);
  *      after login the user chooses Manager or Captain view
  *
  * Safe to run again: finished steps are skipped.
@@ -14,7 +14,7 @@
  *   node setup_cafes.js --password 123
  *
  * Options: --flammy-login <username> (default flammywood)
- *          --forno-login  <username> (default laferno)
+ *          --forno-login  <username> (default laforno)
  *          --password <pw>   (required; used for both logins)
  *          --flammy-manager/--flammy-captain/--forno-manager/--forno-captain <email>
  *              optional extra personal email logins
@@ -83,7 +83,7 @@ async function main() {
   if (!password) throw new Error('Give a password for the cafe logins, e.g. --password 123');
   const logins = [
     await createCafeLogin(opt('--flammy-login') || 'flammywood', password, flammyId),
-    await createCafeLogin(opt('--forno-login') || 'laferno', password, fornoId),
+    await createCafeLogin(opt('--forno-login') || 'laforno', password, fornoId),
   ];
   const wanted = [
     [opt('--flammy-manager'), 'manager', flammyId],
