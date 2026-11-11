@@ -7,6 +7,8 @@ import 'package:pos_app/features/menu/menu_models.dart';
 import 'package:pos_app/features/orders/bill.dart';
 import 'package:pos_app/features/orders/order_model.dart';
 import 'package:pos_app/features/orders/order_service.dart';
+import 'package:pos_app/features/orders/orders_board_screen.dart';
+import 'package:flutter/material.dart';
 import 'package:pos_app/features/pos/pos_cart.dart';
 import 'package:pos_app/features/reports/reports_csv.dart';
 
@@ -190,6 +192,33 @@ void main() {
       expect(lines.first, 'Bill No,Date,Time,Table No,Customer Name,Phone,Item Count,Subtotal,GST,Discount,Grand Total,Payment Status,Order Status');
       expect(lines.length, 4);
       expect(lines[1], startsWith('"#ABCDE"'));
+    });
+  });
+
+  group('Table timer', () {
+    test('format', () {
+      expect(formatElapsed(const Duration(seconds: 45)), '0:45');
+      expect(formatElapsed(const Duration(minutes: 12, seconds: 5)), '12:05');
+      expect(formatElapsed(const Duration(hours: 1, minutes: 2, seconds: 9)), '1:02:09');
+      expect(formatElapsed(const Duration(seconds: -3)), '0:00');
+    });
+
+    testWidgets('runs until paid, then stops', (t) async {
+      final start = DateTime.now().subtract(const Duration(minutes: 5));
+      await t.pumpWidget(MaterialApp(home: Scaffold(body: TableTimer(start: start))));
+      final first = (t.widget<Text>(find.byType(Text))).data!;
+      await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 1100))); // real time passes
+      await t.pump(const Duration(seconds: 1)); // timer tick
+      final later = (t.widget<Text>(find.byType(Text))).data!;
+      expect(first, startsWith('5:'));
+      expect(later, isNot(first), reason: 'keeps ticking while unpaid');
+      expect(find.byIcon(Icons.timer_outlined), findsOneWidget);
+
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(body: TableTimer(start: start, stoppedAt: start.add(const Duration(minutes: 7, seconds: 30)))),
+      ));
+      expect(find.text('7:30'), findsOneWidget, reason: 'frozen at payment time');
+      expect(find.byIcon(Icons.check_circle_rounded), findsOneWidget);
     });
   });
 }

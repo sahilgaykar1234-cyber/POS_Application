@@ -40,6 +40,7 @@ class PosOrder {
 
   DateTime? get createdAt => (data['createdAt'] as Timestamp?)?.toDate();
   DateTime? get completedAt => (data['completedAt'] as Timestamp?)?.toDate();
+  DateTime? get paidAt => (data['paidAt'] as Timestamp?)?.toDate();
 
   /// Short bill number, same as receipts: first 6 chars of the id.
   String get billNo => '#${id.substring(0, id.length > 6 ? 6 : id.length).toUpperCase()}';

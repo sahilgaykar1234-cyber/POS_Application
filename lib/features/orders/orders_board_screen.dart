@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/layout/breakpoints.dart';
@@ -242,7 +244,6 @@ class _TableTile extends StatelessWidget {
     final p = context.palette;
     final (c, tint, text) = _statusLook(context, order, virtual: virtual);
     final o = order;
-    final mins = o?.createdAt == null ? null : DateTime.now().difference(o!.createdAt!).inMinutes;
     return Material(
       color: o == null ? p.surface : tint,
       shape: RoundedRectangleBorder(
@@ -292,11 +293,18 @@ class _TableTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()]),
                   ),
-                  Text(
-                    '${o.itemCount} items${mins != null ? ' · ${mins}m' : ''}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, color: p.inkSubtle),
+                  Row(
+                    children: [
+                      if (o.createdAt != null) TableTimer(start: o.createdAt!, stoppedAt: o.isPaid ? (o.paidAt ?? o.completedAt) : null),
+                      Flexible(
+                        child: Text(
+                          ' · ${o.itemCount} items',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12, color: p.inkSubtle),
+                        ),
+                      ),
+                    ],
                   ),
                 ] else
                   Text(
@@ -351,4 +359,75 @@ class _CompletedList extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Live "time at table" counter. Runs from when the order was taken until it
+/// is paid (then shows the stopped time with a tick). Nothing is stored: it is
+/// worked out on screen from the order's own timestamps, so it disappears
+/// (resets) when the table is freed.
+class TableTimer extends StatefulWidget {
+  const TableTimer({super.key, required this.start, this.stoppedAt});
+  final DateTime start;
+  final DateTime? stoppedAt;
+
+  @override
+  State<TableTimer> createState() => _TableTimerState();
+}
+
+class _TableTimerState extends State<TableTimer> {
+  Timer? _t;
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(TableTimer old) {
+    super.didUpdateWidget(old);
+    _sync();
+  }
+
+  void _sync() {
+    if (widget.stoppedAt == null) {
+      _t ??= Timer.periodic(const Duration(seconds: 1), (_) => mounted ? setState(() {}) : null);
+    } else {
+      _t?.cancel();
+      _t = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final running = widget.stoppedAt == null;
+    final end = widget.stoppedAt ?? DateTime.now();
+    final color = running ? p.ink : p.success;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(running ? Icons.timer_outlined : Icons.check_circle_rounded, size: 13, color: color),
+        const SizedBox(width: 3),
+        Text(
+          formatElapsed(end.difference(widget.start)),
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color, fontFeatures: const [FontFeature.tabularFigures()]),
+        ),
+      ],
+    );
+  }
+}
+
+/// 0:45 · 12:05 · 1:02:09
+String formatElapsed(Duration d) {
+  if (d.isNegative) d = Duration.zero;
+  final h = d.inHours, m = d.inMinutes % 60, s = d.inSeconds % 60;
+  String two(int n) => n.toString().padLeft(2, '0');
+  return h > 0 ? '$h:${two(m)}:${two(s)}' : '$m:${two(s)}';
 }
