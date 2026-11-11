@@ -143,6 +143,20 @@ class OrderService {
     }
 
     final hasAnyNew = cart.any((e) => (e['isDone'] ?? false) == false);
+    if (existing.isCompleted) {
+      // Correcting a closed bill: keep it closed and paid as it was, keep its
+      // discount, nothing goes to the kitchen.
+      await _orders.doc(existing.id).update({
+        'customerName': displayName,
+        'tableNo': tableNo.trim(),
+        'customerPhone': c.phone,
+        'orderType': orderType,
+        'specialRequest': note.trim(),
+        ..._recalc(existing, [for (final e in cart) {...e, 'isDone': true}]),
+        'editedAt': FieldValue.serverTimestamp(),
+      });
+      return (id: existing.id, token: existing.tokenNo, billNo: existing.data['billNo'] as String?);
+    }
     await _orders.doc(existing.id).update({
       'customerName': displayName,
       'tableNo': tableNo.trim(),
@@ -154,8 +168,9 @@ class OrderService {
       'subtotal': bill.subtotal,
       'hasGst': gstEnabled,
       'gstPercentage': gstPercent,
-      'status': 'pending',
-      'kitchenStatus': 'pending',
+      // Only new (unsent) items send the order back to the kitchen.
+      'status': statusAfterEdit(existing.status, hasNewItems: hasAnyNew),
+      'kitchenStatus': statusAfterEdit(existing.status, hasNewItems: hasAnyNew),
       'hasNewItemsAdded': hasAnyNew,
       // Items changed: any earlier discount must be re-applied at settle time.
       'discountType': FieldValue.delete(),
@@ -290,6 +305,37 @@ class OrderService {
 
   Future<void> delete(String id) => _orders.doc(id).delete();
 
+  /// Adds an off-menu item (with the manager's price) to an existing order.
+  Future<void> addCustomItem(PosOrder order, Map<String, dynamic> line) async {
+    final items = [for (final e in order.items) {...e}];
+    final i = items.indexWhere((l) => l['custom'] == true && l['name'] == line['name'] && l['price'] == line['price']);
+    if (i != -1) {
+      items[i]['qty'] = ((items[i]['qty'] ?? 1) as num).toInt() + ((line['qty'] ?? 1) as num).toInt();
+    } else {
+      items.add({...line});
+    }
+    await _orders.doc(order.id).update(_recalc(order, items));
+  }
+
+  /// New items + totals for [order], keeping its GST setting and discount.
+  Map<String, dynamic> _recalc(PosOrder order, List<Map<String, dynamic>> items) {
+    final type = Bill.parseType(order.data['discountType']);
+    final value = ((order.data['discountValue'] ?? 0) as num).toDouble();
+    final bill = Bill.compute(
+      items: items,
+      gstEnabled: order.hasGst,
+      gstPercent: ((order.data['gstPercentage'] ?? 5) as num).toDouble(),
+      discountType: type,
+      discountValue: value,
+    );
+    return {
+      'items': items,
+      'subtotal': bill.subtotal,
+      'totalPrice': bill.total,
+      if (type != DiscountType.none) 'discountGiven': bill.discount,
+    };
+  }
+
   /// Finds the last name and items for a 10-digit phone (original logic).
   Future<KnownCustomer?> lookupByPhone(String rawPhone) async {
     final phone = rawPhone.trim().replaceAll(RegExp(r'\D'), '');
@@ -329,3 +375,10 @@ class OrderService {
 /// yyyymmdd (local day) — token numbers restart every day.
 String takeawayDayKey(DateTime d) =>
     '${d.year}${d.month.toString().padLeft(2, '0')}${d.day.toString().padLeft(2, '0')}';
+
+/// Order status after an edit: new items go (back) to the kitchen, otherwise
+/// (e.g. an item removed or an extra off-menu item added) it stays as it was.
+String statusAfterEdit(String current, {required bool hasNewItems}) {
+  if (hasNewItems) return 'pending';
+  return const ['pending', 'preparing', 'ready'].contains(current) ? current : 'pending';
+}

@@ -6,6 +6,7 @@ import 'package:pos_app/features/manager/sales_stats.dart';
 import 'package:pos_app/features/menu/menu_models.dart';
 import 'package:pos_app/features/orders/bill.dart';
 import 'package:pos_app/features/orders/bill_numbers.dart';
+import 'package:pos_app/features/orders/custom_item_dialog.dart';
 import 'package:pos_app/features/orders/order_model.dart';
 import 'package:pos_app/features/orders/order_service.dart';
 import 'package:pos_app/features/orders/orders_board_screen.dart';
@@ -395,6 +396,44 @@ void main() {
       expect(seqInYear(202600042, DateTime(2027, 3, 31)), 42);
       expect(seqInYear(202600042, DateTime(2027, 4, 1)), isNull);
       expect(seqInYear(null, DateTime(2027, 4, 1)), isNull);
+    });
+  });
+
+  group('Extra (off-menu) items', () {
+    test('input is validated and cleaned', () {
+      final c = CustomItem.parse('  Coke   750 ml ', '45', '2')!;
+      expect(c.name, 'Coke 750 ml');
+      expect(c.price, 45);
+      expect(c.qty, 2);
+      expect(CustomItem.parse('Water', '20.555', '1')!.price, 20.56);
+      expect(CustomItem.parse('', '20', '1'), isNull);
+      expect(CustomItem.parse('Water', '0', '1'), isNull);
+      expect(CustomItem.parse('Water', 'abc', '1'), isNull);
+      expect(CustomItem.parse('Water', '20', '0'), isNull);
+    });
+
+    test('line is billed, marked extra, and not sent to the kitchen', () {
+      final line = const CustomItem('Coke', 45, 2).toLine();
+      expect(line, {'name': 'Coke', 'price': 45.0, 'size': 'Standard', 'qty': 2, 'isDone': true, 'custom': true});
+      final b = Bill.compute(items: [line, {'name': 'Pizza', 'price': 130, 'qty': 1}], gstEnabled: false, gstPercent: 5);
+      expect(b.total, 220);
+    });
+
+    test('cart merges same extra item, keeps it apart from menu items', () {
+      final cart = PosCart();
+      cart.addCustom(const CustomItem('Coke', 45, 1).toLine());
+      cart.addCustom(const CustomItem('Coke', 45, 2).toLine());
+      cart.addCustom(const CustomItem('Coke', 50, 1).toLine());
+      expect(cart.lines.length, 2);
+      expect(cart.lines.first['qty'], 3);
+      expect(cart.itemCount, 4);
+    });
+
+    test('editing without new items keeps the kitchen status', () {
+      expect(statusAfterEdit('ready', hasNewItems: false), 'ready');
+      expect(statusAfterEdit('preparing', hasNewItems: false), 'preparing');
+      expect(statusAfterEdit('ready', hasNewItems: true), 'pending');
+      expect(statusAfterEdit('weird', hasNewItems: false), 'pending');
     });
   });
 }

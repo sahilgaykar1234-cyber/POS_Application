@@ -224,7 +224,7 @@ class _TicketCard extends StatelessWidget {
                         ),
                       ),
                     const SizedBox(height: Space.sm),
-                    for (final it in o.items)
+                    for (final it in o.items.where((it) => it['custom'] != true))
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2),
                         child: Row(

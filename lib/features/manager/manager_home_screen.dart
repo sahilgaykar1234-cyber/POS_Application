@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import '../../core/layout/breakpoints.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
+import '../../core/widgets/confirm_dialog.dart';
 import '../../core/widgets/ui.dart';
 import '../menu/menu_models.dart' show formatPrice;
 import '../orders/bill.dart';
 import '../orders/order_details_sheet.dart';
 import '../orders/order_model.dart';
 import '../orders/order_service.dart';
+import '../pos/pos_screen.dart';
 import '../settings/business_settings.dart';
 import 'sales_stats.dart';
 
@@ -143,6 +145,8 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
                       _RecentBill(
                         order: recent[i],
                         onTap: recent[i].isActive ? () => showOrderDetailsSheet(context, recent[i], settings, canDelete: true) : null,
+                        onEdit: () => _edit(recent[i]),
+                        onDelete: () => _delete(recent[i]),
                       ),
                     ],
                   ],
@@ -150,6 +154,27 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
         ),
       ],
     );
+  }
+
+  void _edit(PosOrder o) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => PosScreen(editing: o, standalone: true)));
+  }
+
+  Future<void> _delete(PosOrder o) async {
+    final ok = await showDangerConfirmDialog(
+      context,
+      title: 'Delete bill ${o.billNo}?',
+      message: '${o.displayName} · ${Fmt.money(o.totalPrice)}${o.isPaid ? ' · already paid' : ''}\n'
+          'It will be removed from sales and reports. This cannot be undone.',
+      confirmLabel: 'Delete',
+    );
+    if (!ok || !mounted) return;
+    try {
+      await OrderService.instance.delete(o.id);
+      if (mounted) showSuccess(context, 'Bill ${o.billNo} deleted');
+    } catch (_) {
+      if (mounted) showError(context, 'Could not delete the bill. Please check your connection.');
+    }
   }
 
   Widget _twoUp(BuildContext context, Widget a, Widget b, {int flexA = 1}) {
@@ -394,9 +419,11 @@ class _PaymentSplit extends StatelessWidget {
 
 /// One bill in "Recent bills": header + every item with qty, size and price.
 class _RecentBill extends StatelessWidget {
-  const _RecentBill({required this.order, this.onTap});
+  const _RecentBill({required this.order, this.onTap, this.onEdit, this.onDelete});
   final PosOrder order;
   final VoidCallback? onTap;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -473,6 +500,31 @@ class _RecentBill extends StatelessWidget {
                 MoneyText(o.totalPrice, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
               ],
             ),
+            if (onEdit != null || onDelete != null)
+              Padding(
+                padding: const EdgeInsets.only(top: Space.xs),
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: Space.xs,
+                  children: [
+                    if (onEdit != null)
+                      TextButton.icon(
+                        key: Key('recent-edit-${o.id}'),
+                        onPressed: onEdit,
+                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        label: const Text('Edit'),
+                      ),
+                    if (onDelete != null)
+                      TextButton.icon(
+                        key: Key('recent-delete-${o.id}'),
+                        style: TextButton.styleFrom(foregroundColor: p.danger),
+                        onPressed: onDelete,
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        label: const Text('Delete'),
+                      ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),

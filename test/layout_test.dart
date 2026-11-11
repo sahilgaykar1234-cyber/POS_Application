@@ -373,4 +373,42 @@ void main() {
     expect(find.text('Margherita + Cheese burst-style'), findsOneWidget);
     expect(t.takeException(), isNull);
   });
+
+  testWidgets('POS: extra off-menu item with its own price', (t) async {
+    await pumpAt(t, sizes['desktop']!, PosScreen(menuStream: Stream.value(menu()), settingsStream: Stream.value(settings)), AppTheme.light());
+    await t.ensureVisible(find.byKey(const Key('pos-add-extra')));
+    await t.tap(find.byKey(const Key('pos-add-extra')));
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('custom-name')), 'Coke 750 ml');
+    await t.enterText(find.byKey(const Key('custom-price')), '45');
+    await t.enterText(find.byKey(const Key('custom-qty')), '2');
+    await t.pump();
+    await t.tap(find.text('Add  ₹90'));
+    await t.pumpAndSettle();
+    expect(find.text('Coke 750 ml'), findsOneWidget);
+    expect(find.textContaining('extra'), findsWidgets);
+    expect(t.takeException(), isNull);
+  });
+
+  for (final s in sizes.entries) {
+    testWidgets('Dashboard recent bills have Edit and Delete · ${s.key}', (t) async {
+      await pumpAt(
+        t,
+        s.value,
+        ManagerHomeScreen(onNewOrder: () {}, onOpenTables: () {}, ordersStream: Stream.value(orders()), settingsStream: Stream.value(settings)),
+        AppTheme.light(),
+      );
+      bool keyStarts(Widget w, String pre) => w.key is ValueKey<String> && (w.key as ValueKey<String>).value.startsWith(pre);
+      final del = find.byWidgetPredicate((w) => keyStarts(w, 'recent-delete-'), skipOffstage: false).first;
+      await t.scrollUntilVisible(del, 300, scrollable: find.byType(Scrollable).first);
+      await t.pumpAndSettle();
+      expect(find.byWidgetPredicate((w) => keyStarts(w, 'recent-edit-')), findsWidgets);
+      await t.tap(del);
+      await t.pumpAndSettle();
+      expect(find.textContaining('Delete bill'), findsOneWidget);
+      await t.tap(find.text('Cancel'));
+      await t.pumpAndSettle();
+      expect(t.takeException(), isNull);
+    });
+  }
 }

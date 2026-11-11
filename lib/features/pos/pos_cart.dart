@@ -24,11 +24,22 @@ class PosCart extends ChangeNotifier {
 
   /// Same merging rule as before: same name + same size → qty + 1.
   void add(CartLine line) {
-    final i = lines.indexWhere((l) => l['name'] == line.name && l['size'] == line.size);
+    final i = lines.indexWhere((l) => l['custom'] != true && l['name'] == line.name && l['size'] == line.size);
     if (i != -1) {
       lines[i]['qty'] = ((lines[i]['qty'] ?? 1) as num).toInt() + 1;
     } else {
       lines.add({'name': line.name, 'price': line.unitPrice, 'size': line.size, 'qty': 1, 'isDone': false});
+    }
+    notifyListeners();
+  }
+
+  /// Adds an off-menu item with its own price (merges same name + price).
+  void addCustom(Map<String, dynamic> line) {
+    final i = lines.indexWhere((l) => l['custom'] == true && l['name'] == line['name'] && l['price'] == line['price']);
+    if (i != -1) {
+      lines[i]['qty'] = ((lines[i]['qty'] ?? 1) as num).toInt() + ((line['qty'] ?? 1) as num).toInt();
+    } else {
+      lines.add({...line});
     }
     notifyListeners();
   }

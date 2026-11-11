@@ -15,6 +15,7 @@ import '../menu/item_picker_sheet.dart';
 import '../menu/menu_models.dart';
 import '../menu/menu_repository.dart';
 import '../orders/bill_numbers.dart';
+import '../orders/custom_item_dialog.dart';
 import '../orders/order_model.dart';
 import '../orders/order_service.dart';
 import '../settings/business_settings.dart';
@@ -185,6 +186,13 @@ class _PosScreenState extends State<PosScreen> {
   Future<void> _printDraft() async {
     if (cart.isEmpty) return showError(context, 'Add at least one item to print the bill.');
     await printBill(context, order: _draft(), settings: _bs.receiptSettings, orderId: widget.editing?.id);
+  }
+
+  Future<void> _addExtra() async {
+    final item = await showCustomItemDialog(context);
+    if (item == null || !mounted) return;
+    cart.addCustom(item.toLine());
+    showSuccess(context, '${item.name} added');
   }
 
   Future<void> _save() async {
@@ -587,7 +595,16 @@ class _PosScreenState extends State<PosScreen> {
                     )
                   else
                     for (var i = 0; i < cart.lines.length; i++) _cartLine(i),
-                  const SizedBox(height: Space.md),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      key: const Key('pos-add-extra'),
+                      onPressed: _addExtra,
+                      icon: const Icon(Icons.add_shopping_cart_outlined, size: 18),
+                      label: const Text('Extra item (not on menu)'),
+                    ),
+                  ),
+                  const SizedBox(height: Space.sm),
                   TextField(
                     controller: _note,
                     maxLines: 2,
@@ -682,7 +699,7 @@ class _PosScreenState extends State<PosScreen> {
               children: [
                 Text(l['name'].toString(), style: const TextStyle(fontWeight: FontWeight.w600)),
                 Text(
-                  [if (size != 'Standard') size, '₹${formatPrice(price)} each', if (l['isDone'] == true) 'sent'].join(' · '),
+                  [if (size != 'Standard') size, '₹${formatPrice(price)} each', if (l['custom'] == true) 'extra' else if (l['isDone'] == true) 'sent'].join(' · '),
                   style: TextStyle(fontSize: 12, color: p.inkSubtle),
                 ),
               ],

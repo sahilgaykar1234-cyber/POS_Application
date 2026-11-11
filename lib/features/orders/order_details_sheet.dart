@@ -5,9 +5,11 @@ import '../../core/utils/formatters.dart';
 import '../../core/widgets/confirm_dialog.dart';
 import '../../core/widgets/ui.dart';
 import '../../receipt_screen.dart';
+import '../menu/menu_models.dart' show formatPrice;
 import '../pos/pos_screen.dart';
 import '../pos/print_helper.dart';
 import '../settings/business_settings.dart';
+import 'custom_item_dialog.dart';
 import 'order_model.dart';
 import 'order_service.dart';
 import 'settle_bill_sheet.dart';
@@ -176,6 +178,18 @@ class _OrderDetails extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: Space.sm),
+          OutlinedButton.icon(
+            key: const Key('details-add-extra'),
+            onPressed: () async {
+              final item = await showCustomItemDialog(context);
+              if (item == null || !context.mounted) return;
+              await _run(context, () => OrderService.instance.addCustomItem(o, item.toLine()),
+                  '${item.name} added · ₹${formatPrice(item.price * item.qty)}');
+            },
+            icon: const Icon(Icons.add_shopping_cart_outlined, size: 18),
+            label: const Text('Extra item (not on menu)'),
           ),
           const SizedBox(height: Space.sm),
           Row(
