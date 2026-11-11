@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../core/data/firestore_paths.dart';
 import 'bill.dart';
@@ -134,7 +135,8 @@ class OrderService {
           return (token: token, billNo: billNo);
         });
         return (id: ref.id, token: r.token, billNo: r.billNo);
-      } catch (_) {
+      } catch (e) {
+        debugPrint('Bill number / token not assigned: $e');
         // Offline / transaction failed: never lose the order. It is saved
         // without numbers; the bill number is given when it is settled.
         await ref.set(data);
@@ -182,6 +184,15 @@ class OrderService {
     });
   }
 
+  /// Never let numbering problems block taking payment.
+  Future<void> _tryEnsureBillNumber(String id) async {
+    try {
+      await ensureBillNumber(id);
+    } catch (e) {
+      debugPrint('Bill number not assigned for $id: $e');
+    }
+  }
+
   Future<void> setStatus(String id, String status) =>
       _orders.doc(id).update({'status': status, 'kitchenStatus': status});
 
@@ -196,7 +207,7 @@ class OrderService {
     required bool complete,
     bool assignBillNumber = true,
   }) async {
-    if (assignBillNumber && order.data['billNo'] == null) await ensureBillNumber(order.id);
+    if (assignBillNumber && order.data['billNo'] == null) await _tryEnsureBillNumber(order.id);
     final bill = Bill.compute(
       items: order.items,
       gstEnabled: order.hasGst,
@@ -230,7 +241,7 @@ class OrderService {
 
   /// Frees the table without changing payment (original "Done" action).
   Future<Map<String, dynamic>> complete(String id, {bool assignBillNumber = true}) async {
-    if (assignBillNumber) await ensureBillNumber(id);
+    if (assignBillNumber) await _tryEnsureBillNumber(id);
     await _orders.doc(id).update({
       'status': 'completed',
       'kitchenStatus': 'completed',
