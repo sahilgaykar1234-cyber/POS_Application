@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -504,7 +505,22 @@ class PaymentCompleteReceiptScreen extends StatelessWidget {
       }
     }
     final text = buildWhatsAppBill(order: orderData, orderId: orderId, settings: businessSettings);
-    final ok = await launchUrl(whatsAppUri(number, text), mode: LaunchMode.externalApplication);
+    final mobile = defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
+    var ok = false;
+    try {
+      // Straight to the chat: WhatsApp app on phones, WhatsApp Web on
+      // computers (re-using one "whatsapp" tab instead of opening new ones).
+      ok = await launchUrl(
+        whatsAppDirectUri(number, text, mobile: mobile),
+        mode: LaunchMode.externalApplication,
+        webOnlyWindowName: mobile ? null : 'cafepos_whatsapp',
+      );
+    } catch (_) {
+      ok = false;
+    }
+    if (!ok) {
+      ok = await launchUrl(whatsAppUri(number, text), mode: LaunchMode.externalApplication);
+    }
     if (!ok && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open WhatsApp.')));
     }

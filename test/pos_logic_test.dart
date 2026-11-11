@@ -261,6 +261,13 @@ void main() {
       expect(text, contains('*Total: ₹812.70*'));
       expect(text, contains('Paid via UPI'));
       expect(text, endsWith('Visit again!'));
+      final web = whatsAppDirectUri('919825012345', text, mobile: false);
+      expect(web.host, 'web.whatsapp.com');
+      expect(web.queryParameters['phone'], '919825012345');
+      expect(web.queryParameters['text'], text);
+      final app = whatsAppDirectUri('919825012345', text, mobile: true);
+      expect(app.scheme, 'whatsapp');
+      expect(app.queryParameters['text'], text);
       final uri = whatsAppUri('919825012345', text);
       expect(uri.host, 'wa.me');
       expect(uri.path, '/919825012345');

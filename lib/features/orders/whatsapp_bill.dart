@@ -66,6 +66,16 @@ String buildWhatsAppBill({
   return b.toString();
 }
 
-/// `https://wa.me/<number>?text=<bill>`
+/// `https://wa.me/<number>?text=<bill>` (universal fallback).
 Uri whatsAppUri(String number, String text) =>
     Uri.parse('https://wa.me/$number?text=${Uri.encodeComponent(text)}');
+
+/// The link that opens the chat directly, with no "open app?" landing page:
+///  - phones/tablets (Android, iOS): the WhatsApp app (`whatsapp://send`)
+///  - computers: WhatsApp Web (`web.whatsapp.com/send`)
+Uri whatsAppDirectUri(String number, String text, {required bool mobile}) {
+  final t = Uri.encodeComponent(text);
+  return mobile
+      ? Uri.parse('whatsapp://send?phone=$number&text=$t')
+      : Uri.parse('https://web.whatsapp.com/send?phone=$number&text=$t');
+}
