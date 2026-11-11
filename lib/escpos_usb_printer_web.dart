@@ -2,6 +2,7 @@
 // ESC/POS thermal printing over WebUSB (Flutter web, Chrome/Edge).
 // pubspec.yaml me `web: ^1.0.0` hona chahiye.
 import 'dart:convert';
+import 'features/orders/bill_numbers.dart';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 import 'dart:typed_data';
@@ -339,12 +340,6 @@ class EscPosUsbPrinter {
         .trim();
   }
 
-  // Receipt screen jaisa: order ID ke pehle 6 characters, uppercase.
-  static String _billNo(String? orderId) {
-    final id = orderId ?? '';
-    if (id.isEmpty) return '';
-    return '#${id.substring(0, id.length > 6 ? 6 : id.length).toUpperCase()}';
-  }
 
   // Receipt screen jaisa: pehle completedAt, phir createdAt, warna abhi ka time.
   static DateTime _orderDate(Map<String, dynamic> order) {
@@ -405,7 +400,8 @@ class EscPosUsbPrinter {
     String two(int n) => n.toString().padLeft(2, '0');
     final dateStr =
         '${two(dt.day)}/${two(dt.month)}/${dt.year} ${two(dt.hour)}:${two(dt.minute)}';
-    final bill = _billNo(orderId);
+    // Sequential bill number (26-27/0042); old orders keep #ABCDEF.
+    final bill = displayBillNo(order, orderId ?? '');
     _lr(bill.isEmpty ? '' : 'Bill: $bill', dateStr);
 
     final tableNo = _s(order['tableNo']);

@@ -192,7 +192,7 @@ class _OrderDetails extends StatelessWidget {
                     if (!ok || !context.mounted) return;
                     Navigator.pop(context);
                     try {
-                      final data = await OrderService.instance.complete(o.id);
+                      final data = await OrderService.instance.complete(o.id, assignBillNumber: settings.autoGenBillNumber);
                       if (!parent.mounted) return;
                       Navigator.push(
                         parent,

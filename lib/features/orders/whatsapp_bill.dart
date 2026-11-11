@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'bill_numbers.dart';
+
 /// Sending a bill on WhatsApp the free way: we open WhatsApp (app or web)
 /// with the customer's number and the bill already typed; staff tap Send.
 /// No WhatsApp Business API, no cost, nothing sent automatically.
@@ -27,7 +29,7 @@ String buildWhatsAppBill({
   Map<String, dynamic>? settings,
 }) {
   final shop = (settings?['shopName'] ?? '').toString().trim();
-  final billNo = '#${orderId.substring(0, orderId.length > 6 ? 6 : orderId.length).toUpperCase()}';
+  final billNo = displayBillNo(order, orderId);
   final ts = (order['completedAt'] ?? order['paidAt'] ?? order['createdAt']);
   final dt = ts is Timestamp ? ts.toDate() : DateTime.now();
   String two(int n) => n.toString().padLeft(2, '0');

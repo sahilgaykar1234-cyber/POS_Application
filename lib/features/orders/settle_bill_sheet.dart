@@ -87,6 +87,7 @@ class _SettleSheetState extends State<_SettleSheet> {
         discountValue: double.tryParse(_dValue.text.trim()) ?? 0,
         cashReceived: _cashReceived,
         complete: complete,
+        assignBillNumber: widget.settings.autoGenBillNumber,
       );
       if (!mounted) return;
       final parent = widget.parentContext;

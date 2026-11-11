@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../core/data/firestore_paths.dart';
 import 'bill.dart';
+import 'bill_numbers.dart';
 import 'order_model.dart';
 
 /// Customer details as entered at the POS, normalised exactly like the
@@ -54,7 +55,7 @@ class OrderService {
   ///
   /// New takeaway orders get the next daily token number (atomically, so two
   /// devices never share a token) and an optional promised pickup time.
-  Future<({String id, int? token})> saveOrder({
+  Future<({String id, int? token, String? billNo})> saveOrder({
     PosOrder? existing,
     required String tableNo,
     required String rawName,
@@ -67,6 +68,7 @@ class OrderService {
     String? createdByRole,
     int? pickupInMinutes,
     bool assignToken = true,
+    bool assignBillNumber = true,
   }) async {
     final c = CustomerInput.normalize(rawName, rawPhone);
     final displayName = formatCustomerDisplayName(c.name, tableNo.trim());
@@ -97,28 +99,47 @@ class OrderService {
           'pickupAt': Timestamp.fromDate(DateTime.now().add(Duration(minutes: pickupInMinutes))),
       };
 
-      if (isTakeaway && assignToken) {
-        final ref = _orders.doc();
-        final counter = FirestorePaths.cafeCounter('takeaway_${takeawayDayKey(DateTime.now())}');
-        try {
-          final token = await FirebaseFirestore.instance.runTransaction<int>((tx) async {
-            final snap = await tx.get(counter);
-            final next = (snap.data()?['next'] as num?)?.toInt() ?? 1;
-            tx.set(counter, {'next': next + 1, 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
-            tx.set(ref, {...data, 'tokenNo': next});
-            return next;
-          });
-          return (id: ref.id, token: token);
-        } catch (_) {
-          // Offline / transaction failed: never lose the order — save it
-          // without a token (the bill number is shown instead).
-          await ref.set(data);
-          return (id: ref.id, token: null);
-        }
+      final wantToken = isTakeaway && assignToken;
+      final ref = _orders.doc();
+      if (!wantToken && !assignBillNumber) {
+        await ref.set(data);
+        return (id: ref.id, token: null, billNo: null);
       }
-
-      final ref = await _orders.add(data);
-      return (id: ref.id, token: null);
+      final now = DateTime.now();
+      try {
+        // One transaction: next bill number in the cafe's series (and the
+        // next daily takeaway token), so two devices never share a number.
+        final r = await FirebaseFirestore.instance.runTransaction<({int? token, String? billNo})>((tx) async {
+          final billRef = FirestorePaths.cafeCounter(billCounterName(now));
+          final tokenRef = FirestorePaths.cafeCounter('takeaway_${takeawayDayKey(now)}');
+          final billSnap = assignBillNumber ? await tx.get(billRef) : null;
+          final tokenSnap = wantToken ? await tx.get(tokenRef) : null;
+          final extra = <String, dynamic>{};
+          String? billNo;
+          int? token;
+          if (billSnap != null) {
+            final seq = (billSnap.data()?['next'] as num?)?.toInt() ?? 1;
+            billNo = formatBillNumber(now, seq);
+            tx.set(billRef, {'next': seq + 1, 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+            extra['billSeq'] = seq;
+            extra['billNo'] = billNo;
+            extra['billFy'] = financialYear(now);
+          }
+          if (tokenSnap != null) {
+            token = (tokenSnap.data()?['next'] as num?)?.toInt() ?? 1;
+            tx.set(tokenRef, {'next': token + 1, 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+            extra['tokenNo'] = token;
+          }
+          tx.set(ref, {...data, ...extra});
+          return (token: token, billNo: billNo);
+        });
+        return (id: ref.id, token: r.token, billNo: r.billNo);
+      } catch (_) {
+        // Offline / transaction failed: never lose the order. It is saved
+        // without numbers; the bill number is given when it is settled.
+        await ref.set(data);
+        return (id: ref.id, token: null, billNo: null);
+      }
     }
 
     final hasAnyNew = cart.any((e) => (e['isDone'] ?? false) == false);
@@ -141,7 +162,24 @@ class OrderService {
       'discountValue': FieldValue.delete(),
       'discountGiven': FieldValue.delete(),
     });
-    return (id: existing.id, token: existing.tokenNo);
+    return (id: existing.id, token: existing.tokenNo, billNo: existing.data['billNo'] as String?);
+  }
+
+  /// Gives an order its sequential bill number if it doesn't have one yet
+  /// (e.g. it was created offline). Safe to call repeatedly.
+  Future<void> ensureBillNumber(String id) async {
+    final now = DateTime.now();
+    final ref = _orders.doc(id);
+    await FirebaseFirestore.instance.runTransaction<void>((tx) async {
+      final order = await tx.get(ref);
+      final has = order.data()?['billNo'];
+      if (!order.exists || (has is String && has.isNotEmpty)) return;
+      final billRef = FirestorePaths.cafeCounter(billCounterName(now));
+      final c = await tx.get(billRef);
+      final seq = (c.data()?['next'] as num?)?.toInt() ?? 1;
+      tx.set(billRef, {'next': seq + 1, 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+      tx.update(ref, {'billSeq': seq, 'billNo': formatBillNumber(now, seq), 'billFy': financialYear(now)});
+    });
   }
 
   Future<void> setStatus(String id, String status) =>
@@ -156,7 +194,9 @@ class OrderService {
     required double discountValue,
     required double? cashReceived,
     required bool complete,
+    bool assignBillNumber = true,
   }) async {
+    if (assignBillNumber && order.data['billNo'] == null) await ensureBillNumber(order.id);
     final bill = Bill.compute(
       items: order.items,
       gstEnabled: order.hasGst,
@@ -189,7 +229,8 @@ class OrderService {
   }
 
   /// Frees the table without changing payment (original "Done" action).
-  Future<Map<String, dynamic>> complete(String id) async {
+  Future<Map<String, dynamic>> complete(String id, {bool assignBillNumber = true}) async {
+    if (assignBillNumber) await ensureBillNumber(id);
     await _orders.doc(id).update({
       'status': 'completed',
       'kitchenStatus': 'completed',

@@ -5,6 +5,7 @@ import 'package:pos_app/features/customers/customers_screen.dart';
 import 'package:pos_app/features/manager/sales_stats.dart';
 import 'package:pos_app/features/menu/menu_models.dart';
 import 'package:pos_app/features/orders/bill.dart';
+import 'package:pos_app/features/orders/bill_numbers.dart';
 import 'package:pos_app/features/orders/order_model.dart';
 import 'package:pos_app/features/orders/order_service.dart';
 import 'package:pos_app/features/orders/orders_board_screen.dart';
@@ -334,6 +335,44 @@ void main() {
         'Hi Rahul, your takeaway (Token #12) is *ready for pickup* at *Pizza La Forno*. See you soon!',
       );
       expect(takeawayDayKey(DateTime(2026, 3, 5)), '20260305');
+    });
+  });
+
+  group('Bill number series', () {
+    test('financial year flips on 1 April', () {
+      expect(financialYear(DateTime(2026, 3, 31)), '2025-26');
+      expect(financialYear(DateTime(2026, 4, 1)), '2026-27');
+      expect(financialYear(DateTime(2099, 12, 31)), '2099-00');
+      expect(financialYearShort(DateTime(2026, 11, 11)), '26-27');
+      expect(billCounterName(DateTime(2027, 2, 1)), 'bills_2026-27');
+    });
+
+    test('format is FY/0001 and sorts in order', () {
+      final now = DateTime(2026, 11, 11);
+      expect(formatBillNumber(now, 1), '26-27/0001');
+      expect(formatBillNumber(now, 42), '26-27/0042');
+      expect(formatBillNumber(now, 12345), '26-27/12345');
+      final list = [for (var i = 1; i <= 12; i++) formatBillNumber(now, i)];
+      expect([...list]..sort(), list, reason: 'zero-padded so text order = number order');
+    });
+
+    test('stored number wins; old orders keep their id-based number', () {
+      expect(displayBillNo({'billNo': '26-27/0042'}, 'abcdef123'), '26-27/0042');
+      expect(displayBillNo({}, 'abcdef123'), '#ABCDEF');
+      expect(displayBillNo({}, 'abcdef123', idChars: 5), '#ABCDE');
+      expect(PosOrder('abcdef1', {'billNo': '26-27/0007'}).billNo, '26-27/0007');
+      expect(PosOrder('abcdef1', {}).billNo, '#ABCDEF');
+    });
+
+    test('CSV and WhatsApp use the series number', () {
+      final o = PosOrder('zzzzzz1', {
+        'billNo': '26-27/0101',
+        'status': 'completed',
+        'totalPrice': 100,
+        'createdAt': Timestamp.fromDate(DateTime(2026, 11, 11, 12)),
+      });
+      expect(salesCsv([o], DateTime(2026, 11, 1), DateTime(2026, 11, 30)), contains('"26-27/0101"'));
+      expect(buildWhatsAppBill(order: o.data, orderId: o.id), contains('Bill 26-27/0101'));
     });
   });
 }

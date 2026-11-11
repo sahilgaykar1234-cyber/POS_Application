@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'features/orders/bill_numbers.dart';
 import 'features/orders/whatsapp_bill.dart';
 import 'features/orders/whatsapp_launch.dart';
 
@@ -35,7 +36,7 @@ class PaymentCompleteReceiptScreen extends StatelessWidget {
         double.tryParse((businessSettings?['gstPercentage'] ?? orderData['gstPercentage'] ?? '5').toString()) ?? 5.0;
 
     // 2. Order Information
-    final String billNo = '#${orderId.substring(0, orderId.length > 6 ? 6 : orderId.length).toUpperCase()}';
+    final String billNo = displayBillNo(orderData, orderId);
     final String customerName = (orderData['customerName'] ?? 'Walk-in Guest').toString();
     final String customerPhone = (orderData['customerPhone'] ?? '').toString();
     final String tableNo = (orderData['tableNo'] ?? '').toString();

@@ -14,6 +14,7 @@ import '../../core/widgets/ui.dart';
 import '../menu/item_picker_sheet.dart';
 import '../menu/menu_models.dart';
 import '../menu/menu_repository.dart';
+import '../orders/bill_numbers.dart';
 import '../orders/order_model.dart';
 import '../orders/order_service.dart';
 import '../settings/business_settings.dart';
@@ -177,6 +178,7 @@ class _PosScreenState extends State<PosScreen> {
       'hasGst': _bs.showGst,
       'gstPercentage': _bs.gstPercent,
       'paymentStatus': widget.editing?.paymentStatus ?? 'pending',
+      'billNo': ?widget.editing?.data['billNo'],
     };
   }
 
@@ -206,13 +208,14 @@ class _PosScreenState extends State<PosScreen> {
         createdByRole: AuthService.instance.currentUser?.role?.claim,
         pickupInMinutes: isTakeaway ? _pickupMinutes : null,
         assignToken: _bs.autoGenTokenNumber,
+        assignBillNumber: _bs.autoGenBillNumber,
       );
       if (!mounted) return;
       final msg = widget.editing == null ? 'Order sent to kitchen' : 'Order updated';
       if (_sheetOpen) Navigator.of(context).pop();
       // New takeaway: show the token big so it can be told/printed for the customer.
       if (isTakeaway && widget.editing == null) {
-        await _showTokenDialog(saved.token, {...draft, 'tableNo': '', 'orderType': 'Takeaway', 'tokenNo': ?saved.token}, saved.id);
+        await _showTokenDialog(saved.token, {...draft, 'tableNo': '', 'orderType': 'Takeaway', 'tokenNo': ?saved.token, 'billNo': ?saved.billNo}, saved.id);
         if (!mounted) return;
       }
       if (widget.standalone) {
@@ -254,7 +257,7 @@ class _PosScreenState extends State<PosScreen> {
             children: [
               Text(token == null ? 'Bill' : 'Token', style: TextStyle(color: p.inkSubtle, fontWeight: FontWeight.w600)),
               Text(
-                token == null ? '#${orderId.substring(0, 6).toUpperCase()}' : '#$token',
+                token == null ? displayBillNo(order, orderId) : '#$token',
                 style: TextStyle(fontSize: 64, fontWeight: FontWeight.w800, color: p.primary, height: 1.1, letterSpacing: -1),
               ),
               if (_pickupMinutes != null)

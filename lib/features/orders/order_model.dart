@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'bill_numbers.dart';
+
 import 'bill.dart';
 
 /// Read-only view of an order document (fields exactly as stored).
@@ -61,7 +63,8 @@ class PosOrder {
   }
 
   /// Short bill number, same as receipts: first 6 chars of the id.
-  String get billNo => '#${id.substring(0, id.length > 6 ? 6 : id.length).toUpperCase()}';
+  /// Sequential bill number (e.g. 26-27/0042); old orders keep #ABCDEF.
+  String get billNo => displayBillNo(data, id);
 
   String get paymentLabel {
     final m = methodFromStatus(paymentStatus);

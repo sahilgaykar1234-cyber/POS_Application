@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../orders/bill_numbers.dart';
+
 import '../orders/order_model.dart';
 
 /// CSV exports, ported unchanged from the original Reports screen so the
@@ -20,7 +22,7 @@ String salesCsv(List<PosOrder> all, DateTime start, DateTime end) {
     ..writeln('Bill No,Date,Time,Table No,Customer Name,Phone,Item Count,Subtotal,GST,Discount,Grand Total,Payment Status,Order Status');
   for (final o in rangeDocs) {
     final d = o.data;
-    final billNo = '#${o.id.substring(0, o.id.length > 5 ? 5 : o.id.length).toUpperCase()}';
+    final billNo = displayBillNo(d, o.id, idChars: 5);
     final dt = _created(o) ?? DateTime.now();
     final dateStr = '${dt.day}-${dt.month}-${dt.year}';
     final timeStr = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';

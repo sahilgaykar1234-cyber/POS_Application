@@ -309,7 +309,7 @@ class _TakeawayCard extends StatelessWidget {
       return;
     }
     try {
-      final data = await OrderService.instance.complete(order.id);
+      final data = await OrderService.instance.complete(order.id, assignBillNumber: settings.autoGenBillNumber);
       if (!context.mounted) return;
       showSuccess(context, '${order.tokenLabel} picked up');
       Navigator.push(
