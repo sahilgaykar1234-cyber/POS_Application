@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../captain_dashboard.dart';
-import '../../features/admin/super_admin_home_screen.dart';
+import '../../features/admin/super_admin_shell.dart';
 import '../../features/auth/login_screen.dart';
 import '../../manager_dashboard.dart';
 import '../data/firestore_paths.dart';
@@ -89,7 +89,7 @@ class _SignedInGateState extends State<_SignedInGate> {
           );
         }
 
-        if (appUser.isSuperAdmin) return const SuperAdminHomeScreen();
+        if (appUser.isSuperAdmin) return const SuperAdminShell();
         return _CafeGate(user: appUser);
       },
     );

@@ -13,10 +13,13 @@ import '../auth/login_screen.dart';
 ///  - Manager:     can add/manage Captains of their own cafe.
 /// Every action is re-authorised by Cloud Functions on the server.
 class StaffManagementScreen extends StatelessWidget {
-  const StaffManagementScreen({super.key, required this.cafeId, required this.cafeName});
+  const StaffManagementScreen({super.key, required this.cafeId, required this.cafeName, this.embedded = false});
 
   final String cafeId;
   final String cafeName;
+
+  /// Inside another screen's tab (no own app bar).
+  final bool embedded;
 
   AppUser? get _me => AuthService.instance.currentUser;
 
@@ -38,14 +41,17 @@ class StaffManagementScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        title: Text('Staff · $cafeName', style: const TextStyle(fontWeight: FontWeight.bold)),
-      ),
+      backgroundColor: embedded ? Colors.transparent : AppColors.background,
+      appBar: embedded
+          ? null
+          : AppBar(
+              backgroundColor: AppColors.surface,
+              title: Text('Staff · $cafeName', style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
       floatingActionButton: _invitableRoles.isEmpty
           ? null
           : FloatingActionButton.extended(
+              heroTag: 'add-staff',
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               icon: const Icon(Icons.person_add_alt_1),
