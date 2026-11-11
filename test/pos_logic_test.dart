@@ -8,6 +8,7 @@ import 'package:pos_app/features/orders/bill.dart';
 import 'package:pos_app/features/orders/order_model.dart';
 import 'package:pos_app/features/orders/order_service.dart';
 import 'package:pos_app/features/orders/orders_board_screen.dart';
+import 'package:pos_app/features/orders/whatsapp_bill.dart';
 import 'package:flutter/material.dart';
 import 'package:pos_app/features/pos/pos_cart.dart';
 import 'package:pos_app/features/reports/reports_csv.dart';
@@ -219,6 +220,51 @@ void main() {
       ));
       expect(find.text('7:30'), findsOneWidget, reason: 'frozen at payment time');
       expect(find.byIcon(Icons.check_circle_rounded), findsOneWidget);
+    });
+  });
+
+  group('WhatsApp bill', () {
+    test('numbers', () {
+      expect(normalizeWhatsAppNumber('98250 12345'), '919825012345');
+      expect(normalizeWhatsAppNumber('09825012345'), '919825012345');
+      expect(normalizeWhatsAppNumber('+91 98250 12345'), '919825012345');
+      expect(normalizeWhatsAppNumber('12345'), isNull);
+      expect(normalizeWhatsAppNumber(''), isNull);
+    });
+
+    test('bill text has items, discount, GST, total and payment', () {
+      final text = buildWhatsAppBill(
+        orderId: 'abcdef123',
+        settings: {'shopName': 'Pizza La Forno', 'thankYouMessage': 'Visit again!'},
+        order: {
+          'tableNo': '4',
+          'items': [
+            {'name': 'Margherita + Cheese burst-style', 'size': '10 inch', 'price': 420, 'qty': 2},
+            {'name': 'Thums Up', 'size': 'Standard', 'price': 20, 'qty': 1},
+          ],
+          'subtotal': 860,
+          'discountGiven': 86,
+          'hasGst': true,
+          'gstPercentage': 5,
+          'totalPrice': 812.7,
+          'paymentStatus': 'paid_upi',
+          'createdAt': Timestamp.fromDate(DateTime(2026, 11, 11, 20, 5)),
+        },
+      );
+      expect(text, contains('*Pizza La Forno*'));
+      expect(text, contains('Bill #ABCDEF · 11/11/2026 20:05'));
+      expect(text, contains('Table 4'));
+      expect(text, contains('2 × Margherita + Cheese burst-style (10 inch) — ₹840'));
+      expect(text, contains('1 × Thums Up — ₹20'));
+      expect(text, contains('Discount: -₹86'));
+      expect(text, contains('GST 5%: ₹38.70'));
+      expect(text, contains('*Total: ₹812.70*'));
+      expect(text, contains('Paid via UPI'));
+      expect(text, endsWith('Visit again!'));
+      final uri = whatsAppUri('919825012345', text);
+      expect(uri.host, 'wa.me');
+      expect(uri.path, '/919825012345');
+      expect(uri.queryParameters['text'], text);
     });
   });
 }

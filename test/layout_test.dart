@@ -22,6 +22,7 @@ import 'package:pos_app/features/pos/pos_screen.dart';
 import 'package:pos_app/features/reports/reports_screen.dart';
 import 'package:pos_app/features/settings/business_settings.dart';
 import 'package:pos_app/features/settings/settings_screen.dart';
+import 'package:pos_app/receipt_screen.dart';
 
 const sizes = {
   'small phone': Size(360, 740),
@@ -168,6 +169,7 @@ void main() {
   );
   checkScreen('Reports', () => ReportsScreen(ordersStream: Stream.value(orders())));
   checkScreen('Customers', () => CustomersScreen(ordersStream: Stream.value(orders())));
+  checkScreen('Receipt with WhatsApp', () => PaymentCompleteReceiptScreen(orderData: orders()[3].data, orderId: 'ORD000004', businessSettings: settings.receiptSettings));
   checkScreen('Menu management', () => MenuManagementScreen(cafeId: 'test', menuStream: Stream.value(menu())));
   checkScreen('Settings', () => SettingsScreen(loader: () async => settings));
 
