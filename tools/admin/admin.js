@@ -16,6 +16,10 @@
  *       --legacy marks the cafe whose data still lives in the old global
  *       collections (Flamy Wood only, until the Phase 3 migration).
  *
+ *   create-staff <email> <manager|captain> <cafeId> [display name]
+ *       Creates (or re-assigns) a cafe staff login and prints a one-time
+ *       "set your password" link. Works without Cloud Functions.
+ *
  *   list-cafes
  *   list-users
  */
@@ -72,12 +76,18 @@ async function createSuperAdmin(email, displayName) {
   console.log(link);
 }
 
-async function createCafe(name, legacy) {
+async function findCafeByName(name) {
+  const snap = await db.collection('cafes').where('name', '==', name.trim()).limit(1).get();
+  return snap.empty ? null : snap.docs[0];
+}
+
+/** Creates a cafe (auto ID). New cafes also get default POS settings. Returns the id. */
+async function createCafe(name, legacy, extra = {}) {
   if (!name || name.trim().length < 2) throw new Error('Usage: create-cafe <name> [--legacy]');
   name = name.trim();
 
-  const dup = await db.collection('cafes').where('name', '==', name).limit(1).get();
-  if (!dup.empty) throw new Error(`A cafe named "${name}" already exists (id ${dup.docs[0].id}).`);
+  const dup = await findCafeByName(name);
+  if (dup) throw new Error(`A cafe named "${name}" already exists (id ${dup.id}).`);
 
   if (legacy) {
     const existing = await db.collection('cafes').where('legacyData', '==', true).limit(1).get();
@@ -89,9 +99,38 @@ async function createCafe(name, legacy) {
     name,
     status: 'active',
     legacyData: legacy, // true = data still in old global collections
+    contactNumber: extra.contactNumber || '',
     createdAt: FieldValue.serverTimestamp(),
     createdBy: 'local-admin-script',
   });
+
+  // Legacy cafes bring their own settings in the migration.
+  if (!legacy) {
+    await ref.collection('settings').doc('business').set({
+      shopName: name,
+      tagline: extra.tagline || '',
+      ownerName: '',
+      mobileNumber: extra.contactNumber || '',
+      email: '',
+      gstNumber: '',
+      address: '',
+      shopLogoBase64: null,
+      receiptHeader: 'Thank you for your order!',
+      receiptFooter: 'Visit Again!',
+      thankYouMessage: 'Thank You!',
+      showGst: false,
+      gstPercentage: '5',
+      currencySymbol: '₹',
+      currencyCode: 'INR',
+      defaultOrderType: 'Dine-In',
+      defaultTax: '5',
+      autoGenBillNumber: true,
+      autoGenTokenNumber: true,
+      numberOfTables: 12,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+
   await db.collection('auditLogs').add({
     action: 'cafe.create',
     actorUid: 'local-admin-script',
@@ -100,6 +139,50 @@ async function createCafe(name, legacy) {
     at: FieldValue.serverTimestamp(),
   });
   console.log(`Created cafe "${name}" with ID: ${ref.id}${legacy ? '  (legacy data)' : ''}`);
+  return ref.id;
+}
+
+/**
+ * Creates (or re-assigns) a Manager/Captain login for a cafe without Cloud
+ * Functions. Prints a one-time "set your password" link.
+ */
+async function createStaff(email, displayName, role, cafeId) {
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error('Usage: create-staff <email> <manager|captain> <cafeId> [name]');
+  if (!['manager', 'captain'].includes(role)) throw new Error('Role must be manager or captain.');
+  const cafe = await db.collection('cafes').doc(cafeId || '-').get();
+  if (!cafe.exists) throw new Error(`Cafe ${cafeId} not found. Run list-cafes to see IDs.`);
+  email = email.trim().toLowerCase();
+  displayName = (displayName || '').trim() || email.split('@')[0];
+
+  let user;
+  try {
+    user = await auth.getUserByEmail(email);
+    const claims = user.customClaims || {};
+    if (claims.role === 'superAdmin') throw new Error(`${email} is the Super Admin; use a different email for cafe staff.`);
+    console.log(`  ${email}: account exists, assigning ${role} of ${cafe.get('name')}`);
+  } catch (e) {
+    if (e.code !== 'auth/user-not-found') throw e;
+    user = await auth.createUser({ email, displayName });
+    console.log(`  ${email}: account created (${role} of ${cafe.get('name')})`);
+  }
+
+  await auth.setCustomUserClaims(user.uid, { role, cafeId });
+  await auth.updateUser(user.uid, { disabled: false });
+  await auth.revokeRefreshTokens(user.uid); // pick up the new role on next sign-in
+  await db.collection('users').doc(user.uid).set(
+    { email, displayName, role, cafeId, status: 'invited', updatedAt: FieldValue.serverTimestamp() },
+    { merge: true },
+  );
+  await db.collection('auditLogs').add({
+    action: 'staff.invite',
+    actorUid: 'local-admin-script',
+    cafeId,
+    targetUid: user.uid,
+    details: { email, role },
+    at: FieldValue.serverTimestamp(),
+  });
+  const link = await auth.generatePasswordResetLink(email);
+  return { email, role, cafeName: cafe.get('name'), link };
 }
 
 async function listCafes() {
@@ -129,16 +212,31 @@ async function main() {
       const legacy = args.includes('--legacy');
       return createCafe(args.filter((a) => a !== '--legacy').join(' '), legacy);
     }
+    case 'create-staff': {
+      const r = await createStaff(args[0], args.slice(3).join(' '), args[1], args[2]);
+      console.log(`\nOpen this link once to set the password for ${r.email}:\n${r.link}`);
+      return;
+    }
     case 'list-cafes':
       return listCafes();
     case 'list-users':
       return listUsers();
     default:
-      console.log('Commands: create-super-admin <email> [name] | create-cafe <name> [--legacy] | list-cafes | list-users');
+      console.log(
+        'Commands:\n' +
+          '  create-super-admin <email> [name]\n' +
+          '  create-cafe <name> [--legacy]\n' +
+          '  create-staff <email> <manager|captain> <cafeId> [name]\n' +
+          '  list-cafes | list-users',
+      );
   }
 }
 
-main().catch((err) => {
-  console.error('FAILED:', err.message);
-  process.exit(1);
-});
+module.exports = { createCafe, createStaff, findCafeByName, db, auth };
+
+if (require.main === module) {
+  main().catch((err) => {
+    console.error('FAILED:', err.message);
+    process.exit(1);
+  });
+}
