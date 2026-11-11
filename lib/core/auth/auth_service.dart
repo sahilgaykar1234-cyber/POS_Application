@@ -34,8 +34,12 @@ class AuthService {
     return appUser;
   }
 
-  Future<void> signIn({required String email, required String password}) async {
-    await _auth.signInWithEmailAndPassword(email: email.trim(), password: password);
+  /// [identifier] is a username (e.g. "flammywood") or an email.
+  Future<void> signIn({required String identifier, required String password}) async {
+    await _auth.signInWithEmailAndPassword(
+      email: AppConfig.loginEmail(identifier),
+      password: AppConfig.loginPassword(identifier, password),
+    );
     // Mark an invited account as active. Best-effort: never block sign-in.
     try {
       await FirebaseFunctions.instanceFor(region: AppConfig.functionsRegion)
@@ -66,9 +70,9 @@ class AuthService {
         case 'wrong-password':
         case 'user-not-found':
         case 'invalid-login-credentials':
-          return 'Incorrect email or password.';
+          return 'Incorrect username or password.';
         case 'invalid-email':
-          return 'Please enter a valid email address.';
+          return 'Please enter a valid username or email.';
         case 'user-disabled':
           return 'This account has been disabled. Please contact your manager.';
         case 'too-many-requests':

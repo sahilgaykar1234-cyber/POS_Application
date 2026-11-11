@@ -18,6 +18,17 @@ class LoginValidators {
     return null;
   }
 
+  static final RegExp _username = RegExp(r'^[a-zA-Z0-9._-]{3,30}$');
+
+  /// Username (e.g. "flammywood") or email.
+  static String? usernameOrEmail(String? v) {
+    final s = (v ?? '').trim();
+    if (s.isEmpty) return 'Please enter your username';
+    if (s.contains('@')) return email(s);
+    if (!_username.hasMatch(s)) return 'Username: 3–30 letters/numbers';
+    return null;
+  }
+
   static String? password(String? v) {
     if ((v ?? '').isEmpty) return 'Please enter your password';
     return null;
@@ -55,7 +66,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
     try {
-      await AuthService.instance.signIn(email: _emailCtrl.text, password: _passwordCtrl.text);
+      await AuthService.instance.signIn(identifier: _emailCtrl.text, password: _passwordCtrl.text);
       // AuthGate reacts to the auth change and navigates.
     } catch (e) {
       if (mounted) setState(() => _error = AuthService.friendlyError(e));
@@ -65,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _forgotPassword() async {
-    final ctrl = TextEditingController(text: _emailCtrl.text.trim());
+    final ctrl = TextEditingController(text: _emailCtrl.text.contains('@') ? _emailCtrl.text.trim() : '');
     final formKey = GlobalKey<FormState>();
 
     final email = await showDialog<String>(
@@ -80,7 +91,8 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Enter your account email. We will send you a link to set a new password.',
+                'Enter your account email. We will send you a link to set a new password.\n\n'
+                'Cafe username logins (like "flammywood"): please ask the owner to reset the password.',
                 style: TextStyle(color: Colors.white70),
               ),
               const SizedBox(height: 14),
@@ -163,13 +175,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextFormField(
                           controller: _emailCtrl,
                           keyboardType: TextInputType.emailAddress,
-                          autofillHints: const [AutofillHints.email, AutofillHints.username],
+                          autofillHints: const [AutofillHints.username, AutofillHints.email],
                           textInputAction: TextInputAction.next,
                           enabled: !_loading,
-                          validator: LoginValidators.email,
+                          validator: LoginValidators.usernameOrEmail,
                           decoration: const InputDecoration(
-                            labelText: 'Email',
-                            prefixIcon: Icon(Icons.email_outlined),
+                            labelText: 'Username',
+                            hintText: 'e.g. flammywood',
+                            prefixIcon: Icon(Icons.person_outline),
                             border: OutlineInputBorder(),
                           ),
                         ),

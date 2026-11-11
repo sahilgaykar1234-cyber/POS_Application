@@ -140,7 +140,10 @@ class _CafeGate extends StatelessWidget {
         // cafes/{this user's cafeId}. Firestore rules enforce the same.
         FirestorePaths.setActiveCafe(user.cafeId);
 
-        final dashboard = user.isManager ? const ManagerDashboardScreen() : const CaptainDashboardScreen();
+        // A cafe login (manager role) chooses Manager or Captain view after
+        // signing in; a captain-only account goes straight to the kitchen.
+        final cafeName = (cafe.data()?['name'] ?? 'Your cafe').toString();
+        final dashboard = user.isManager ? _ModeChooser(cafeName: cafeName) : const CaptainDashboardScreen();
         // Always the same widget structure, so the dashboard (and any
         // half-entered order) survives the banner appearing/disappearing.
         return _WarningBanner(
@@ -209,6 +212,78 @@ class _SignOutMessage extends StatelessWidget {
       message: message,
       actionLabel: 'Sign out',
       onAction: () => signOutToLogin(context),
+    );
+  }
+}
+
+/// After a cafe login: "Manager" (POS, billing, menu) or "Captain" (kitchen).
+class _ModeChooser extends StatefulWidget {
+  const _ModeChooser({required this.cafeName});
+  final String cafeName;
+
+  @override
+  State<_ModeChooser> createState() => _ModeChooserState();
+}
+
+class _ModeChooserState extends State<_ModeChooser> {
+  String? _mode; // 'manager' | 'captain'
+
+  @override
+  Widget build(BuildContext context) {
+    if (_mode == 'manager') return const ManagerDashboardScreen();
+    if (_mode == 'captain') return const CaptainDashboardScreen();
+
+    Widget option(String mode, IconData icon, String title, String subtitle) => Card(
+          color: AppColors.surface,
+          margin: const EdgeInsets.only(bottom: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: const BorderSide(color: AppColors.border),
+          ),
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            leading: CircleAvatar(
+              radius: 26,
+              backgroundColor: AppColors.primary.withValues(alpha: 0.15),
+              child: Icon(icon, color: AppColors.primary, size: 28),
+            ),
+            title: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            subtitle: Text(subtitle, style: const TextStyle(color: Colors.white54)),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => setState(() => _mode = mode),
+          ),
+        );
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(widget.cafeName,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.accent)),
+                const SizedBox(height: 6),
+                const Text('Continue as', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54)),
+                const SizedBox(height: 24),
+                option('manager', Icons.point_of_sale, 'Manager', 'Orders, billing, tables, menu, reports'),
+                option('captain', Icons.soup_kitchen_outlined, 'Captain', 'Kitchen: start cooking, mark ready'),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: () => signOutToLogin(context),
+                  icon: const Icon(Icons.logout, size: 18),
+                  label: const Text('Sign out'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

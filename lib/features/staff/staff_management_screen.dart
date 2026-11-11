@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/auth/app_user.dart';
 import '../../core/auth/auth_service.dart';
+import '../../core/config/app_config.dart';
 import '../../core/services/staff_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/confirm_dialog.dart';
@@ -205,7 +206,7 @@ class _StaffTileState extends State<_StaffTile> {
           ),
         ),
         title: Text(m.displayName, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text('${m.role?.label ?? 'Unknown role'} · ${m.email}',
+        subtitle: Text('${m.role?.label ?? 'Unknown role'} · ${AppConfig.displayLogin(m.email)}',
             style: const TextStyle(color: Colors.white54, fontSize: 12)),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,

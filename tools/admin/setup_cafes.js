@@ -5,22 +5,24 @@
  *   1. Backup of the whole database (backups/…)
  *   2. Flammy Wood: create cafe + move existing data into it (same bill numbers)
  *   3. Pizza La Forno: create cafe + import the full menu from the PDF
- *   4. Manager / Captain logins for each cafe (prints set-password links)
+ *   4. Simple cafe logins: username + password (default flammywood / laferno);
+ *      after login the user chooses Manager or Captain view
  *
  * Safe to run again: finished steps are skipped.
  *
  *   export GOOGLE_APPLICATION_CREDENTIALS=~/secrets/suratpos-admin.json
- *   node setup_cafes.js \
- *     --flammy-manager  manager1@gmail.com  --flammy-captain  kitchen1@gmail.com \
- *     --forno-manager   manager2@gmail.com  --forno-captain   kitchen2@gmail.com
+ *   node setup_cafes.js --password 123
  *
- * Every email is optional; add staff later with:
- *   node admin.js create-staff <email> <manager|captain> <cafeId>
+ * Options: --flammy-login <username> (default flammywood)
+ *          --forno-login  <username> (default laferno)
+ *          --password <pw>   (required; used for both logins)
+ *          --flammy-manager/--flammy-captain/--forno-manager/--forno-captain <email>
+ *              optional extra personal email logins
  */
 
 const { spawnSync } = require('child_process');
 const path = require('path');
-const { createCafe, createStaff, findCafeByName, db } = require('./admin');
+const { createCafe, createStaff, createCafeLogin, findCafeByName, db } = require('./admin');
 
 const FLAMMY = 'Flammy Wood';
 const FORNO = 'Pizza La Forno';
@@ -42,6 +44,8 @@ function step(n, text) {
 }
 
 async function main() {
+  if (!opt('--password')) throw new Error('Give a password for the cafe logins, e.g. --password 123');
+
   // 1. Backup
   step(1, 'Backup');
   run('backup.js', []);
@@ -73,8 +77,14 @@ async function main() {
     console.log(`${FORNO} already has a menu — skipped. (To re-import: node import_menu.js --cafe ${fornoId} --menu data/pizza_la_forno_menu.js --replace)`);
   }
 
-  // 4. Staff logins
-  step(4, 'Staff logins');
+  // 4. Logins
+  step(4, 'Logins');
+  const password = opt('--password');
+  if (!password) throw new Error('Give a password for the cafe logins, e.g. --password 123');
+  const logins = [
+    await createCafeLogin(opt('--flammy-login') || 'flammywood', password, flammyId),
+    await createCafeLogin(opt('--forno-login') || 'laferno', password, fornoId),
+  ];
   const wanted = [
     [opt('--flammy-manager'), 'manager', flammyId],
     [opt('--flammy-captain'), 'captain', flammyId],
@@ -83,12 +93,13 @@ async function main() {
   ].filter(([email]) => email);
   const links = [];
   for (const [email, role, cafeId] of wanted) links.push(await createStaff(email, '', role, cafeId));
-  if (!wanted.length) console.log('No staff emails given (you can add them later).');
 
   // Summary
   console.log('\n══════════════════════ DONE ══════════════════════');
   console.log(`${FLAMMY.padEnd(16)} cafe ID: ${flammyId}`);
   console.log(`${FORNO.padEnd(16)} cafe ID: ${fornoId}`);
+  console.log('\nLogins (choose Manager or Captain after signing in):');
+  for (const l of logins) console.log(`  ${l.cafeName.padEnd(16)} username: ${l.username}   password: (the one you gave)`);
   if (links.length) {
     console.log('\nOpen each link ONCE to set that person\'s password (links expire in ~1 hour;');
     console.log('after that use "Forgot password?" on the login screen):\n');

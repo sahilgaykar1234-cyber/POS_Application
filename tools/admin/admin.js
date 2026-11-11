@@ -20,6 +20,10 @@
  *       Creates (or re-assigns) a cafe staff login and prints a one-time
  *       "set your password" link. Works without Cloud Functions.
  *
+ *   create-cafe-login <username> <password> <cafeId>
+ *       Simple shared cafe login (e.g. flammywood / 123). After signing in
+ *       the user picks Manager or Captain view. Re-run to change the password.
+ *
  *   list-cafes
  *   list-users
  */
@@ -36,6 +40,7 @@ admin.initializeApp({ credential: admin.credential.applicationDefault() });
 const db = admin.firestore();
 const auth = admin.auth();
 const { FieldValue } = admin.firestore;
+const { loginEmail, loginPassword } = require('./lib/login');
 
 async function createSuperAdmin(email, displayName) {
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error('Usage: create-super-admin <email> [name]');
@@ -185,6 +190,47 @@ async function createStaff(email, displayName, role, cafeId) {
   return { email, role, cafeName: cafe.get('name'), link };
 }
 
+/**
+ * Simple cafe login, e.g. username "flammywood" + password "123".
+ * The account gets the Manager role; after signing in the app lets them
+ * choose Manager (POS) or Captain (kitchen) view. Re-running resets the password.
+ */
+async function createCafeLogin(username, password, cafeId) {
+  username = String(username || '').trim().toLowerCase();
+  if (!/^[a-z0-9._-]{3,30}$/.test(username)) throw new Error('Username: 3-30 letters/numbers (no spaces, no @).');
+  if (!password || String(password).length < 3) throw new Error('Password must be at least 3 characters.');
+  const cafe = await db.collection('cafes').doc(cafeId || '-').get();
+  if (!cafe.exists) throw new Error(`Cafe ${cafeId} not found. Run list-cafes to see IDs.`);
+
+  const email = loginEmail(username);
+  const pass = loginPassword(username, String(password));
+  let user;
+  try {
+    user = await auth.getUserByEmail(email);
+    await auth.updateUser(user.uid, { password: pass, disabled: false, displayName: cafe.get('name') });
+    console.log(`  login "${username}" updated (password reset) for ${cafe.get('name')}`);
+  } catch (e) {
+    if (e.code !== 'auth/user-not-found') throw e;
+    user = await auth.createUser({ email, password: pass, displayName: cafe.get('name') });
+    console.log(`  login "${username}" created for ${cafe.get('name')}`);
+  }
+  await auth.setCustomUserClaims(user.uid, { role: 'manager', cafeId });
+  await auth.revokeRefreshTokens(user.uid);
+  await db.collection('users').doc(user.uid).set(
+    { email, displayName: `${cafe.get('name')} (shared login)`, role: 'manager', cafeId, status: 'active', updatedAt: FieldValue.serverTimestamp() },
+    { merge: true },
+  );
+  await db.collection('auditLogs').add({
+    action: 'staff.invite',
+    actorUid: 'local-admin-script',
+    cafeId,
+    targetUid: user.uid,
+    details: { email: username, role: 'manager' },
+    at: FieldValue.serverTimestamp(),
+  });
+  return { username, cafeName: cafe.get('name') };
+}
+
 async function listCafes() {
   const snap = await db.collection('cafes').get();
   if (snap.empty) return console.log('No cafes yet.');
@@ -217,6 +263,9 @@ async function main() {
       console.log(`\nOpen this link once to set the password for ${r.email}:\n${r.link}`);
       return;
     }
+    case 'create-cafe-login':
+      await createCafeLogin(args[0], args[1], args[2]);
+      return;
     case 'list-cafes':
       return listCafes();
     case 'list-users':
@@ -227,12 +276,13 @@ async function main() {
           '  create-super-admin <email> [name]\n' +
           '  create-cafe <name> [--legacy]\n' +
           '  create-staff <email> <manager|captain> <cafeId> [name]\n' +
+          '  create-cafe-login <username> <password> <cafeId>\n' +
           '  list-cafes | list-users',
       );
   }
 }
 
-module.exports = { createCafe, createStaff, findCafeByName, db, auth };
+module.exports = { createCafe, createStaff, createCafeLogin, findCafeByName, db, auth };
 
 if (require.main === module) {
   main().catch((err) => {

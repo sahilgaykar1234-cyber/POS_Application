@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:pos_app/core/auth/app_user.dart';
+import 'package:pos_app/core/config/app_config.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
 import 'package:pos_app/core/widgets/message_screen.dart';
 import 'package:pos_app/features/auth/login_screen.dart';
@@ -46,6 +47,26 @@ void main() {
     test('no claims at all is NOT valid', () {
       expect(build(null).hasValidAssignment, isFalse);
       expect(build({}).role, isNull);
+    });
+  });
+
+  group('username logins (must match tools/admin/lib/login.js)', () {
+    test('username maps to Firebase account and 6+ char password', () {
+      expect(AppConfig.loginEmail(' FlammyWood '), 'flammywood@pos.example.com');
+      expect(AppConfig.loginPassword('flammywood', '123'), 'cafepos-123');
+      expect(AppConfig.displayLogin('laferno@pos.example.com'), 'laferno');
+    });
+    test('email logins unchanged', () {
+      expect(AppConfig.loginEmail('Owner@Gmail.com'), 'owner@gmail.com');
+      expect(AppConfig.loginPassword('owner@gmail.com', 'secret12'), 'secret12');
+    });
+    test('validator accepts usernames and emails', () {
+      expect(LoginValidators.usernameOrEmail('flammywood'), isNull);
+      expect(LoginValidators.usernameOrEmail('laferno'), isNull);
+      expect(LoginValidators.usernameOrEmail('a@b.co'), isNull);
+      expect(LoginValidators.usernameOrEmail('ab'), isNotNull);
+      expect(LoginValidators.usernameOrEmail('has space'), isNotNull);
+      expect(LoginValidators.usernameOrEmail(''), isNotNull);
     });
   });
 
