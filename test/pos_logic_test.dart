@@ -13,6 +13,7 @@ import 'package:pos_app/features/orders/orders_board_screen.dart';
 import 'package:pos_app/features/orders/whatsapp_bill.dart';
 import 'package:pos_app/features/takeaway/takeaway_board.dart';
 import 'package:flutter/material.dart';
+import 'package:pos_app/core/widgets/ui.dart';
 import 'package:pos_app/features/pos/pos_cart.dart';
 import 'package:pos_app/features/reports/reports_csv.dart';
 
@@ -447,5 +448,56 @@ void main() {
       'Farm Villa (Regular) · 2× Pani · Coke',
     );
     expect(itemsSummary([]), '');
+  });
+
+  group('MonthSummary', () {
+    PosOrder o(String id, DateTime at, double total, {String pay = 'paid_cash', String status = 'completed'}) =>
+        PosOrder(id, {'createdAt': Timestamp.fromDate(at), 'totalPrice': total, 'paymentStatus': pay, 'status': status});
+    final now = DateTime(2026, 11, 12, 15);
+
+    test('this month vs the same days of last month', () {
+      final m = MonthSummary.of([
+        o('a', DateTime(2026, 11, 1, 12), 200),
+        o('b', DateTime(2026, 11, 3, 12), 500),
+        o('c', DateTime(2026, 11, 12, 9), 300),
+        o('u', DateTime(2026, 11, 12, 10), 999, pay: 'pending', status: 'pending'), // unpaid: order, not sales
+        o('x', DateTime(2026, 11, 5, 10), 800, status: 'cancelled'),
+        o('p1', DateTime(2026, 10, 2, 12), 400),
+        o('p2', DateTime(2026, 10, 12, 23), 100),
+        o('p3', DateTime(2026, 10, 13, 9), 5000), // after "same day" last month: ignored
+      ], now);
+      expect(m.sales, 1000);
+      expect(m.orders, 4);
+      expect(m.paidBills, 3);
+      expect(m.averageBill.round(), 333);
+      expect(m.prevSales, 500);
+      expect(m.salesChangePct, 100);
+      expect(m.ordersChangePct, 100);
+      expect(m.daily.length, 12);
+      expect(m.daily[2], 500);
+      expect(m.bestDay, DateTime(2026, 11, 3));
+      expect(m.bestDaySales, 500);
+    });
+
+    test('empty month has no comparison and no best day', () {
+      final m = MonthSummary.of([], now);
+      expect(m.sales, 0);
+      expect(m.salesChangePct, isNull);
+      expect(m.bestDay, isNull);
+      expect(m.averageBill, 0);
+    });
+
+    test('31st compares with the last day of a shorter month', () {
+      final m = MonthSummary.of([o('p', DateTime(2026, 2, 28, 20), 100)], DateTime(2026, 3, 31, 12));
+      expect(m.prevSales, 100);
+    });
+  });
+
+  test('grid columns fill the row and balance', () {
+    expect(ResponsiveGrid.columnsFor(1550, minTileWidth: 170, maxColumns: 6, count: 6), 6);
+    expect(ResponsiveGrid.columnsFor(1550, minTileWidth: 180, maxColumns: 6, count: 5), 5);
+    expect(ResponsiveGrid.columnsFor(358, minTileWidth: 160, maxColumns: 6, count: 5), 2);
+    expect(ResponsiveGrid.columnsFor(760, minTileWidth: 170, maxColumns: 6, count: 6), 3);
+    expect(ResponsiveGrid.columnsFor(760, minTileWidth: 170, maxColumns: 6), 4);
   });
 }

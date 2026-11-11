@@ -102,3 +102,73 @@ class SalesStats {
     ];
   }
 }
+
+/// "This month" numbers for the dashboard, compared with the same days of
+/// the previous month (1st → today's date), so a half-finished month is not
+/// compared with a full one. Only real order data; nothing estimated.
+class MonthSummary {
+  MonthSummary._({
+    required this.sales,
+    required this.orders,
+    required this.paidBills,
+    required this.prevSales,
+    required this.prevOrders,
+    required this.daily,
+    required this.bestDay,
+    required this.bestDaySales,
+  });
+
+  final double sales;
+  final int orders; // not cancelled
+  final int paidBills;
+  final double prevSales;
+  final int prevOrders;
+
+  /// Paid sales per day of this month, day 1 → today.
+  final List<double> daily;
+  final DateTime? bestDay;
+  final double bestDaySales;
+
+  double get averageBill => paidBills > 0 ? sales / paidBills : 0;
+  double get dailyAverage => daily.isEmpty ? 0 : sales / daily.length;
+
+  /// Percent change vs the same days last month; null when there is nothing
+  /// to compare with.
+  int? get salesChangePct => prevSales > 0 ? ((sales - prevSales) / prevSales * 100).round() : null;
+  int? get ordersChangePct => prevOrders > 0 ? ((orders - prevOrders) / prevOrders * 100).round() : null;
+
+  static MonthSummary of(Iterable<PosOrder> all, DateTime now) {
+    final monthStart = DateTime(now.year, now.month);
+    final tomorrow = DateTime(now.year, now.month, now.day + 1);
+    final prevStart = DateTime(now.year, now.month - 1);
+    final prevDays = DateTime(now.year, now.month, 0).day;
+    final prevEnd = DateTime(now.year, now.month - 1, (now.day < prevDays ? now.day : prevDays) + 1);
+
+    final cur = SalesStats.between(all, monthStart, tomorrow).where((o) => !o.isCancelled).toList();
+    final prev = SalesStats.between(all, prevStart, prevEnd).where((o) => !o.isCancelled).toList();
+
+    final daily = List<double>.filled(now.day, 0);
+    var sales = 0.0;
+    var paid = 0;
+    for (final o in cur) {
+      if (!o.isPaid) continue;
+      sales += o.totalPrice;
+      paid++;
+      daily[o.createdAt!.day - 1] += o.totalPrice;
+    }
+    var best = -1;
+    for (var i = 0; i < daily.length; i++) {
+      if (daily[i] > 0 && (best < 0 || daily[i] > daily[best])) best = i;
+    }
+    return MonthSummary._(
+      sales: sales,
+      orders: cur.length,
+      paidBills: paid,
+      prevSales: prev.where((o) => o.isPaid).fold(0.0, (t, o) => t + o.totalPrice),
+      prevOrders: prev.length,
+      daily: daily,
+      bestDay: best < 0 ? null : DateTime(now.year, now.month, best + 1),
+      bestDaySales: best < 0 ? 0 : daily[best],
+    );
+  }
+}

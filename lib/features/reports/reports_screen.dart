@@ -176,12 +176,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ],
         ),
         const SizedBox(height: Space.lg),
-        ResponsiveGrid(minTileWidth: 180, children: [
-          StatCard(label: 'Collected (paid)', value: Fmt.money(stats.sales), icon: Icons.account_balance_wallet_outlined, highlight: true),
+        ResponsiveGrid(minTileWidth: 160, equalHeights: true, fill: true, children: [
+          StatCard(label: 'Collected (paid)', value: Fmt.money(stats.sales), icon: Icons.account_balance_wallet_outlined, highlight: true, caption: '${stats.orders - stats.unpaid - stats.cancelled} paid bills'),
           StatCard(label: 'Billed (all orders)', value: Fmt.money(billed), icon: Icons.receipt_long_outlined, caption: '${period.length} orders', color: p.info),
-          StatCard(label: 'Average bill', value: Fmt.money(stats.averageBill.round()), icon: Icons.payments_outlined, color: p.violet),
-          StatCard(label: 'Highest bill', value: Fmt.money(highest), icon: Icons.star_outline_rounded, color: p.warning),
-          StatCard(label: 'Discounts given', value: Fmt.money(discounts), icon: Icons.local_offer_outlined, color: p.primary),
+          StatCard(label: 'Average bill', value: Fmt.money(stats.averageBill.round()), icon: Icons.payments_outlined, color: p.violet, caption: 'Per paid bill'),
+          StatCard(label: 'Highest bill', value: Fmt.money(highest), icon: Icons.star_outline_rounded, color: p.warning, caption: 'Single bill'),
+          StatCard(label: 'Discounts given', value: Fmt.money(discounts), icon: Icons.local_offer_outlined, color: p.primary, caption: 'Total off bills'),
         ]),
         const SizedBox(height: Space.lg),
         SectionCard(

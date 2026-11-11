@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/layout/breakpoints.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/ui.dart';
@@ -73,6 +74,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
         var list = buildCustomers(snap.data!);
         final total = list.length;
         final repeat = list.where((c) => c.orders > 1).length;
+        final spentAll = list.fold<double>(0, (t, c) => t + c.spent);
+        final visits = list.fold<int>(0, (t, c) => t + c.orders);
         if (_q.isNotEmpty) {
           list = list.where((c) => c.name.toLowerCase().contains(_q) || c.phone.contains(_q)).toList();
         }
@@ -82,12 +85,31 @@ class _CustomersScreenState extends State<CustomersScreen> {
         return PageBody(
           children: [
             PageHeader(title: 'Customers', subtitle: '$total customers · $repeat repeat'),
+            ResponsiveGrid(minTileWidth: 170, equalHeights: true, fill: true, children: [
+              StatCard(label: 'Customers', value: '$total', icon: Icons.groups_outlined, color: p.info, caption: 'With a completed bill'),
+              StatCard(
+                label: 'Repeat customers',
+                value: '$repeat',
+                icon: Icons.repeat_rounded,
+                color: p.success,
+                caption: total == 0 ? 'No customers yet' : '${(repeat / total * 100).round()}% came back',
+              ),
+              StatCard(label: 'Total spent', value: Fmt.money(spentAll), icon: Icons.account_balance_wallet_outlined, color: p.primary, caption: '$visits visit${visits == 1 ? '' : 's'}'),
+              StatCard(
+                label: 'Avg per customer',
+                value: Fmt.money(total == 0 ? 0 : (spentAll / total).round()),
+                icon: Icons.person_outline_rounded,
+                color: p.violet,
+                caption: 'Lifetime spend',
+              ),
+            ]),
+            const SizedBox(height: Space.lg),
             Wrap(
               spacing: Space.md,
               runSpacing: Space.md,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                SearchField(width: 320, hint: 'Search name or phone', onChanged: (v) => setState(() => _q = v.trim().toLowerCase())),
+                SearchField(width: context.isMobile ? double.infinity : 320, hint: 'Search name or phone', onChanged: (v) => setState(() => _q = v.trim().toLowerCase())),
                 FilterPills<String>(
                   scroll: false,
                   options: const [('recent', 'Recent'), ('spent', 'Top spenders'), ('orders', 'Most visits')],

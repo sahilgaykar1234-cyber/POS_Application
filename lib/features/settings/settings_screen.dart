@@ -206,158 +206,177 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: Form(
         key: _form,
         child: PageBody(
-          maxWidth: 860,
+
           children: [
             const PageHeader(title: 'Settings', subtitle: 'Cafe details, billing and receipts'),
-            SectionCard(
-              title: 'Cafe profile',
-              icon: Icons.storefront_outlined,
-              child: Column(
-                children: [
-                  Row(
+            LayoutBuilder(
+              builder: (context, c) {
+                final profile = SectionCard(
+                  title: 'Cafe profile',
+                  icon: Icons.storefront_outlined,
+                  child: Column(
                     children: [
-                      Container(
-                        width: 76,
-                        height: 76,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: Radii.cardR,
-                          border: Border.all(color: p.border),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: _logo == null
-                            ? const Center(child: AppLogo(size: 44))
-                            : Image.memory(base64Decode(_logo!), fit: BoxFit.contain),
-                      ),
-                      const SizedBox(width: Space.lg),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Logo', style: context.text.titleSmall),
-                            Text('Printed on bills. PNG/JPG under 300 KB.', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
-                            const SizedBox(height: Space.sm),
-                            Wrap(
-                              spacing: Space.sm,
+                      Row(
+                        children: [
+                          Container(
+                            width: 76,
+                            height: 76,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: Radii.cardR,
+                              border: Border.all(color: p.border),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: _logo == null
+                                ? const Center(child: AppLogo(size: 44))
+                                : Image.memory(base64Decode(_logo!), fit: BoxFit.contain),
+                          ),
+                          const SizedBox(width: Space.lg),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                OutlinedButton(onPressed: _pickLogo, child: Text(_logo == null ? 'Upload' : 'Change')),
-                                if (_logo != null)
-                                  TextButton(
-                                    style: TextButton.styleFrom(foregroundColor: p.danger),
-                                    onPressed: () => setState(() {
-                                      _logo = null;
-                                      _dirty = true;
-                                    }),
-                                    child: const Text('Remove'),
-                                  ),
+                                Text('Logo', style: context.text.titleSmall),
+                                Text('Printed on bills. PNG/JPG under 300 KB.', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
+                                const SizedBox(height: Space.sm),
+                                Wrap(
+                                  spacing: Space.sm,
+                                  children: [
+                                    OutlinedButton(onPressed: _pickLogo, child: Text(_logo == null ? 'Upload' : 'Change')),
+                                    if (_logo != null)
+                                      TextButton(
+                                        style: TextButton.styleFrom(foregroundColor: p.danger),
+                                        onPressed: () => setState(() {
+                                          _logo = null;
+                                          _dirty = true;
+                                        }),
+                                        child: const Text('Remove'),
+                                      ),
+                                  ],
+                                ),
                               ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: Space.lg),
+                      _row([_field('shopName', 'Cafe name', required: true), _field('tagline', 'Tagline')]),
+                      _row([_field('ownerName', 'Owner name'), _field('mobileNumber', 'Mobile number', keyboard: TextInputType.phone)]),
+                      _row([_field('email', 'Email', keyboard: TextInputType.emailAddress), _field('gstNumber', 'GST number')]),
+                      _field('address', 'Address', maxLines: 2),
+                    ],
+                  ),
+                );
+                final billing = SectionCard(
+                  title: 'Billing',
+                  icon: Icons.receipt_long_outlined,
+                  child: Column(
+                    children: [
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _showGst,
+                        onChanged: (v) => setState(() {
+                          _showGst = v;
+                          _dirty = true;
+                        }),
+                        title: const Text('Add GST to bills', style: TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: const Text('New orders include GST at the rate below.'),
+                      ),
+                      const SizedBox(height: Space.sm),
+                      _row([
+                        _field('gstPercentage', 'GST %', keyboard: const TextInputType.numberWithOptions(decimal: true), number: true),
+                        _field('numberOfTables', 'Number of tables', keyboard: TextInputType.number, number: true),
+                      ]),
+                      _row([_field('currencySymbol', 'Currency symbol'), _field('currencyCode', 'Currency code')]),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: Space.md),
+                        child: Row(
+                          children: [
+                            Expanded(child: Text('Default order type', style: context.text.titleSmall)),
+                            SegmentedButton<String>(
+                              showSelectedIcon: false,
+                              segments: const [
+                                ButtonSegment(value: 'Dine-In', label: Text('Dine-in')),
+                                ButtonSegment(value: 'Takeaway', label: Text('Takeaway')),
+                              ],
+                              selected: {_defaultOrderType == 'Takeaway' ? 'Takeaway' : 'Dine-In'},
+                              onSelectionChanged: (s) => setState(() {
+                                _defaultOrderType = s.first;
+                                _dirty = true;
+                              }),
                             ),
                           ],
                         ),
                       ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _autoBill,
+                        onChanged: (v) => setState(() {
+                          _autoBill = v;
+                          _dirty = true;
+                        }),
+                        title: const Text('Auto bill number'),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _autoToken,
+                        onChanged: (v) => setState(() {
+                          _autoToken = v;
+                          _dirty = true;
+                        }),
+                        title: const Text('Auto token number'),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: Space.lg),
-                  _row([_field('shopName', 'Cafe name', required: true), _field('tagline', 'Tagline')]),
-                  _row([_field('ownerName', 'Owner name'), _field('mobileNumber', 'Mobile number', keyboard: TextInputType.phone)]),
-                  _row([_field('email', 'Email', keyboard: TextInputType.emailAddress), _field('gstNumber', 'GST number')]),
-                  _field('address', 'Address', maxLines: 2),
-                ],
-              ),
-            ),
-            SectionCard(
-              title: 'Billing',
-              icon: Icons.receipt_long_outlined,
-              child: Column(
-                children: [
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: _showGst,
-                    onChanged: (v) => setState(() {
-                      _showGst = v;
-                      _dirty = true;
-                    }),
-                    title: const Text('Add GST to bills', style: TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: const Text('New orders include GST at the rate below.'),
+                );
+                final receipt = SectionCard(
+                  title: 'Receipt text',
+                  icon: Icons.print_outlined,
+                  child: Column(
+                    children: [
+                      _field('receiptHeader', 'Header'),
+                      _field('thankYouMessage', 'Thank-you message'),
+                      _field('receiptFooter', 'Footer'),
+                    ],
                   ),
-                  const SizedBox(height: Space.sm),
-                  _row([
-                    _field('gstPercentage', 'GST %', keyboard: const TextInputType.numberWithOptions(decimal: true), number: true),
-                    _field('numberOfTables', 'Number of tables', keyboard: TextInputType.number, number: true),
-                  ]),
-                  _row([_field('currencySymbol', 'Currency symbol'), _field('currencyCode', 'Currency code')]),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: Space.md),
-                    child: Row(
-                      children: [
-                        Expanded(child: Text('Default order type', style: context.text.titleSmall)),
-                        SegmentedButton<String>(
-                          showSelectedIcon: false,
-                          segments: const [
-                            ButtonSegment(value: 'Dine-In', label: Text('Dine-in')),
-                            ButtonSegment(value: 'Takeaway', label: Text('Takeaway')),
-                          ],
-                          selected: {_defaultOrderType == 'Takeaway' ? 'Takeaway' : 'Dine-In'},
-                          onSelectionChanged: (s) => setState(() {
-                            _defaultOrderType = s.first;
-                            _dirty = true;
-                          }),
-                        ),
-                      ],
+                );
+                final appearance = SectionCard(
+                  title: 'Appearance',
+                  icon: Icons.palette_outlined,
+                  subtitle: 'Saved on this device only',
+                  child: ValueListenableBuilder<ThemeMode>(
+                    valueListenable: ThemeController.instance,
+                    builder: (context, mode, _) => Align(
+                      alignment: Alignment.centerLeft,
+                      child: SegmentedButton<ThemeMode>(
+                        showSelectedIcon: false,
+                        segments: const [
+                          ButtonSegment(value: ThemeMode.light, label: Text('Light'), icon: Icon(Icons.light_mode_outlined, size: 18)),
+                          ButtonSegment(value: ThemeMode.dark, label: Text('Dark'), icon: Icon(Icons.dark_mode_outlined, size: 18)),
+                          ButtonSegment(value: ThemeMode.system, label: Text('Auto'), icon: Icon(Icons.brightness_auto_outlined, size: 18)),
+                        ],
+                        selected: {mode},
+                        onSelectionChanged: (s) => ThemeController.instance.set(s.first),
+                      ),
                     ),
                   ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: _autoBill,
-                    onChanged: (v) => setState(() {
-                      _autoBill = v;
-                      _dirty = true;
-                    }),
-                    title: const Text('Auto bill number'),
-                  ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: _autoToken,
-                    onChanged: (v) => setState(() {
-                      _autoToken = v;
-                      _dirty = true;
-                    }),
-                    title: const Text('Auto token number'),
-                  ),
-                ],
-              ),
-            ),
-            SectionCard(
-              title: 'Receipt text',
-              icon: Icons.print_outlined,
-              child: Column(
-                children: [
-                  _field('receiptHeader', 'Header'),
-                  _field('thankYouMessage', 'Thank-you message'),
-                  _field('receiptFooter', 'Footer'),
-                ],
-              ),
-            ),
-            SectionCard(
-              title: 'Appearance',
-              icon: Icons.palette_outlined,
-              subtitle: 'Saved on this device only',
-              child: ValueListenableBuilder<ThemeMode>(
-                valueListenable: ThemeController.instance,
-                builder: (context, mode, _) => Align(
-                  alignment: Alignment.centerLeft,
-                  child: SegmentedButton<ThemeMode>(
-                    showSelectedIcon: false,
-                    segments: const [
-                      ButtonSegment(value: ThemeMode.light, label: Text('Light'), icon: Icon(Icons.light_mode_outlined, size: 18)),
-                      ButtonSegment(value: ThemeMode.dark, label: Text('Dark'), icon: Icon(Icons.dark_mode_outlined, size: 18)),
-                      ButtonSegment(value: ThemeMode.system, label: Text('Auto'), icon: Icon(Icons.brightness_auto_outlined, size: 18)),
-                    ],
-                    selected: {mode},
-                    onSelectionChanged: (s) => ThemeController.instance.set(s.first),
-                  ),
-                ),
-              ),
+                );
+                if (c.maxWidth < 1000) {
+                  return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [profile, billing, receipt, appearance]);
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [profile, receipt]),
+                    ),
+                    const SizedBox(width: Space.lg),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [billing, appearance]),
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),

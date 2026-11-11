@@ -5,7 +5,6 @@ import '../../core/data/firestore_paths.dart';
 import '../../core/config/app_config.dart';
 import '../../core/layout/app_shell.dart';
 import '../../core/layout/breakpoints.dart';
-import '../../core/theme/theme_controller.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/web/favicon.dart';
 import '../../core/widgets/confirm_dialog.dart';
@@ -241,11 +240,6 @@ class CaptainShell extends StatelessWidget {
                   wide
                       ? TextButton.icon(onPressed: onSwitchMode, icon: const Icon(Icons.swap_horiz_rounded, size: 18), label: const Text('Manager view'))
                       : IconButton(tooltip: 'Manager view', onPressed: onSwitchMode, icon: const Icon(Icons.swap_horiz_rounded)),
-                IconButton(
-                  tooltip: 'Light / dark',
-                  onPressed: () => ThemeController.instance.toggle(context),
-                  icon: Icon(ThemeController.instance.isDark(context) ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
-                ),
                 IconButton(tooltip: 'Sign out', onPressed: () => _confirmSignOut(context), icon: const Icon(Icons.logout_rounded)),
                 const SizedBox(width: Space.sm),
               ],

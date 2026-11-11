@@ -3,7 +3,6 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
-import '../theme/theme_controller.dart';
 import '../theme/tokens.dart';
 import 'breakpoints.dart';
 
@@ -143,11 +142,6 @@ class AppShell extends StatelessWidget {
         actions: [
           ...actions,
           if (wide) ...[
-            IconButton(
-              tooltip: 'Light / dark',
-              onPressed: () => ThemeController.instance.toggle(context),
-              icon: Icon(ThemeController.instance.isDark(context) ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
-            ),
             IconButton(tooltip: 'Sign out', onPressed: onLogout, icon: const Icon(Icons.logout_rounded)),
           ],
           const SizedBox(width: Space.sm),
@@ -246,7 +240,6 @@ class AppShell extends StatelessWidget {
                       },
                     ),
                 Divider(height: Space.xl, color: p.border),
-                _ThemeTile(),
                 ListTile(
                   minTileHeight: 52,
                   leading: const Icon(Icons.logout_rounded),
@@ -436,7 +429,6 @@ class _Sidebar extends StatelessWidget {
                 padding: const EdgeInsets.all(Space.sm),
                 child: Column(
                   children: [
-                    _ThemeTile(),
                     ListTile(
                       minTileHeight: kTouch,
                       leading: const Icon(Icons.logout_rounded, size: 20),
@@ -490,11 +482,6 @@ class _Rail extends StatelessWidget {
               ),
             ),
             IconButton(
-              tooltip: 'Light / dark',
-              onPressed: () => ThemeController.instance.toggle(context),
-              icon: Icon(ThemeController.instance.isDark(context) ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
-            ),
-            IconButton(
               tooltip: 'Sign out',
               onPressed: shell.onLogout,
               icon: Icon(Icons.logout_rounded, color: p.inkSubtle),
@@ -503,22 +490,6 @@ class _Rail extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _ThemeTile extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final dark = ThemeController.instance.isDark(context);
-    return ListTile(
-      minTileHeight: kTouch,
-      leading: Icon(dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, size: 20),
-      title: Text(
-        dark ? 'Light mode' : 'Dark mode',
-        style: TextStyle(color: context.palette.inkMuted, fontWeight: FontWeight.w500),
-      ),
-      onTap: () => ThemeController.instance.toggle(context),
     );
   }
 }

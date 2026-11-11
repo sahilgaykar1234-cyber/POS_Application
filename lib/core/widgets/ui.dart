@@ -11,7 +11,7 @@ import '../utils/formatters.dart';
 
 /// Page body with consistent padding and a max width on big screens.
 class PageBody extends StatelessWidget {
-  const PageBody({super.key, required this.children, this.maxWidth = 1280, this.padding, this.bottomPadding = 96});
+  const PageBody({super.key, required this.children, this.maxWidth = 1600, this.padding, this.bottomPadding = 96});
 
   final List<Widget> children;
   final double maxWidth;
@@ -157,24 +157,71 @@ class StatCard extends StatelessWidget {
 }
 
 /// Responsive grid of cards: 1–6 columns depending on width.
+///
+/// [equalHeights] makes every card in a row as tall as the tallest one (for
+/// stat cards); [fill] uses fewer, wider columns when there are fewer cards
+/// than columns, so a row never ends with an empty gap.
 class ResponsiveGrid extends StatelessWidget {
-  const ResponsiveGrid({super.key, required this.children, this.minTileWidth = 200, this.spacing = 12, this.maxColumns = 6});
+  const ResponsiveGrid({
+    super.key,
+    required this.children,
+    this.minTileWidth = 200,
+    this.spacing = 12,
+    this.maxColumns = 6,
+    this.equalHeights = false,
+    this.fill = false,
+  });
 
   final List<Widget> children;
   final double minTileWidth;
   final double spacing;
   final int maxColumns;
+  final bool equalHeights;
+  final bool fill;
+
+  /// Columns for [width] (pure, unit-tested).
+  static int columnsFor(double width, {required double minTileWidth, required int maxColumns, int? count}) {
+    var cols = (width / minTileWidth).floor().clamp(1, maxColumns);
+    if (count != null && count > 0) {
+      cols = cols.clamp(1, count);
+      // Balance the rows: 5 cards in 4 columns -> 3 + 2 looks better than 4 + 1.
+      final rows = (count / cols).ceil();
+      cols = (count / rows).ceil();
+    }
+    return cols;
+  }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        final cols = (c.maxWidth / minTileWidth).floor().clamp(1, maxColumns);
+        final cols = columnsFor(c.maxWidth, minTileWidth: minTileWidth, maxColumns: maxColumns, count: fill ? children.length : null);
         final w = (c.maxWidth - spacing * (cols - 1)) / cols;
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: [for (final child in children) SizedBox(width: w, child: child)],
+        if (!equalHeights) {
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: [for (final child in children) SizedBox(width: w, child: child)],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var r = 0; r < children.length; r += cols) ...[
+              if (r > 0) SizedBox(height: spacing),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = r; i < r + cols; i++) ...[
+                      if (i > r) SizedBox(width: spacing),
+                      SizedBox(width: w, child: i < children.length ? children[i] : null),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ],
         );
       },
     );

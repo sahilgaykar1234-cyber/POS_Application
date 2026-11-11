@@ -97,7 +97,6 @@ class _OrdersBoardScreenState extends State<OrdersBoardScreen> {
                   ? FloatingActionButton(onPressed: () => _newOrder(), tooltip: 'New order', child: const Icon(Icons.add))
                   : null,
               body: PageBody(
-                maxWidth: 1400,
                 children: [
                   PageHeader(
                     title: 'Tables',
