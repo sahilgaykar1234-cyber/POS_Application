@@ -6,7 +6,6 @@ import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/ui.dart';
 import '../../reports_stub.dart' if (dart.library.html) '../../reports_web.dart';
-import '../expenses/expenses.dart';
 import '../manager/sales_stats.dart';
 import '../orders/bill.dart';
 import '../orders/order_model.dart';
@@ -17,9 +16,8 @@ enum _Period { today, week, month, custom }
 
 /// Sales reports with charts and the original CSV exports.
 class ReportsScreen extends StatefulWidget {
-  const ReportsScreen({super.key, this.ordersStream, this.expensesStream});
+  const ReportsScreen({super.key, this.ordersStream});
   final Stream<List<PosOrder>>? ordersStream;
-  final Stream<List<Expense>>? expensesStream;
 
   @override
   State<ReportsScreen> createState() => _ReportsScreenState();
@@ -27,7 +25,6 @@ class ReportsScreen extends StatefulWidget {
 
 class _ReportsScreenState extends State<ReportsScreen> {
   late final _orders = widget.ordersStream ?? OrderService.instance.watchAll();
-  late final _expenses = widget.expensesStream ?? ExpenseService.instance.watch();
   _Period _period = _Period.week;
   late DateTimeRange _range = _rangeFor(_Period.week);
 
@@ -73,20 +70,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<Expense>>(
-      stream: _expenses,
-      builder: (context, expSnap) => StreamBuilder<List<PosOrder>>(
-        stream: _orders,
-        builder: (context, snap) {
-          if (snap.hasError) return const ErrorState();
-          if (!snap.hasData) return const LoadingState(label: 'Building report…');
-          return _body(context, snap.data!, expSnap.data ?? const []);
-        },
-      ),
+    return StreamBuilder<List<PosOrder>>(
+      stream: _orders,
+      builder: (context, snap) {
+        if (snap.hasError) return const ErrorState();
+        if (!snap.hasData) return const LoadingState(label: 'Building report…');
+        return _body(context, snap.data!);
+      },
     );
   }
 
-  Widget _body(BuildContext context, List<PosOrder> all, List<Expense> expenses) {
+  Widget _body(BuildContext context, List<PosOrder> all) {
     final p = context.palette;
     final from = _range.start;
     final to = _range.end.add(const Duration(seconds: 1));
@@ -97,7 +91,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final takeaway = period.where((o) => o.orderType.toLowerCase().contains('takeaway')).length;
     final dineIn = period.length - takeaway;
     final discounts = period.fold<double>(0, (s, o) => s + o.discount);
-    final spent = expensesBetween(expenses, from, to);
 
     // Daily series across the range (max 62 points).
     final days = to.difference(DateTime(from.year, from.month, from.day)).inDays.clamp(1, 62);
@@ -187,7 +180,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
           StatCard(label: 'Average bill', value: Fmt.money(stats.averageBill.round()), icon: Icons.payments_outlined, color: p.violet),
           StatCard(label: 'Highest bill', value: Fmt.money(highest), icon: Icons.star_outline_rounded, color: p.warning),
           StatCard(label: 'Discounts given', value: Fmt.money(discounts), icon: Icons.local_offer_outlined, color: p.primary),
-          StatCard(label: 'Expenses', value: Fmt.money(spent), icon: Icons.trending_down_rounded, color: p.danger, caption: 'Profit ${Fmt.money(stats.sales - spent)}'),
         ]),
         const SizedBox(height: Space.lg),
         SectionCard(

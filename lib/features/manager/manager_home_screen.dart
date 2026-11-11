@@ -5,7 +5,6 @@ import '../../core/layout/breakpoints.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/ui.dart';
-import '../expenses/expenses.dart';
 import '../orders/bill.dart';
 import '../orders/order_details_sheet.dart';
 import '../orders/order_model.dart';
@@ -15,9 +14,8 @@ import 'sales_stats.dart';
 
 /// Manager's "Today" dashboard. Everything is for the signed-in cafe only.
 class ManagerHomeScreen extends StatefulWidget {
-  const ManagerHomeScreen({super.key, required this.onNewOrder, required this.onOpenTables, this.ordersStream, this.expensesStream, this.settingsStream});
+  const ManagerHomeScreen({super.key, required this.onNewOrder, required this.onOpenTables, this.ordersStream, this.settingsStream});
   final Stream<List<PosOrder>>? ordersStream;
-  final Stream<List<Expense>>? expensesStream;
   final Stream<BusinessSettings>? settingsStream;
   final VoidCallback onNewOrder;
   final VoidCallback onOpenTables;
@@ -28,7 +26,6 @@ class ManagerHomeScreen extends StatefulWidget {
 
 class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
   late final _orders = widget.ordersStream ?? OrderService.instance.watchAll();
-  late final _expenses = widget.expensesStream ?? ExpenseService.instance.watch();
   late final _settings = widget.settingsStream ?? BusinessSettingsRepository.instance.watch();
 
   static const _weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -37,21 +34,18 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
   Widget build(BuildContext context) {
     return StreamBuilder<BusinessSettings>(
       stream: _settings,
-      builder: (context, setSnap) => StreamBuilder<List<Expense>>(
-        stream: _expenses,
-        builder: (context, expSnap) => StreamBuilder<List<PosOrder>>(
-          stream: _orders,
-          builder: (context, snap) {
-            if (snap.hasError) return const ErrorState();
-            if (!snap.hasData) return const LoadingState(label: 'Loading today…');
-            return _build(context, snap.data!, expSnap.data ?? const [], setSnap.data ?? BusinessSettings.empty);
-          },
-        ),
+      builder: (context, setSnap) => StreamBuilder<List<PosOrder>>(
+        stream: _orders,
+        builder: (context, snap) {
+          if (snap.hasError) return const ErrorState();
+          if (!snap.hasData) return const LoadingState(label: 'Loading today…');
+          return _build(context, snap.data!, setSnap.data ?? BusinessSettings.empty);
+        },
       ),
     );
   }
 
-  Widget _build(BuildContext context, List<PosOrder> all, List<Expense> expenses, BusinessSettings settings) {
+  Widget _build(BuildContext context, List<PosOrder> all, BusinessSettings settings) {
     final p = context.palette;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -62,8 +56,7 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
     final s = SalesStats.of(todayOrders);
     final lw = SalesStats.of(lastWeek);
     final monthStart = DateTime(now.year, now.month);
-    final monthSales = SalesStats.of(SalesStats.between(all, monthStart, DateTime(now.year, now.month + 1))).sales;
-    final monthExpenses = expensesBetween(expenses, monthStart, DateTime(now.year, now.month + 1));
+    final month = SalesStats.of(SalesStats.between(all, monthStart, DateTime(now.year, now.month + 1)));
 
     String? vsLastWeek;
     if (lw.sales > 0) {
@@ -130,9 +123,9 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
           title: 'This month',
           icon: Icons.calendar_month_outlined,
           child: ResponsiveGrid(minTileWidth: 180, children: [
-            _MiniStat(label: 'Sales', value: Fmt.money(monthSales), color: p.success),
-            _MiniStat(label: 'Expenses', value: Fmt.money(monthExpenses), color: p.danger),
-            _MiniStat(label: 'Profit (sales − expenses)', value: Fmt.money(monthSales - monthExpenses), color: monthSales - monthExpenses >= 0 ? p.success : p.danger),
+            _MiniStat(label: 'Sales', value: Fmt.money(month.sales), color: p.success),
+            _MiniStat(label: 'Orders', value: '${month.orders}', color: p.info),
+            _MiniStat(label: 'Average bill', value: Fmt.money(month.averageBill.round()), color: p.ink),
           ]),
         ),
         SectionCard(

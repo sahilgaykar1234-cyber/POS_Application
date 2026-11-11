@@ -6,7 +6,6 @@ import '../../core/data/firestore_paths.dart';
 import '../../core/layout/app_shell.dart';
 import '../../core/widgets/confirm_dialog.dart';
 import '../customers/customers_screen.dart';
-import '../expenses/expenses.dart';
 import '../kitchen/kitchen_screen.dart';
 import '../manager/manager_home_screen.dart';
 import '../menu/menu_management_screen.dart';
@@ -141,7 +140,6 @@ class _ManagerShellState extends State<ManagerShell> {
         const ShellDestination(icon: Icons.soup_kitchen_outlined, selectedIcon: Icons.soup_kitchen, label: 'Kitchen'),
         const ShellDestination(icon: Icons.restaurant_menu_outlined, selectedIcon: Icons.restaurant_menu, label: 'Menu', section: 'Manage', onMobileBar: true),
         const ShellDestination(icon: Icons.insights_outlined, selectedIcon: Icons.insights, label: 'Reports'),
-        const ShellDestination(icon: Icons.account_balance_wallet_outlined, selectedIcon: Icons.account_balance_wallet, label: 'Expenses'),
         const ShellDestination(icon: Icons.groups_outlined, selectedIcon: Icons.groups, label: 'Customers'),
         const ShellDestination(icon: Icons.badge_outlined, selectedIcon: Icons.badge, label: 'Staff'),
         const ShellDestination(icon: Icons.settings_outlined, selectedIcon: Icons.settings, label: 'Settings'),
@@ -153,7 +151,6 @@ class _ManagerShellState extends State<ManagerShell> {
         (_) => const KitchenScreen(),
         (_) => MenuManagementScreen(cafeId: cafeId),
         (_) => const ReportsScreen(),
-        (_) => const ExpensesScreen(),
         (_) => const CustomersScreen(),
         (_) => StaffManagementScreen(cafeId: cafeId, cafeName: me?.displayName ?? 'My Cafe', embedded: true),
         (_) => const SettingsScreen(),

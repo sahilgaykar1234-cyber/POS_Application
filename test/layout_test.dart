@@ -9,7 +9,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pos_app/core/layout/app_shell.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
 import 'package:pos_app/features/customers/customers_screen.dart';
-import 'package:pos_app/features/expenses/expenses.dart';
 import 'package:pos_app/features/kitchen/kitchen_screen.dart';
 import 'package:pos_app/features/manager/manager_home_screen.dart';
 import 'package:pos_app/features/menu/menu_management_screen.dart';
@@ -123,11 +122,6 @@ List<PosOrder> orders() => [
       }),
     ];
 
-List<Expense> expenses() => [
-      Expense('e1', {'title': 'Cheese 10 kg', 'category': 'Ingredients', 'amount': 4200, 'paidVia': 'UPI', 'date': ago(60)}),
-      Expense('e2', {'title': 'Shop rent November', 'category': 'Rent', 'amount': 18000, 'paidVia': 'Bank', 'date': ago(600)}),
-    ];
-
 Future<void> pumpAt(WidgetTester t, Size size, Widget child, ThemeData theme) async {
   t.view.physicalSize = size;
   t.view.devicePixelRatio = 1;
@@ -169,15 +163,13 @@ void main() {
       onNewOrder: () {},
       onOpenTables: () {},
       ordersStream: Stream.value(orders()),
-      expensesStream: Stream.value(expenses()),
       settingsStream: Stream.value(settings),
     ),
   );
-  checkScreen('Reports', () => ReportsScreen(ordersStream: Stream.value(orders()), expensesStream: Stream.value(expenses())));
+  checkScreen('Reports', () => ReportsScreen(ordersStream: Stream.value(orders())));
   checkScreen('Customers', () => CustomersScreen(ordersStream: Stream.value(orders())));
   checkScreen('Menu management', () => MenuManagementScreen(cafeId: 'test', menuStream: Stream.value(menu())));
   checkScreen('Settings', () => SettingsScreen(loader: () async => settings));
-  checkScreen('Expenses', () => ExpensesScreen(expensesStream: Stream.value(expenses())));
 
   for (final s in sizes.entries) {
     testWidgets('AppShell with 10 sections · ${s.key}', (t) async {
@@ -213,7 +205,7 @@ void main() {
             brandTitle: 'Pizza La Forno',
             brandSubtitle: 'Manager',
             destinations: [
-              for (final l in ['Dashboard', 'New order', 'Tables', 'Kitchen', 'Menu', 'Reports', 'Expenses', 'Customers', 'Staff', 'Settings'])
+              for (final l in ['Dashboard', 'New order', 'Tables', 'Kitchen', 'Menu', 'Reports', 'Customers', 'Staff', 'Settings'])
                 ShellDestination(icon: Icons.circle_outlined, label: l, onMobileBar: ['Dashboard', 'New order', 'Tables', 'Menu'].contains(l), badge: l == 'Tables' ? 3 : null),
             ],
             selectedIndex: selected,
@@ -228,7 +220,7 @@ void main() {
       expect(find.byType(NavigationBar), findsOneWidget);
       expect(find.byType(NavigationRail), findsNothing);
       if (s.value.width >= 1024) {
-        expect(find.text('Settings'), findsOneWidget, reason: 'all 10 fit on desktop');
+        expect(find.text('Settings'), findsOneWidget, reason: 'all sections fit on desktop');
         expect(find.text('More'), findsNothing);
       } else {
         expect(find.text('More'), findsOneWidget);
