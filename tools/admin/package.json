@@ -1,0 +1,12 @@
+{
+  "name": "pos-admin-tools",
+  "private": true,
+  "description": "Local admin scripts (backup, bootstrap). Admin credentials stay on this machine only.",
+  "scripts": {
+    "backup": "node backup.js",
+    "admin": "node admin.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

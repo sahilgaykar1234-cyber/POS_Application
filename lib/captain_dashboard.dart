@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'core/data/firestore_paths.dart';
-import 'main.dart';
+import 'core/auth/auth_gate.dart';
 
 class CaptainDashboardScreen extends StatefulWidget {
   const CaptainDashboardScreen({super.key});
@@ -13,11 +13,7 @@ class CaptainDashboardScreen extends StatefulWidget {
 
 class _CaptainDashboardScreenState extends State<CaptainDashboardScreen> {
   void _logout(BuildContext context) {
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const CustomerCartScreen()),
-      (route) => false,
-    );
+    signOutToLogin(context);
   }
 
   void updateOrderStatus(String docId, String newStatus) async {

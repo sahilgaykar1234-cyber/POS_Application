@@ -31,4 +31,15 @@ class FirestorePaths {
   /// Cafe business/receipt settings (single document).
   static DocumentReference<Map<String, dynamic>> businessSettings() =>
       _db.collection(settingsCollection).doc(businessSettingsDocId);
+
+  // ---- Platform collections (multi-tenant). Written only by the backend. ----
+
+  /// Staff profiles: users/{uid} {email, displayName, role, cafeId, status}.
+  /// Mirrors the Auth custom claims; claims remain the source of truth.
+  static CollectionReference<Map<String, dynamic>> users() => _db.collection('users');
+
+  /// Cafes: cafes/{cafeId} {name, status, legacyData, ...}.
+  static CollectionReference<Map<String, dynamic>> cafes() => _db.collection('cafes');
+
+  static DocumentReference<Map<String, dynamic>> cafe(String cafeId) => cafes().doc(cafeId);
 }

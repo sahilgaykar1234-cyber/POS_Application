@@ -7,7 +7,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'core/data/firestore_paths.dart';
 import 'core/widgets/confirm_dialog.dart';
-import 'main.dart';
+import 'core/widgets/app_logo.dart';
+import 'core/auth/auth_service.dart';
+import 'features/staff/staff_management_screen.dart';
+import 'core/auth/auth_gate.dart';
 import 'menu_data.dart';
 import 'receipt_screen.dart';
 import 'escpos_usb_printer_stub.dart'
@@ -544,7 +547,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
         await collection.add(category);
       }
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Flamy Wood menu successfully updated!')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Default menu restored!')));
       setState(() {});
     } catch (e) {
       if (!context.mounted) return;
@@ -553,11 +556,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   }
 
   void _logout(BuildContext context) {
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const CustomerCartScreen()),
-      (route) => false,
-    );
+    signOutToLogin(context);
   }
 
   void prepareOrderForm({DocumentSnapshot? doc, String? prefilledTable}) {
@@ -951,6 +950,24 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (context) => const CustomerContactsScreen(),
+                    ),
+                  );
+                },
+              ),
+            if (currentView != 'NewOrder' && AuthService.instance.currentUser?.cafeId != null)
+              IconButton(
+                icon: const Icon(Icons.group_outlined, color: Colors.white),
+                tooltip: 'Staff',
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                padding: EdgeInsets.zero,
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => StaffManagementScreen(
+                        cafeId: AuthService.instance.currentUser!.cafeId!,
+                        cafeName: shopNameController.text.trim().isEmpty ? 'My Cafe' : shopNameController.text.trim(),
+                      ),
                     ),
                   );
                 },
@@ -2414,7 +2431,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                         borderRadius: BorderRadius.circular(10),
                         child: shopLogoBase64 != null && shopLogoBase64!.isNotEmpty
                             ? Image.memory(base64Decode(shopLogoBase64!), fit: BoxFit.contain)
-                            : const FlamyWoodOvenLogo(size: 65),
+                            : const AppLogo(size: 65),
                       ),
                     ),
                     const SizedBox(width: 16),

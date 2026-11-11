@@ -1,12 +1,12 @@
 {
-    "name": "Flamy Wood - Woodfire Pizzas",
-    "short_name": "Flamy Wood",
+    "name": "Cafe POS",
+    "short_name": "Cafe POS",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#141211",
     "theme_color": "#E65C00",
-    "description": "Flamy Wood Woodfire Baked Pizzas Surat",
-    "orientation": "portrait-primary",
+    "description": "Point of Sale for Cafes & Restaurants",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {
