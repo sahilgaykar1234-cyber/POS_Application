@@ -375,4 +375,26 @@ void main() {
       expect(buildWhatsAppBill(order: o.data, orderId: o.id), contains('Bill 26-27/0101'));
     });
   });
+
+  group('Next bill number follows the previous bill', () {
+    test('no bills yet -> 0001 even if an old counter exists', () {
+      expect(nextBillSeq(counterNext: null, counterLastOrderExists: false, lastSeqInOrders: 0), 1);
+      expect(nextBillSeq(counterNext: 3, counterLastOrderExists: false, lastSeqInOrders: 0), 1);
+    });
+    test('continues after the latest bill', () {
+      expect(nextBillSeq(counterNext: 8, counterLastOrderExists: true, lastSeqInOrders: 7), 8);
+    });
+    test('latest bill deleted -> reuse its number', () {
+      expect(nextBillSeq(counterNext: 8, counterLastOrderExists: false, lastSeqInOrders: 6), 7);
+    });
+    test('never repeats a number a bill already has', () {
+      expect(nextBillSeq(counterNext: 3, counterLastOrderExists: true, lastSeqInOrders: 9), 10);
+    });
+    test('billKey sorts across years and restarts on 1 April', () {
+      expect(billKey(DateTime(2026, 11, 11), 42), 202600042);
+      expect(seqInYear(202600042, DateTime(2027, 3, 31)), 42);
+      expect(seqInYear(202600042, DateTime(2027, 4, 1)), isNull);
+      expect(seqInYear(null, DateTime(2027, 4, 1)), isNull);
+    });
+  });
 }

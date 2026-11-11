@@ -108,23 +108,21 @@ class OrderService {
       }
       final now = DateTime.now();
       try {
+        final lastSeq = assignBillNumber ? await _lastSeqInOrders(now) : null;
         // One transaction: next bill number in the cafe's series (and the
         // next daily takeaway token), so two devices never share a number.
         final r = await FirebaseFirestore.instance.runTransaction<({int? token, String? billNo})>((tx) async {
           final billRef = FirestorePaths.cafeCounter(billCounterName(now));
           final tokenRef = FirestorePaths.cafeCounter('takeaway_${takeawayDayKey(now)}');
-          final billSnap = assignBillNumber ? await tx.get(billRef) : null;
+          // All reads must come before writes in a transaction.
           final tokenSnap = wantToken ? await tx.get(tokenRef) : null;
+          final seq = assignBillNumber ? await _takeBillSeq(tx, billRef, ref.id, now, lastSeq!) : null;
           final extra = <String, dynamic>{};
           String? billNo;
           int? token;
-          if (billSnap != null) {
-            final seq = (billSnap.data()?['next'] as num?)?.toInt() ?? 1;
+          if (seq != null) {
             billNo = formatBillNumber(now, seq);
-            tx.set(billRef, {'next': seq + 1, 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
-            extra['billSeq'] = seq;
-            extra['billNo'] = billNo;
-            extra['billFy'] = financialYear(now);
+            extra.addAll(_billFields(now, seq));
           }
           if (tokenSnap != null) {
             token = (tokenSnap.data()?['next'] as num?)?.toInt() ?? 1;
@@ -172,16 +170,55 @@ class OrderService {
   Future<void> ensureBillNumber(String id) async {
     final now = DateTime.now();
     final ref = _orders.doc(id);
+    final lastSeq = await _lastSeqInOrders(now);
     await FirebaseFirestore.instance.runTransaction<void>((tx) async {
       final order = await tx.get(ref);
       final has = order.data()?['billNo'];
       if (!order.exists || (has is String && has.isNotEmpty)) return;
       final billRef = FirestorePaths.cafeCounter(billCounterName(now));
-      final c = await tx.get(billRef);
-      final seq = (c.data()?['next'] as num?)?.toInt() ?? 1;
-      tx.set(billRef, {'next': seq + 1, 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
-      tx.update(ref, {'billSeq': seq, 'billNo': formatBillNumber(now, seq), 'billFy': financialYear(now)});
+      final seq = await _takeBillSeq(tx, billRef, id, now, lastSeq);
+      tx.update(ref, _billFields(now, seq));
     });
+  }
+
+  Map<String, dynamic> _billFields(DateTime now, int seq) => {
+        'billSeq': seq,
+        'billNo': formatBillNumber(now, seq),
+        'billFy': financialYear(now),
+        'billKey': billKey(now, seq),
+      };
+
+  /// Highest bill number this financial year among bills that still exist.
+  Future<int> _lastSeqInOrders(DateTime now) async {
+    var last = 0;
+    final byKey = await _orders.orderBy('billKey', descending: true).limit(1).get();
+    if (byKey.docs.isNotEmpty) {
+      last = seqInYear((byKey.docs.first.data()['billKey'] as num?)?.toInt(), now) ?? 0;
+    }
+    // Bills numbered before billKey existed only have billSeq/billFy.
+    final bySeq = await _orders.orderBy('billSeq', descending: true).limit(1).get();
+    if (bySeq.docs.isNotEmpty) {
+      final d = bySeq.docs.first.data();
+      final seq = (d['billSeq'] as num?)?.toInt() ?? 0;
+      if (d['billFy'] == financialYear(now) && seq > last) last = seq;
+    }
+    return last;
+  }
+
+  /// Reserves the next bill number inside [tx] (see [nextBillSeq]). Only
+  /// reads before its single write, so call it after the other reads.
+  Future<int> _takeBillSeq(Transaction tx, DocumentReference<Map<String, dynamic>> billRef, String orderId,
+      DateTime now, int lastSeqInOrders) async {
+    final c = await tx.get(billRef);
+    final lastId = c.data()?['lastOrderId'] as String?;
+    final lastExists = lastId != null && (await tx.get(_orders.doc(lastId))).exists;
+    final seq = nextBillSeq(
+      counterNext: (c.data()?['next'] as num?)?.toInt(),
+      counterLastOrderExists: lastExists,
+      lastSeqInOrders: lastSeqInOrders,
+    );
+    tx.set(billRef, {'next': seq + 1, 'lastOrderId': orderId, 'updatedAt': FieldValue.serverTimestamp()});
+    return seq;
   }
 
   /// Never let numbering problems block taking payment.

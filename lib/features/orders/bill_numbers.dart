@@ -28,3 +28,33 @@ String displayBillNo(Map<String, dynamic> order, String orderId, {int idChars = 
   if (orderId.isEmpty) return '';
   return '#${orderId.substring(0, orderId.length > idChars ? idChars : orderId.length).toUpperCase()}';
 }
+
+/// Sortable key across years: 2026-27 bill 42 → 202600042. Stored on each
+/// order so "the latest bill" is one simple query.
+int billKey(DateTime d, int seq) {
+  final start = d.month >= 4 ? d.year : d.year - 1;
+  return start * 100000 + seq;
+}
+
+/// Sequence number inside its financial year from a stored [billKey], or
+/// null if [key] belongs to a different financial year than [d].
+int? seqInYear(int? key, DateTime d) {
+  if (key == null) return null;
+  final start = d.month >= 4 ? d.year : d.year - 1;
+  return key ~/ 100000 == start ? key % 100000 : null;
+}
+
+/// Decides the next bill number. The previous bill decides it: normally the
+/// counter continues (it is what keeps two devices from sharing a number),
+/// but if the bill that last used the counter was deleted, numbering resumes
+/// right after the latest bill that still exists ([lastSeqInOrders]).
+/// Never goes back to a number an existing bill already has.
+int nextBillSeq({
+  required int? counterNext,
+  required bool counterLastOrderExists,
+  required int lastSeqInOrders,
+}) {
+  final afterLast = lastSeqInOrders + 1;
+  if (counterNext == null || !counterLastOrderExists) return afterLast;
+  return counterNext > afterLast ? counterNext : afterLast;
+}
