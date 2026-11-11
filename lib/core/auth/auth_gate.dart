@@ -84,7 +84,8 @@ class _SignedInGateState extends State<_SignedInGate> {
           return _SignOutMessage(
             icon: Icons.manage_accounts_outlined,
             title: 'Account not set up',
-            message: 'Your account (${appUser.email}) has no role assigned yet. '
+            message:
+                'Your account (${appUser.email}) has no role assigned yet. '
                 'Please ask your manager or the administrator to set it up.',
           );
         }
@@ -140,8 +141,12 @@ class _CafeGate extends StatelessWidget {
         FirestorePaths.setActiveCafe(user.cafeId);
 
         final dashboard = user.isManager ? const ManagerDashboardScreen() : const CaptainDashboardScreen();
-        if (access.state != CafeAccessState.allowedWithWarning) return dashboard;
-        return _WarningBanner(message: access.message, child: dashboard);
+        // Always the same widget structure, so the dashboard (and any
+        // half-entered order) survives the banner appearing/disappearing.
+        return _WarningBanner(
+          message: access.state == CafeAccessState.allowedWithWarning ? access.message : null,
+          child: dashboard,
+        );
       },
     );
   }
@@ -150,31 +155,38 @@ class _CafeGate extends StatelessWidget {
 /// Thin banner above the dashboard (e.g. "Subscription expires in 3 days").
 class _WarningBanner extends StatelessWidget {
   const _WarningBanner({required this.message, required this.child});
-  final String message;
+  final String? message;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
+    final msg = message;
     return Material(
       color: AppColors.background,
       child: Column(
         children: [
-          SafeArea(
-            bottom: false,
-            child: Container(
-              width: double.infinity,
-              color: const Color(0xFF8A5A00),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              child: Row(
-                children: [
-                  const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(message, style: const TextStyle(color: Colors.white, fontSize: 13))),
-                ],
+          if (msg != null)
+            SafeArea(
+              bottom: false,
+              child: Container(
+                width: double.infinity,
+                color: const Color(0xFF8A5A00),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(msg, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                    ),
+                  ],
+                ),
               ),
             ),
+          Expanded(
+            key: const ValueKey('cafe-dashboard'),
+            child: MediaQuery.removePadding(context: context, removeTop: msg != null, child: child),
           ),
-          Expanded(child: MediaQuery.removePadding(context: context, removeTop: true, child: child)),
         ],
       ),
     );

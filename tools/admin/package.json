@@ -6,6 +6,7 @@
     "backup": "node backup.js",
     "admin": "node admin.js",
     "migrate": "node migrate_legacy.js",
+    "import-menu": "node import_menu.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
