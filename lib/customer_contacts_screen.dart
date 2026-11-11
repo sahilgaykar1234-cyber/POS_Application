@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'core/data/firestore_paths.dart';
 
 class CustomerContactsScreen extends StatefulWidget {
   const CustomerContactsScreen({super.key});
@@ -55,7 +56,7 @@ class _CustomerContactsScreenState extends State<CustomerContactsScreen> {
 
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('orders').snapshots(),
+              stream: FirestorePaths.orders().snapshots(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator(color: Color(0xFFE65C00)));

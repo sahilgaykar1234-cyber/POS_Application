@@ -1,6 +1,7 @@
 // ignore_for_file: avoid_web_libraries_in_flutter
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'core/data/firestore_paths.dart';
 import 'main.dart';
 
 class CaptainDashboardScreen extends StatefulWidget {
@@ -21,7 +22,7 @@ class _CaptainDashboardScreenState extends State<CaptainDashboardScreen> {
 
   void updateOrderStatus(String docId, String newStatus) async {
     try {
-      await FirebaseFirestore.instance.collection('orders').doc(docId).update({
+      await FirestorePaths.orders().doc(docId).update({
         'status': newStatus,
         'kitchenStatus': newStatus,
       });
@@ -57,7 +58,7 @@ class _CaptainDashboardScreenState extends State<CaptainDashboardScreen> {
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('orders').snapshots(),
+        stream: FirestorePaths.orders().snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator(color: Color(0xFFE65C00)));

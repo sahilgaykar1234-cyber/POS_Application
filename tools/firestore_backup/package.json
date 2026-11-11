@@ -1,0 +1,11 @@
+{
+  "name": "pos-firestore-backup",
+  "private": true,
+  "description": "Read-only Firestore backup for the POS app. Admin credentials stay on this machine only.",
+  "scripts": {
+    "backup": "node backup.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

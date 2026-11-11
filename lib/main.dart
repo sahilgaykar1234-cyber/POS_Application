@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'core/data/firestore_paths.dart';
+import 'core/theme/app_theme.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
@@ -38,17 +40,7 @@ class PosApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Flamy Wood - Woodfire Pizzas',
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF141211),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFE65C00),
-          secondary: Color(0xFFF7B731),
-          surface: Color(0xFF1E1A17),
-        ),
-        fontFamily: 'Roboto',
-        useMaterial3: true,
-      ),
+      theme: AppTheme.dark,
       home: kIsWeb ? const CustomerCartScreen() : const StaffLoginHomeScreen(),
     );
   }
@@ -269,8 +261,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
 
   Future<List<Map<String, dynamic>>> _fetchFastCachedMenu() async {
     try {
-      final cachedSnapshot = await FirebaseFirestore.instance
-          .collection('menu_categories')
+      final cachedSnapshot = await FirestorePaths.menuCategories()
           .get(const GetOptions(source: Source.cache));
 
       if (cachedSnapshot.docs.isNotEmpty) {
@@ -278,7 +269,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
       }
     } catch (_) {}
 
-    final serverSnapshot = await FirebaseFirestore.instance.collection('menu_categories').get();
+    final serverSnapshot = await FirestorePaths.menuCategories().get();
     return serverSnapshot.docs.map((d) => d.data()).toList();
   }
 
@@ -303,8 +294,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
       DateTime now = DateTime.now();
       DateTime startOfToday = DateTime(now.year, now.month, now.day);
 
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('orders')
+      final querySnapshot = await FirestorePaths.orders()
           .where('deviceId', isEqualTo: deviceId)
           .get();
 
@@ -508,8 +498,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
       DateTime now = DateTime.now();
       DateTime startOfToday = DateTime(now.year, now.month, now.day);
 
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('orders')
+      final querySnapshot = await FirestorePaths.orders()
           .where('deviceId', isEqualTo: deviceId)
           .get();
 
@@ -547,7 +536,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
 
         double updatedTotal = existingTotal + totalCartPrice;
 
-        await FirebaseFirestore.instance.collection('orders').doc(activeOrderId).update({
+        await FirestorePaths.orders().doc(activeOrderId).update({
           'customerName': customerName,
           'specialRequest': specialNote,
           'items': existingItems,
@@ -559,7 +548,7 @@ class _CustomerCartScreenState extends State<CustomerCartScreen> {
         });
       } else {
         List initialItems = items.map((e) => {...e, 'isDone': false}).toList();
-        DocumentReference docRef = await FirebaseFirestore.instance.collection('orders').add({
+        DocumentReference docRef = await FirestorePaths.orders().add({
           'deviceId': deviceId,
           'customerName': customerName,
           'specialRequest': specialNote,

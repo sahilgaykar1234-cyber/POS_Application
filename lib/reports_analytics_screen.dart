@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'core/data/firestore_paths.dart';
 
 // Conditional import for dart:html to prevent Android compilation errors
 import 'reports_stub.dart'
@@ -581,7 +582,7 @@ class _ReportsAnalyticsScreenState extends State<ReportsAnalyticsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF141211),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('orders').snapshots(),
+        stream: FirestorePaths.orders().snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFFE65C00)));
 

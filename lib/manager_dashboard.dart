@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:file_picker/file_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'core/data/firestore_paths.dart';
+import 'core/widgets/confirm_dialog.dart';
 import 'main.dart';
 import 'menu_data.dart';
 import 'receipt_screen.dart';
@@ -84,7 +86,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
   Future<void> _loadSettingsFromFirestore() async {
     try {
-      var doc = await FirebaseFirestore.instance.collection('settings').doc('business_settings').get();
+      var doc = await FirestorePaths.businessSettings().get();
       if (doc.exists && doc.data() != null) {
         var d = doc.data()!;
         if (mounted) {
@@ -127,7 +129,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       int parsedTables = int.tryParse(numberOfTablesController.text.trim()) ?? 12;
       if (parsedTables <= 0) parsedTables = 12;
 
-      await FirebaseFirestore.instance.collection('settings').doc('business_settings').set({
+      await FirestorePaths.businessSettings().set({
         'shopLogoBase64': shopLogoBase64,
         'shopName': shopNameController.text.trim(),
         'tagline': taglineController.text.trim(),
@@ -177,8 +179,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       setState(() => isSearchingCustomer = true);
 
       try {
-        var querySnap = await FirebaseFirestore.instance
-            .collection('orders')
+        var querySnap = await FirestorePaths.orders()
             .where('customerPhone', isEqualTo: phone)
             .get();
 
@@ -404,10 +405,10 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
             onPressed: () async {
               Navigator.pop(ctx);
               try {
-                var orderSnap = await FirebaseFirestore.instance.collection('orders').doc(docId).get();
+                var orderSnap = await FirestorePaths.orders().doc(docId).get();
                 var oData = orderSnap.data() ?? {};
 
-                await FirebaseFirestore.instance.collection('orders').doc(docId).update({
+                await FirestorePaths.orders().doc(docId).update({
                   'status': 'completed',
                   'kitchenStatus': 'completed',
                   'completedAt': FieldValue.serverTimestamp(),
@@ -452,7 +453,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
   void updatePaymentStatus(String docId, String newPaymentStatus) async {
     try {
-      await FirebaseFirestore.instance.collection('orders').doc(docId).update({'paymentStatus': newPaymentStatus});
+      await FirestorePaths.orders().doc(docId).update({'paymentStatus': newPaymentStatus});
     } catch (e) {
       debugPrint("Error: $e");
     }
@@ -488,7 +489,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
             onPressed: () async {
               Navigator.pop(ctx);
               try {
-                await FirebaseFirestore.instance.collection('orders').doc(docId).delete();
+                await FirestorePaths.orders().doc(docId).delete();
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -509,7 +510,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
   void updateOrderStatus(String docId, String newStatus) async {
     try {
-      await FirebaseFirestore.instance.collection('orders').doc(docId).update({
+      await FirestorePaths.orders().doc(docId).update({
         'status': newStatus,
         'kitchenStatus': newStatus,
       });
@@ -519,8 +520,21 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   }
 
   Future<void> _uploadMenuToFirebase(BuildContext context) async {
+    // Safety guard: this replaces the ENTIRE live menu with the static file.
+    // Any category/item added or deleted from the app would be lost.
+    final confirmed = await showDangerConfirmDialog(
+      context,
+      title: 'Reset Live Menu?',
+      message: 'Yeh poora live menu DELETE karke code wala default menu daal dega. '
+          'App se add/delete kiye gaye saare categories aur items permanently chale jayenge.\n\n'
+          'Agar aapko sirf ek item badalna hai, to yeh button mat dabayein.',
+      confirmLabel: 'Reset Menu',
+      confirmText: 'RESET',
+    );
+    if (!confirmed) return;
+
     try {
-      var collection = FirebaseFirestore.instance.collection('menu_categories');
+      var collection = FirestorePaths.menuCategories();
       var snapshots = await collection.get();
       for (var doc in snapshots.docs) {
         await doc.reference.delete();
@@ -662,7 +676,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
     if (editingOrderDoc == null) {
       List initialItems = tempCart.map((e) => {...e, 'isDone': false}).toList();
-      await FirebaseFirestore.instance.collection('orders').add({
+      await FirestorePaths.orders().add({
         'deviceId': 'counter_manager_${DateTime.now().millisecondsSinceEpoch}',
         'customerName': finalDisplayName,
         'tableNo': tableText,
@@ -683,7 +697,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     } else {
       bool hasAnyNew = tempCart.any((e) => (e['isDone'] ?? false) == false);
 
-      await FirebaseFirestore.instance.collection('orders').doc(editingOrderDoc!.id).update({
+      await FirestorePaths.orders().doc(editingOrderDoc!.id).update({
         'customerName': finalDisplayName,
         'tableNo': tableText,
         'customerPhone': custPhone,
@@ -1185,7 +1199,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     DateTime startOfToday = DateTime(now.year, now.month, now.day);
 
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('orders').snapshots(),
+      stream: FirestorePaths.orders().snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator(color: Color(0xFFE65C00)));
@@ -1642,7 +1656,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     DateTime startOfToday = DateTime(now.year, now.month, now.day);
 
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('orders').snapshots(),
+      stream: FirestorePaths.orders().snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFFE65C00)));
 
@@ -1984,7 +1998,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
   Widget _buildMenuManagementBody() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('menu_categories').snapshots(),
+      stream: FirestorePaths.menuCategories().snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator(color: Color(0xFFE65C00)));
@@ -2183,7 +2197,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
               if (catName.isEmpty) return;
               Navigator.pop(ctx);
 
-              await FirebaseFirestore.instance.collection('menu_categories').add({
+              await FirestorePaths.menuCategories().add({
                 'categoryName': catName,
                 'items': [],
               });
@@ -2299,7 +2313,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
                 Navigator.pop(ctx);
                 List updated = List.from(currentItems)..add(newItem);
-                await FirebaseFirestore.instance.collection('menu_categories').doc(catDocId).update({'items': updated});
+                await FirestorePaths.menuCategories().doc(catDocId).update({'items': updated});
 
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Item "$name" add ho gaya!'), backgroundColor: Colors.green));
@@ -2326,7 +2340,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
             onPressed: () async {
               Navigator.pop(ctx);
-              await FirebaseFirestore.instance.collection('menu_categories').doc(catDocId).delete();
+              await FirestorePaths.menuCategories().doc(catDocId).delete();
             },
             child: const Text('Delete'),
           ),
@@ -2337,7 +2351,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
   void _deleteMenuItem(String catDocId, List currentItems, int itemIndex) async {
     List updated = List.from(currentItems)..removeAt(itemIndex);
-    await FirebaseFirestore.instance.collection('menu_categories').doc(catDocId).update({'items': updated});
+    await FirestorePaths.menuCategories().doc(catDocId).update({'items': updated});
   }
 
   Widget _buildSettingsBody() {
@@ -2710,7 +2724,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
   Widget _buildOrderFormBody() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('menu_categories').snapshots(),
+      stream: FirestorePaths.menuCategories().snapshots(),
       builder: (context, menuSnapshot) {
         List liveMenuCategories = restaurantMenuCategories;
         if (menuSnapshot.hasData && menuSnapshot.data!.docs.isNotEmpty) {
