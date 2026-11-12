@@ -21,13 +21,22 @@
   // 2) Load the rendering engine from this site (build/web/canvaskit/), not
   //    from gstatic.com, which some iPhones/networks/blockers stop.
   //    No serviceWorkerSettings: no new service worker is registered.
-  try {
-    _flutter.loader.load({
-      config: { canvasKitBaseUrl: 'canvaskit/' },
-    }).catch(function (e) {
+  function start() {
+    try {
+      _flutter.loader.load({
+        config: { canvasKitBaseUrl: 'canvaskit/' },
+      }).catch(function (e) {
+        if (window.cafePosStartupError) window.cafePosStartupError(e);
+      });
+    } catch (e) {
       if (window.cafePosStartupError) window.cafePosStartupError(e);
-    });
-  } catch (e) {
-    if (window.cafePosStartupError) window.cafePosStartupError(e);
+    }
   }
+
+  // 3) Start once the self-hosted Firebase SDK is ready (see index.html);
+  //    never wait more than 15 s for it.
+  var started = false;
+  function once() { if (!started) { started = true; start(); } }
+  (window.cafePosFirebaseReady || Promise.resolve()).then(once, once);
+  setTimeout(once, 15000);
 })();

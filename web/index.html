@@ -102,6 +102,34 @@
       }, 25000);
     })();
   </script>
+  <!-- Firebase JS SDK served from this site (normally FlutterFire loads it
+       from www.gstatic.com, which some iPhones/networks block: the app then
+       never starts). Version must match firebase_core_web's
+       supportedFirebaseJsSdkVersion; tools/deploy_web.sh checks it.
+       If anything fails here, FlutterFire falls back to gstatic itself. -->
+  <script>
+    window.cafePosFirebaseReady = new Promise(function (resolve) { window.cafePosFirebaseDone = resolve; });
+  </script>
+  <script type="module">
+    var base = 'firebasejs/11.9.1/';
+    Promise.all([
+      import('./' + base + 'firebase-app.js'),
+      import('./' + base + 'firebase-auth.js'),
+      import('./' + base + 'firebase-firestore.js'),
+      import('./' + base + 'firebase-storage.js'),
+      import('./' + base + 'firebase-functions.js'),
+    ]).then(function (m) {
+      // The window names FlutterFire looks for (it skips its own loading
+      // when firebase_core is already present).
+      window.firebase_auth = m[1];
+      window.firebase_firestore = m[2];
+      window.firebase_storage = m[3];
+      window.firebase_functions = m[4];
+      window.firebase_core = m[0];
+    }).catch(function (e) {
+      console.warn('Local Firebase SDK failed, using the default loader', e);
+    }).finally(function () { window.cafePosFirebaseDone(); });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
