@@ -223,6 +223,24 @@ class AdminService {
     }
   }
 
+  /// Adds the recommended starter plans that don't exist yet (by name).
+  Future<int> addRecommendedPlans(List<SubscriptionPlan> existing) async {
+    final missing = missingRecommendedPlans(existing);
+    if (missing.isEmpty) return 0;
+    final batch = _db.batch();
+    for (final p in missing) {
+      batch.set(FirestorePaths.plans().doc(), {
+        ...p,
+        'isActive': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+    await audit('plan.create', details: {'recommended': [for (final p in missing) p['name']]});
+    return missing.length;
+  }
+
   // ---------------------------------------------------------- subscription
 
   /// Assigns (or changes) a cafe's plan and period. No payment is recorded

@@ -376,3 +376,82 @@ String auditLabel(String action) => switch (action) {
       'migration.run' => 'Data migration',
       _ => action,
     };
+
+// ------------------------------------------------------ recommended plans --
+
+/// Starter plans for this POS (features are what the app really does today).
+/// Prices are suggestions; edit them any time. Limits are informational: the
+/// app does not block extra logins/devices.
+const List<Map<String, Object?>> recommendedPlans = [
+  {
+    'name': 'Free Trial',
+    'tier': 'trial',
+    'monthlyPrice': 0,
+    'yearlyPrice': 0,
+    'trialDays': 14,
+    'maxStaff': null,
+    'maxDevices': null,
+    'description': 'Try everything for 14 days.',
+    'features': ['All features of Standard', 'No card needed', 'Data stays when you upgrade'],
+  },
+  {
+    'name': 'Basic',
+    'tier': 'basic',
+    'monthlyPrice': 499,
+    'yearlyPrice': 4999,
+    'trialDays': 0,
+    'maxStaff': 2,
+    'maxDevices': 2,
+    'description': 'For a small cafe or takeaway counter.',
+    'features': [
+      'POS billing with GST and discounts',
+      'Tables and takeaway tokens',
+      'Menu with sizes, prices and add-ons',
+      'Sequential bill numbers',
+      'Print receipt and WhatsApp bill',
+      'Daily sales dashboard',
+    ],
+  },
+  {
+    'name': 'Standard',
+    'tier': 'standard',
+    'monthlyPrice': 899,
+    'yearlyPrice': 8999,
+    'trialDays': 0,
+    'maxStaff': 5,
+    'maxDevices': 4,
+    'description': 'For a busy cafe with a kitchen team.',
+    'features': [
+      'Everything in Basic',
+      'Kitchen screen with new-order alerts',
+      'Extra (off-menu) items on bills',
+      'Reports and CSV export',
+      'Customer directory',
+      'Orders history: view, print, share, edit',
+      'Business day past midnight',
+    ],
+  },
+  {
+    'name': 'Premium',
+    'tier': 'premium',
+    'monthlyPrice': 1499,
+    'yearlyPrice': 14999,
+    'trialDays': 0,
+    'maxStaff': null,
+    'maxDevices': null,
+    'description': 'For high-volume cafes that want hands-on help.',
+    'features': [
+      'Everything in Standard',
+      'Unlimited logins and devices',
+      'Menu setup done for you',
+      'Logo and receipt branding setup',
+      'Priority support',
+    ],
+  },
+];
+
+/// Recommended plans not created yet (matched by name, case-insensitive).
+List<Map<String, Object?>> missingRecommendedPlans(List<SubscriptionPlan> existing) {
+  final have = {for (final p in existing) p.name.trim().toLowerCase()};
+  return [for (final p in recommendedPlans) if (!have.contains((p['name'] as String).toLowerCase())) p];
+}

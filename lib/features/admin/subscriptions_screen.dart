@@ -38,6 +38,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
             title: 'Subscriptions',
             subtitle: 'Plans, trials and renewals. No payment gateway: money is recorded when received.',
             actions: [
+              if (_tab == 1 && d.plans.isNotEmpty && missingRecommendedPlans(d.plans).isNotEmpty)
+                OutlinedButton.icon(onPressed: () => _addRecommended(context, d), icon: const Icon(Icons.auto_awesome_outlined, size: 18), label: const Text('Add recommended plans')),
               if (_tab == 1) FilledButton.icon(key: const Key('new-plan'), onPressed: () => showPlanForm(context), icon: const Icon(Icons.add, size: 18), label: const Text('New plan')),
             ],
           ),
@@ -138,8 +140,17 @@ class _Plans extends StatelessWidget {
         child: EmptyState(
           icon: Icons.workspace_premium_outlined,
           title: 'No plans yet',
-          message: 'Create plans like Free Trial, Basic, Standard and Premium with your own prices.',
-          action: FilledButton.icon(onPressed: () => showPlanForm(context), icon: const Icon(Icons.add), label: const Text('New plan')),
+          message: 'Start with the recommended plans for this POS (Free Trial, Basic ₹499, Standard ₹899, Premium ₹1,499 per month) '
+              'and edit the prices any time, or create your own.',
+          action: Wrap(spacing: Space.sm, runSpacing: Space.sm, alignment: WrapAlignment.center, children: [
+            FilledButton.icon(
+              key: const Key('add-recommended'),
+              onPressed: () => _addRecommended(context, d),
+              icon: const Icon(Icons.auto_awesome_outlined),
+              label: const Text('Add recommended plans'),
+            ),
+            OutlinedButton.icon(onPressed: () => showPlanForm(context), icon: const Icon(Icons.add), label: const Text('New plan')),
+          ]),
         ),
       );
     }
@@ -180,5 +191,14 @@ class _Plans extends StatelessWidget {
           ),
         ),
     ]);
+  }
+}
+
+Future<void> _addRecommended(BuildContext context, AdminData d) async {
+  try {
+    final n = await AdminService.instance.addRecommendedPlans(d.plans);
+    if (context.mounted) showSuccess(context, n == 0 ? 'All recommended plans already exist' : '$n plans added. Tap a plan to edit its price.');
+  } catch (e) {
+    if (context.mounted) showError(context, 'Could not add plans: $e');
   }
 }

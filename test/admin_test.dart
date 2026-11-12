@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pos_app/core/data/firestore_paths.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
 import 'package:pos_app/features/admin/admin_data.dart';
+import 'package:pos_app/features/admin/admin_dialogs.dart';
 import 'package:pos_app/features/admin/admin_service.dart';
 import 'package:pos_app/features/admin/cafe_detail_screen.dart';
 import 'package:pos_app/features/admin/cafes_screen.dart';
@@ -229,6 +230,103 @@ void main() {
       final controller = AdminDataController.fixed(const AdminData(loading: false));
       await lt.pumpAt(t, lt.sizes['phone']!, PaymentsScreen(data: controller), AppTheme.light());
       expect(find.text('No payments recorded yet'), findsOneWidget);
+    });
+  });
+
+  group('dialogs open, save and write (fake Firestore)', () {
+    late FakeFirebaseFirestore db;
+    setUpAll(lt.loadInter);
+    setUp(() {
+      db = FakeFirebaseFirestore();
+      FirestorePaths.overrideDb = db;
+    });
+    tearDown(() => FirestorePaths.overrideDb = null);
+
+    Future<void> open(WidgetTester t, Size size, Future<void> Function(BuildContext) show) async {
+      await lt.pumpAt(
+        t,
+        size,
+        Builder(builder: (c) => Center(child: TextButton(onPressed: () => show(c), child: const Text('open')))),
+        AppTheme.light(),
+      );
+      await t.tap(find.text('open'));
+      await t.pumpAndSettle();
+      expect(t.takeException(), isNull);
+    }
+
+    for (final s in {'phone': lt.sizes['phone']!, 'desktop': lt.sizes['desktop']!}.entries) {
+      testWidgets('new plan · ${s.key}', (t) async {
+        await open(t, s.value, (c) => showPlanForm(c));
+        expect(find.byKey(const Key('plan-name')), findsOneWidget);
+        await t.enterText(find.byKey(const Key('plan-name')), 'Gold');
+        await t.enterText(find.widgetWithText(TextField, 'Monthly price'), '1199');
+        await t.tap(find.byKey(const Key('plan-save')));
+        await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await t.pumpAndSettle();
+        final plans = await t.runAsync(() => db.collection('plans').get());
+        expect(plans!.docs.single.data()['name'], 'Gold');
+        expect(plans.docs.single.data()['monthlyPrice'], 1199);
+      });
+
+      testWidgets('new cafe with a trial · ${s.key}', (t) async {
+        String? id;
+        await open(t, s.value, (c) async => id = await showCafeForm(c, platform: PlatformSettings(const {'trialDays': 14})));
+        await t.enterText(find.widgetWithText(TextFormField, 'Cafe name *'), 'Chai Point');
+        await t.enterText(find.widgetWithText(TextFormField, 'City'), 'Surat');
+        await t.ensureVisible(find.byKey(const Key('cafe-save')));
+        await t.tap(find.byKey(const Key('cafe-save')));
+        await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await t.pumpAndSettle();
+        expect(id, isNotNull);
+        final cafe = await t.runAsync(() => db.collection('cafes').doc(id).get());
+        expect(cafe!.data()!['name'], 'Chai Point');
+        expect(cafe.data()!['subscription']['status'], 'trial');
+        final settings = await t.runAsync(() => db.doc('cafes/$id/settings/business').get());
+        expect(settings!.data()!['dayEndsAt'], '05:00');
+      });
+
+      testWidgets('assign plan, renew, record payment · ${s.key}', (t) async {
+        await t.runAsync(() => db.collection('cafes').doc('flammy').set(sampleCafes().first.data));
+        final cafe = sampleCafes().first;
+        final plans = sampleData().plans;
+        await open(t, s.value, (c) => showAssignPlan(c, cafe, plans));
+        await t.tap(find.byKey(const Key('assign-save')));
+        await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await t.pumpAndSettle();
+        var doc = await t.runAsync(() => db.collection('cafes').doc('flammy').get());
+        expect(doc!.data()!['subscription']['planName'], 'Standard');
+
+        await t.tap(find.text('open'));
+        await t.pumpAndSettle();
+        await t.tap(find.text('Cancel'));
+        await t.pumpAndSettle();
+
+        await open(t, s.value, (c) => showRenew(c, cafe));
+        await t.tap(find.text('Renew').last);
+        await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await t.pumpAndSettle();
+        final history = await t.runAsync(() => db.collection('cafes/flammy/subscriptionHistory').get());
+        expect(history!.docs.length, 2);
+
+        await open(t, s.value, (c) => showRecordPayment(c, [cafe], cafe: cafe));
+        await t.enterText(find.byKey(const Key('payment-amount')), '999');
+        await t.ensureVisible(find.byKey(const Key('payment-save')));
+        await t.tap(find.byKey(const Key('payment-save')));
+        await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await t.pumpAndSettle();
+        final pays = await t.runAsync(() => db.collection('subscriptionPayments').get());
+        expect(pays!.docs.single.data()['receiptNo'], 'RCPT-0001');
+        expect(t.takeException(), isNull);
+      });
+    }
+
+    test('recommended plans are added once', () async {
+      expect(await AdminService.instance.addRecommendedPlans(const []), 4);
+      final first = (await db.collection('plans').get()).docs.map((d) => SubscriptionPlan(d.id, d.data())).toList();
+      expect(first.map((p) => p.name).toSet(), {'Free Trial', 'Basic', 'Standard', 'Premium'});
+      expect(first.firstWhere((p) => p.name == 'Basic').priceLabel, '₹499/mo · ₹4,999/yr');
+      expect(first.firstWhere((p) => p.name == 'Free Trial').trialDays, 14);
+      expect(await AdminService.instance.addRecommendedPlans(first), 0);
     });
   });
 }

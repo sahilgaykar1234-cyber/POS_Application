@@ -13,7 +13,12 @@ import 'admin_widgets.dart';
 /// Forms of the Super Admin panel. Every save is a Firestore write that the
 /// rules allow only for the Super Admin, and each one is audit-logged.
 
-Future<T?> _sheet<T>(BuildContext context, {required String title, required Widget Function(BuildContext, StateSetter) body, required List<Widget> Function(BuildContext) actions}) {
+Future<T?> _sheet<T>(
+  BuildContext context, {
+  required String title,
+  required Widget Function(BuildContext, StateSetter) body,
+  required List<Widget> Function(BuildContext) actions,
+}) {
   return showDialog<T>(
     context: context,
     builder: (ctx) => StatefulBuilder(
@@ -27,11 +32,27 @@ Future<T?> _sheet<T>(BuildContext context, {required String title, required Widg
   );
 }
 
-Widget _two(BuildContext context, Widget a, Widget b) => LayoutBuilder(
-      builder: (context, c) => c.maxWidth < 440
-          ? Column(children: [a, const SizedBox(height: Space.md), b])
-          : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: a), const SizedBox(width: Space.md), Expanded(child: b)]),
-    );
+/// Two fields side by side, stacked on phones. Decided from the screen
+/// width: dialogs measure their content (intrinsic size), which a
+/// LayoutBuilder can't take part in (that left the dialog blank).
+Widget _two(BuildContext context, Widget a, Widget b) => MediaQuery.sizeOf(context).width < 600
+    ? Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          a,
+          const SizedBox(height: Space.md),
+          b,
+        ],
+      )
+    : Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: a),
+          const SizedBox(width: Space.md),
+          Expanded(child: b),
+        ],
+      );
 
 Future<DateTime?> _pickDay(BuildContext context, DateTime initial) =>
     showDatePicker(context: context, initialDate: initial, firstDate: DateTime(2020), lastDate: DateTime(2100));
@@ -59,112 +80,125 @@ Future<String?> showCafeForm(
   var saving = false;
 
   Widget field(String k, String label, {bool required = false, TextInputType? type, int lines = 1}) => TextFormField(
-        controller: c[k],
-        keyboardType: type,
-        maxLines: lines,
-        decoration: InputDecoration(labelText: required ? '$label *' : label),
-        validator: (v) {
-          final t = (v ?? '').trim();
-          if (required && t.isEmpty) return 'Required';
-          if (k == 'ownerEmail' && t.isNotEmpty && !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(t)) return 'Not a valid email';
-          return null;
-        },
-      );
+    controller: c[k],
+    keyboardType: type,
+    maxLines: lines,
+    decoration: InputDecoration(labelText: required ? '$label *' : label),
+    validator: (v) {
+      final t = (v ?? '').trim();
+      if (required && t.isEmpty) return 'Required';
+      if (k == 'ownerEmail' && t.isNotEmpty && !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(t)) return 'Not a valid email';
+      return null;
+    },
+  );
 
   return showDialog<String>(
     context: context,
     barrierDismissible: false,
-    builder: (ctx) => StatefulBuilder(builder: (ctx, setState) {
-      Future<void> save() async {
-        if (!form.currentState!.validate()) return;
-        setState(() => saving = true);
-        final profile = {for (final e in c.entries) e.key: e.value.text.trim()};
-        try {
-          if (isNew) {
-            final id = await AdminService.instance.createCafe(
-              profile: profile,
-              dayEndsAt: dayEnds,
-              trialPlan: trialPlan,
-              trialDays: startTrial ? trialDays : null,
-            );
-            if (ctx.mounted) Navigator.pop(ctx, id);
-          } else {
-            await AdminService.instance.updateCafe(cafe, profile, dayEndsAt: dayEnds);
-            if (ctx.mounted) Navigator.pop(ctx, cafe.id);
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) {
+        Future<void> save() async {
+          if (!form.currentState!.validate()) return;
+          setState(() => saving = true);
+          final profile = {for (final e in c.entries) e.key: e.value.text.trim()};
+          try {
+            if (isNew) {
+              final id = await AdminService.instance.createCafe(
+                profile: profile,
+                dayEndsAt: dayEnds,
+                trialPlan: trialPlan,
+                trialDays: startTrial ? trialDays : null,
+              );
+              if (ctx.mounted) Navigator.pop(ctx, id);
+            } else {
+              await AdminService.instance.updateCafe(cafe, profile, dayEndsAt: dayEnds);
+              if (ctx.mounted) Navigator.pop(ctx, cafe.id);
+            }
+          } catch (e) {
+            setState(() => saving = false);
+            if (ctx.mounted) showError(ctx, 'Could not save: $e');
           }
-        } catch (e) {
-          setState(() => saving = false);
-          if (ctx.mounted) showError(ctx, 'Could not save: $e');
         }
-      }
 
-      return AlertDialog(
-        title: Text(isNew ? 'New cafe' : 'Edit ${cafe.name}'),
-        scrollable: true,
-        content: SizedBox(
-          width: 600,
-          child: Form(
-            key: form,
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              field('name', 'Cafe name', required: true),
-              const SizedBox(height: Space.md),
-              _two(ctx, field('ownerName', 'Owner name'), field('contactNumber', 'Phone', type: TextInputType.phone)),
-              const SizedBox(height: Space.md),
-              _two(ctx, field('ownerEmail', 'Email', type: TextInputType.emailAddress), field('gstNumber', 'GST number')),
-              const SizedBox(height: Space.md),
-              field('address', 'Address', lines: 2),
-              const SizedBox(height: Space.md),
-              _two(ctx, field('city', 'City'), field('state', 'State')),
-              const SizedBox(height: Space.md),
-              field('country', 'Country'),
-              const SizedBox(height: Space.md),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Business day ends at'),
-                subtitle: const Text('Orders after midnight until this time count in the previous day.'),
-                trailing: OutlinedButton(
-                  onPressed: () async {
-                    final t = await showTimePicker(context: ctx, initialTime: TimeOfDay(hour: dayEnds ~/ 60, minute: dayEnds % 60));
-                    if (t == null) return;
-                    final m = t.hour * 60 + t.minute;
-                    if (m > BusinessDay.maxCutoffMinutes) {
-                      if (ctx.mounted) showError(ctx, 'Pick a time between 12:00 AM and 12:00 PM.');
-                      return;
-                    }
-                    setState(() => dayEnds = m);
-                  },
-                  child: Text(BusinessDay.label(dayEnds)),
-                ),
+        return AlertDialog(
+          title: Text(isNew ? 'New cafe' : 'Edit ${cafe.name}'),
+          scrollable: true,
+          content: SizedBox(
+            width: 600,
+            child: Form(
+              key: form,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  field('name', 'Cafe name', required: true),
+                  const SizedBox(height: Space.md),
+                  _two(ctx, field('ownerName', 'Owner name'), field('contactNumber', 'Phone', type: TextInputType.phone)),
+                  const SizedBox(height: Space.md),
+                  _two(ctx, field('ownerEmail', 'Email', type: TextInputType.emailAddress), field('gstNumber', 'GST number')),
+                  const SizedBox(height: Space.md),
+                  field('address', 'Address', lines: 2),
+                  const SizedBox(height: Space.md),
+                  _two(ctx, field('city', 'City'), field('state', 'State')),
+                  const SizedBox(height: Space.md),
+                  field('country', 'Country'),
+                  const SizedBox(height: Space.md),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Business day ends at'),
+                    subtitle: const Text('Orders after midnight until this time count in the previous day.'),
+                    trailing: OutlinedButton(
+                      onPressed: () async {
+                        final t = await showTimePicker(
+                          context: ctx,
+                          initialTime: TimeOfDay(hour: dayEnds ~/ 60, minute: dayEnds % 60),
+                        );
+                        if (t == null) return;
+                        final m = t.hour * 60 + t.minute;
+                        if (m > BusinessDay.maxCutoffMinutes) {
+                          if (ctx.mounted) showError(ctx, 'Pick a time between 12:00 AM and 12:00 PM.');
+                          return;
+                        }
+                        setState(() => dayEnds = m);
+                      },
+                      child: Text(BusinessDay.label(dayEnds)),
+                    ),
+                  ),
+                  if (isNew) ...[
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: startTrial,
+                      onChanged: (v) => setState(() => startTrial = v),
+                      title: const Text('Start a free trial'),
+                      subtitle: Text(startTrial ? '$trialDays days, then assign a plan' : 'Assign a plan later'),
+                    ),
+                    if (startTrial)
+                      Row(
+                        children: [
+                          const Text('Trial length'),
+                          const Spacer(),
+                          IconButton(onPressed: trialDays > 1 ? () => setState(() => trialDays--) : null, icon: const Icon(Icons.remove_circle_outline)),
+                          Text('$trialDays days', style: const TextStyle(fontWeight: FontWeight.w700)),
+                          IconButton(onPressed: trialDays < 90 ? () => setState(() => trialDays++) : null, icon: const Icon(Icons.add_circle_outline)),
+                        ],
+                      ),
+                    const SizedBox(height: Space.xs),
+                    Text(
+                      'After saving, create the cafe\'s login with the admin script (shown next).',
+                      style: TextStyle(color: ctx.palette.inkSubtle, fontSize: 12),
+                    ),
+                  ],
+                ],
               ),
-              if (isNew) ...[
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: startTrial,
-                  onChanged: (v) => setState(() => startTrial = v),
-                  title: const Text('Start a free trial'),
-                  subtitle: Text(startTrial ? '$trialDays days, then assign a plan' : 'Assign a plan later'),
-                ),
-                if (startTrial)
-                  Row(children: [
-                    const Text('Trial length'),
-                    const Spacer(),
-                    IconButton(onPressed: trialDays > 1 ? () => setState(() => trialDays--) : null, icon: const Icon(Icons.remove_circle_outline)),
-                    Text('$trialDays days', style: const TextStyle(fontWeight: FontWeight.w700)),
-                    IconButton(onPressed: trialDays < 90 ? () => setState(() => trialDays++) : null, icon: const Icon(Icons.add_circle_outline)),
-                  ]),
-                const SizedBox(height: Space.xs),
-                Text('After saving, create the cafe\'s login with the admin script (shown next).',
-                    style: TextStyle(color: ctx.palette.inkSubtle, fontSize: 12)),
-              ],
-            ]),
+            ),
           ),
-        ),
-        actions: [
-          OutlinedButton(onPressed: saving ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(key: const Key('cafe-save'), onPressed: saving ? null : save, child: Text(saving ? 'Saving…' : (isNew ? 'Create cafe' : 'Save'))),
-        ],
-      );
-    }),
+          actions: [
+            OutlinedButton(onPressed: saving ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(key: const Key('cafe-save'), onPressed: saving ? null : save, child: Text(saving ? 'Saving…' : (isNew ? 'Create cafe' : 'Save'))),
+          ],
+        );
+      },
+    ),
   );
 }
 
@@ -206,43 +240,85 @@ Future<void> showPlanForm(BuildContext context, {SubscriptionPlan? plan}) {
   return _sheet<void>(
     context,
     title: plan == null ? 'New plan' : 'Edit plan',
-    body: (ctx, setState) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      _two(
-        ctx,
-        TextField(key: const Key('plan-name'), controller: name, decoration: const InputDecoration(labelText: 'Plan name *')),
-        DropdownButtonFormField<PlanTier>(
-          initialValue: tier,
-          decoration: const InputDecoration(labelText: 'Type'),
-          items: [for (final t in PlanTier.values) DropdownMenuItem(value: t, child: Text(t.label))],
-          onChanged: (v) => setState(() => tier = v ?? tier),
-        ),
-      ),
-      const SizedBox(height: Space.md),
-      if (tier == PlanTier.trial)
-        TextField(controller: trial, keyboardType: TextInputType.number, inputFormatters: digits, decoration: const InputDecoration(labelText: 'Trial length (days) *'))
-      else
+    body: (ctx, setState) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         _two(
           ctx,
-          TextField(controller: monthly, keyboardType: TextInputType.number, inputFormatters: digits, decoration: const InputDecoration(labelText: 'Monthly price', prefixText: '₹ ')),
-          TextField(controller: yearly, keyboardType: TextInputType.number, inputFormatters: digits, decoration: const InputDecoration(labelText: 'Yearly price', prefixText: '₹ ')),
+          TextField(
+            key: const Key('plan-name'),
+            controller: name,
+            decoration: const InputDecoration(labelText: 'Plan name *'),
+          ),
+          DropdownButtonFormField<PlanTier>(
+            isExpanded: true,
+            initialValue: tier,
+            decoration: const InputDecoration(labelText: 'Type'),
+            items: [for (final t in PlanTier.values) DropdownMenuItem(value: t, child: Text(t.label))],
+            onChanged: (v) => setState(() => tier = v ?? tier),
+          ),
         ),
-      const SizedBox(height: Space.md),
-      _two(
-        ctx,
-        TextField(controller: staff, keyboardType: TextInputType.number, inputFormatters: digits, decoration: const InputDecoration(labelText: 'Max staff logins', hintText: 'Empty = no limit')),
-        TextField(controller: devices, keyboardType: TextInputType.number, inputFormatters: digits, decoration: const InputDecoration(labelText: 'Max devices', hintText: 'Empty = no limit')),
-      ),
-      const SizedBox(height: Space.md),
-      TextField(controller: features, minLines: 3, maxLines: 6, decoration: const InputDecoration(labelText: 'Features (one per line)', alignLabelWithHint: true)),
-      const SizedBox(height: Space.md),
-      TextField(controller: desc, decoration: const InputDecoration(labelText: 'Short description')),
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        value: active,
-        onChanged: (v) => setState(() => active = v),
-        title: const Text('Available for new subscriptions'),
-      ),
-    ]),
+        const SizedBox(height: Space.md),
+        if (tier == PlanTier.trial)
+          TextField(
+            controller: trial,
+            keyboardType: TextInputType.number,
+            inputFormatters: digits,
+            decoration: const InputDecoration(labelText: 'Trial length (days) *'),
+          )
+        else
+          _two(
+            ctx,
+            TextField(
+              controller: monthly,
+              keyboardType: TextInputType.number,
+              inputFormatters: digits,
+              decoration: const InputDecoration(labelText: 'Monthly price', prefixText: '₹ '),
+            ),
+            TextField(
+              controller: yearly,
+              keyboardType: TextInputType.number,
+              inputFormatters: digits,
+              decoration: const InputDecoration(labelText: 'Yearly price', prefixText: '₹ '),
+            ),
+          ),
+        const SizedBox(height: Space.md),
+        _two(
+          ctx,
+          TextField(
+            controller: staff,
+            keyboardType: TextInputType.number,
+            inputFormatters: digits,
+            decoration: const InputDecoration(labelText: 'Max staff logins', hintText: 'Empty = no limit'),
+          ),
+          TextField(
+            controller: devices,
+            keyboardType: TextInputType.number,
+            inputFormatters: digits,
+            decoration: const InputDecoration(labelText: 'Max devices', hintText: 'Empty = no limit'),
+          ),
+        ),
+        const SizedBox(height: Space.md),
+        TextField(
+          controller: features,
+          minLines: 3,
+          maxLines: 6,
+          decoration: const InputDecoration(labelText: 'Features (one per line)', alignLabelWithHint: true),
+        ),
+        const SizedBox(height: Space.md),
+        TextField(
+          controller: desc,
+          decoration: const InputDecoration(labelText: 'Short description'),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: active,
+          onChanged: (v) => setState(() => active = v),
+          title: const Text('Available for new subscriptions'),
+        ),
+      ],
+    ),
     actions: (ctx) => [
       OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
       StatefulBuilder(
@@ -318,69 +394,83 @@ Future<void> showAssignPlan(BuildContext context, CafeSummary cafe, List<Subscri
       }
 
       final isTrial = plan?.tier == PlanTier.trial;
-      return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        DropdownButtonFormField<String>(
-          key: const Key('assign-plan'),
-          initialValue: plan?.id,
-          decoration: const InputDecoration(labelText: 'Plan'),
-          items: [for (final p in usable) DropdownMenuItem(value: p.id, child: Text('${p.name} · ${p.priceLabel}', overflow: TextOverflow.ellipsis))],
-          onChanged: (id) => setState(() {
-            plan = usable.firstWhere((p) => p.id == id);
-            recalc();
-          }),
-        ),
-        const SizedBox(height: Space.md),
-        if (!isTrial)
-          SegmentedButton<String>(
-            segments: const [ButtonSegment(value: 'monthly', label: Text('Monthly')), ButtonSegment(value: 'yearly', label: Text('Yearly'))],
-            selected: {cycle},
-            onSelectionChanged: (s) => setState(() {
-              cycle = s.first;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DropdownButtonFormField<String>(
+            key: const Key('assign-plan'),
+            isExpanded: true,
+            initialValue: plan?.id,
+            decoration: const InputDecoration(labelText: 'Plan'),
+            items: [
+              for (final p in usable)
+                DropdownMenuItem(
+                  value: p.id,
+                  child: Text('${p.name} · ${p.priceLabel}', overflow: TextOverflow.ellipsis),
+                ),
+            ],
+            onChanged: (id) => setState(() {
+              plan = usable.firstWhere((p) => p.id == id);
               recalc();
             }),
           ),
-        const SizedBox(height: Space.md),
-        _two(
-          ctx,
-          OutlinedButton.icon(
-            onPressed: () async {
-              final d = await _pickDay(ctx, start);
-              if (d == null) return;
-              setState(() {
-                start = d;
+          const SizedBox(height: Space.md),
+          if (!isTrial)
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'monthly', label: Text('Monthly')),
+                ButtonSegment(value: 'yearly', label: Text('Yearly')),
+              ],
+              selected: {cycle},
+              onSelectionChanged: (s) => setState(() {
+                cycle = s.first;
                 recalc();
-              });
-            },
-            icon: const Icon(Icons.event_outlined, size: 18),
-            label: Text('Starts ${Fmt.date(start)}'),
-          ),
-          OutlinedButton.icon(
-            onPressed: () async {
-              final d = await _pickDay(ctx, expiry);
-              if (d != null) setState(() => expiry = d);
-            },
-            icon: const Icon(Icons.event_available_outlined, size: 18),
-            label: Text('Ends ${Fmt.date(expiry)}'),
-          ),
-        ),
-        if (!isTrial) ...[
+              }),
+            ),
           const SizedBox(height: Space.md),
-          TextField(
-            controller: amount,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-            decoration: InputDecoration(labelText: 'Amount for this period', prefixText: '₹ ', helperText: cycle == 'yearly' ? 'Counted as amount ÷ 12 in MRR' : null),
+          _two(
+            ctx,
+            OutlinedButton.icon(
+              onPressed: () async {
+                final d = await _pickDay(ctx, start);
+                if (d == null) return;
+                setState(() {
+                  start = d;
+                  recalc();
+                });
+              },
+              icon: const Icon(Icons.event_outlined, size: 18),
+              label: Text('Starts ${Fmt.date(start)}'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final d = await _pickDay(ctx, expiry);
+                if (d != null) setState(() => expiry = d);
+              },
+              icon: const Icon(Icons.event_available_outlined, size: 18),
+              label: Text('Ends ${Fmt.date(expiry)}'),
+            ),
           ),
-          const SizedBox(height: Space.md),
-          SegmentedButton<String>(
-            segments: const [ButtonSegment(value: 'pending', label: Text('Payment pending')), ButtonSegment(value: 'paid', label: Text('Already paid'))],
-            selected: {paid},
-            onSelectionChanged: (s) => setState(() => paid = s.first),
-          ),
-          const SizedBox(height: Space.xs),
-          Text('"Already paid" does not record money. Use Record payment for that.', style: TextStyle(color: ctx.palette.inkSubtle, fontSize: 12)),
+          if (!isTrial) ...[
+            const SizedBox(height: Space.md),
+            TextField(
+              controller: amount,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+              decoration: InputDecoration(
+                labelText: 'Amount for this period',
+                prefixText: '₹ ',
+                helperText: cycle == 'yearly' ? 'Counted as amount ÷ 12 in MRR' : null,
+              ),
+            ),
+            const SizedBox(height: Space.md),
+            _payChoice(paid, (v) => setState(() => paid = v)),
+            const SizedBox(height: Space.xs),
+            Text('"Already paid" does not record money. Use Record payment for that.', style: TextStyle(color: ctx.palette.inkSubtle, fontSize: 12)),
+          ],
         ],
-      ]);
+      );
     },
     actions: (ctx) => [
       OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
@@ -421,6 +511,16 @@ Future<void> showAssignPlan(BuildContext context, CafeSummary cafe, List<Subscri
   );
 }
 
+/// "Payment pending" / "Already paid" as chips (they wrap on narrow phones).
+Widget _payChoice(String value, ValueChanged<String> onChanged) => Wrap(
+  spacing: Space.sm,
+  runSpacing: Space.xs,
+  children: [
+    ChoiceChip(label: const Text('Payment pending'), selected: value == 'pending', onSelected: (_) => onChanged('pending')),
+    ChoiceChip(label: const Text('Already paid'), selected: value == 'paid', onSelected: (_) => onChanged('paid')),
+  ],
+);
+
 Future<void> showRenew(BuildContext context, CafeSummary cafe) {
   final now = DateTime.now();
   final from = cafe.expiryDate != null && cafe.expiryDate!.isAfter(now) ? cafe.expiryDate! : now;
@@ -431,22 +531,29 @@ Future<void> showRenew(BuildContext context, CafeSummary cafe) {
   return _sheet<void>(
     context,
     title: 'Renew · ${cafe.name}',
-    body: (ctx, setState) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Text('${cafe.planName ?? 'Current plan'} · currently ${cafe.expiryDate == null ? 'no end date' : 'ends ${Fmt.date(cafe.expiryDate)}'}'),
-      const SizedBox(height: Space.md),
-      Wrap(spacing: Space.sm, children: [
-        for (final m in [1, 3, 6, 12])
-          ChoiceChip(label: Text(m == 12 ? '1 year' : '$m month${m == 1 ? '' : 's'}'), selected: months == m, onSelected: (_) => setState(() => months = m)),
-      ]),
-      const SizedBox(height: Space.md),
-      Text('New end date: ${Fmt.date(until())}', style: const TextStyle(fontWeight: FontWeight.w700)),
-      const SizedBox(height: Space.md),
-      SegmentedButton<String>(
-        segments: const [ButtonSegment(value: 'pending', label: Text('Payment pending')), ButtonSegment(value: 'paid', label: Text('Already paid'))],
-        selected: {paid},
-        onSelectionChanged: (s) => setState(() => paid = s.first),
-      ),
-    ]),
+    body: (ctx, setState) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('${cafe.planName ?? 'Current plan'} · currently ${cafe.expiryDate == null ? 'no end date' : 'ends ${Fmt.date(cafe.expiryDate)}'}'),
+        const SizedBox(height: Space.md),
+        Wrap(
+          spacing: Space.sm,
+          children: [
+            for (final m in [1, 3, 6, 12])
+              ChoiceChip(
+                label: Text(m == 12 ? '1 year' : '$m month${m == 1 ? '' : 's'}'),
+                selected: months == m,
+                onSelected: (_) => setState(() => months = m),
+              ),
+          ],
+        ),
+        const SizedBox(height: Space.md),
+        Text('New end date: ${Fmt.date(until())}', style: const TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: Space.md),
+        _payChoice(paid, (v) => setState(() => paid = v)),
+      ],
+    ),
     actions: (ctx) => [
       OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
       StatefulBuilder(
@@ -477,7 +584,8 @@ Future<void> confirmCancelSubscription(BuildContext context, CafeSummary cafe) a
   final ok = await showDangerConfirmDialog(
     context,
     title: 'Cancel ${cafe.name}\'s subscription?',
-    message: 'It will not be renewed. The cafe keeps working until ${cafe.expiryDate == null ? 'you set an end date' : Fmt.date(cafe.expiryDate)}; no data is deleted.',
+    message:
+        'It will not be renewed. The cafe keeps working until ${cafe.expiryDate == null ? 'you set an end date' : Fmt.date(cafe.expiryDate)}; no data is deleted.',
     confirmLabel: 'Cancel subscription',
   );
   if (!ok || !context.mounted) return;
@@ -515,62 +623,76 @@ Future<void> showRecordPayment(BuildContext context, List<CafeSummary> cafes, {C
     body: (ctx, setState) {
       if (live.isEmpty) return const Text('No cafes yet.');
       final c = selected!;
-      return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('For money already received (UPI, cash, bank). The app does not collect payments.',
-            style: TextStyle(color: ctx.palette.inkSubtle, fontSize: 13)),
-        const SizedBox(height: Space.md),
-        if (cafe == null) ...[
-          DropdownButtonFormField<String>(
-            initialValue: c.id,
-            decoration: const InputDecoration(labelText: 'Cafe'),
-            items: [for (final x in live) DropdownMenuItem(value: x.id, child: Text(x.name))],
-            onChanged: (id) => setState(() {
-              selected = live.firstWhere((x) => x.id == id);
-              if (selected!.amount > 0) amount.text = _num(selected!.amount);
-            }),
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'For money already received (UPI, cash, bank). The app does not collect payments.',
+            style: TextStyle(color: ctx.palette.inkSubtle, fontSize: 13),
           ),
           const SizedBox(height: Space.md),
-        ],
-        _two(
-          ctx,
+          if (cafe == null) ...[
+            DropdownButtonFormField<String>(
+              isExpanded: true,
+              initialValue: c.id,
+              decoration: const InputDecoration(labelText: 'Cafe'),
+              items: [for (final x in live) DropdownMenuItem(value: x.id, child: Text(x.name))],
+              onChanged: (id) => setState(() {
+                selected = live.firstWhere((x) => x.id == id);
+                if (selected!.amount > 0) amount.text = _num(selected!.amount);
+              }),
+            ),
+            const SizedBox(height: Space.md),
+          ],
+          _two(
+            ctx,
+            TextField(
+              key: const Key('payment-amount'),
+              controller: amount,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+              decoration: const InputDecoration(labelText: 'Amount received *', prefixText: '₹ '),
+            ),
+            DropdownButtonFormField<String>(
+              isExpanded: true,
+              initialValue: method,
+              decoration: const InputDecoration(labelText: 'Method'),
+              items: [for (final m in paymentMethods) DropdownMenuItem(value: m, child: Text(m))],
+              onChanged: (v) => setState(() => method = v ?? method),
+            ),
+          ),
+          const SizedBox(height: Space.md),
+          _two(
+            ctx,
+            TextField(
+              controller: ref,
+              decoration: const InputDecoration(labelText: 'Transaction / reference ID'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final d = await _pickDay(ctx, paidAt);
+                if (d != null) setState(() => paidAt = d);
+              },
+              icon: const Icon(Icons.event_outlined, size: 18),
+              label: Text('Received ${Fmt.date(paidAt)}'),
+            ),
+          ),
+          const SizedBox(height: Space.md),
           TextField(
-            key: const Key('payment-amount'),
-            controller: amount,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-            decoration: const InputDecoration(labelText: 'Amount received *', prefixText: '₹ '),
+            controller: notes,
+            decoration: const InputDecoration(labelText: 'Notes'),
           ),
-          DropdownButtonFormField<String>(
-            initialValue: method,
-            decoration: const InputDecoration(labelText: 'Method'),
-            items: [for (final m in paymentMethods) DropdownMenuItem(value: m, child: Text(m))],
-            onChanged: (v) => setState(() => method = v ?? method),
-          ),
-        ),
-        const SizedBox(height: Space.md),
-        _two(
-          ctx,
-          TextField(controller: ref, decoration: const InputDecoration(labelText: 'Transaction / reference ID')),
-          OutlinedButton.icon(
-            onPressed: () async {
-              final d = await _pickDay(ctx, paidAt);
-              if (d != null) setState(() => paidAt = d);
-            },
-            icon: const Icon(Icons.event_outlined, size: 18),
-            label: Text('Received ${Fmt.date(paidAt)}'),
-          ),
-        ),
-        const SizedBox(height: Space.md),
-        TextField(controller: notes, decoration: const InputDecoration(labelText: 'Notes')),
-        if (c.hasSubscription)
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: extend,
-            onChanged: (v) => setState(() => extend = v),
-            title: const Text('Extend the subscription'),
-            subtitle: Text(extend ? 'Until ${Fmt.date(extendTo(c))} (${monthsFor(c) == 12 ? '1 year' : '1 month'})' : 'Only record the payment'),
-          ),
-      ]);
+          if (c.hasSubscription)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: extend,
+              onChanged: (v) => setState(() => extend = v),
+              title: const Text('Extend the subscription'),
+              subtitle: Text(extend ? 'Until ${Fmt.date(extendTo(c))} (${monthsFor(c) == 12 ? '1 year' : '1 month'})' : 'Only record the payment'),
+            ),
+        ],
+      );
     },
     actions: (ctx) => [
       OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
@@ -616,16 +738,18 @@ Future<void> showRecordPayment(BuildContext context, List<CafeSummary> cafes, {C
 
 /// After a cafe is created: how to give it a login.
 Future<void> showNewCafeLoginHelp(BuildContext context, String cafeId, String cafeName) => showAdminCommand(
-      context,
-      title: '$cafeName is created',
-      why: 'Now create its login. Logins need the admin script (they are Firebase accounts with a role and the cafe ID). '
-          'Pick a short username; staff sign in with it and choose Manager or Captain view.',
-      command: loginCommand(cafeId),
-    );
+  context,
+  title: '$cafeName is created',
+  why:
+      'Now create its login. Logins need the admin script (they are Firebase accounts with a role and the cafe ID). '
+      'Pick a short username; staff sign in with it and choose Manager or Captain view.',
+  command: loginCommand(cafeId),
+);
 
 /// Short date or a dash.
 String fmtDate(DateTime? d) => d == null ? '—' : Fmt.date(d);
 
 /// Why logins are not created inside the app.
-const kLoginHelp = 'Logins are Firebase accounts with a role and a cafe. They are created and switched on/off with the '
+const kLoginHelp =
+    'Logins are Firebase accounts with a role and a cafe. They are created and switched on/off with the '
     'admin script on your computer (it needs the private service key, which must never be in the app).';
