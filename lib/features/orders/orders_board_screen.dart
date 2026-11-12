@@ -6,10 +6,10 @@ import '../../core/layout/breakpoints.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/ui.dart';
-import '../../receipt_screen.dart';
 import '../pos/pos_screen.dart';
 import '../settings/business_settings.dart';
 import 'order_details_sheet.dart';
+import '../receipt/bill_view.dart';
 import 'order_model.dart';
 import 'order_service.dart';
 
@@ -342,16 +342,7 @@ class _CompletedList extends StatelessWidget {
                 '${orders[i].billNo} · ${Fmt.dateTime(orders[i].completedAt ?? orders[i].createdAt)} · ${orders[i].paymentLabel}',
               ),
               trailing: MoneyText(orders[i].totalPrice, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => PaymentCompleteReceiptScreen(
-                    orderData: orders[i].data,
-                    orderId: orders[i].id,
-                    businessSettings: settings.receiptSettings,
-                  ),
-                ),
-              ),
+              onTap: () => showBill(context, order: orders[i].data, orderId: orders[i].id, settings: settings.receiptSettings),
             ),
           ],
         ],

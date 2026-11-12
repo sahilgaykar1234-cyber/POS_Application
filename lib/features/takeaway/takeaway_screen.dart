@@ -7,8 +7,8 @@ import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/confirm_dialog.dart';
 import '../../core/widgets/ui.dart';
-import '../../receipt_screen.dart';
 import '../orders/order_model.dart';
+import '../receipt/bill_view.dart';
 import '../orders/order_service.dart';
 import '../orders/orders_board_screen.dart' show TableTimer;
 import '../orders/settle_bill_sheet.dart';
@@ -346,12 +346,7 @@ class _TakeawayCard extends StatelessWidget {
       final data = await OrderService.instance.complete(order, assignBillNumber: settings.autoGenBillNumber);
       if (!context.mounted) return;
       showSuccess(context, '${order.tokenLabel} picked up');
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => PaymentCompleteReceiptScreen(orderData: data, orderId: order.id, businessSettings: settings.receiptSettings),
-        ),
-      );
+      await showBill(context, order: data, orderId: order.id, settings: settings.receiptSettings);
     } catch (_) {
       if (context.mounted) showError(context, 'Could not complete. Please check your connection.');
     }
@@ -608,12 +603,7 @@ class _PickedUp extends StatelessWidget {
                         ),
                         subtitle: Text('${Fmt.dateTime(o.completedAt ?? o.createdAt).split(', ').last} · ${o.paymentLabel}'),
                         trailing: MoneyText(o.totalPrice, style: const TextStyle(fontWeight: FontWeight.w700)),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => PaymentCompleteReceiptScreen(orderData: o.data, orderId: o.id, businessSettings: settings.receiptSettings),
-                          ),
-                        ),
+                        onTap: () => showBill(context, order: o.data, orderId: o.id, settings: settings.receiptSettings),
                       );
                     },
                   ),

@@ -63,6 +63,13 @@ class OrderService {
         ]);
       });
 
+  /// Orders created in [from, to) (the Orders screen's date filter).
+  Stream<List<PosOrder>> watchRange(DateTime from, DateTime to) => _orders
+      .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(from))
+      .where('createdAt', isLessThan: Timestamp.fromDate(to))
+      .snapshots()
+      .map((s) => s.docs.map(PosOrder.fromDoc).toList());
+
   /// Every order ever (Reports, Customers only).
   Stream<List<PosOrder>> watchHistory() =>
       _shared('history', () => _orders.snapshots().map((s) => s.docs.map(PosOrder.fromDoc).toList()));

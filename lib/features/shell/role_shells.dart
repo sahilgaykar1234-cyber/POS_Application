@@ -16,6 +16,7 @@ import '../menu/menu_management_screen.dart';
 import '../orders/order_model.dart';
 import '../orders/order_service.dart';
 import '../orders/orders_board_screen.dart';
+import '../orders/orders_screen.dart';
 import '../takeaway/takeaway_screen.dart';
 import '../pos/pos_screen.dart';
 import '../reports/reports_screen.dart';
@@ -145,6 +146,7 @@ class _ManagerShellState extends State<ManagerShell> {
   int _i = 0;
 
   static const _tables = 1;
+  static const _orders = 3;
 
   void _go(int i) => setState(() => _i = i);
 
@@ -166,6 +168,7 @@ class _ManagerShellState extends State<ManagerShell> {
         const ShellDestination(icon: Icons.space_dashboard_outlined, selectedIcon: Icons.space_dashboard, label: 'Dashboard', onMobileBar: true),
         ShellDestination(icon: Icons.table_restaurant_outlined, selectedIcon: Icons.table_restaurant, label: 'Tables', badge: running.dineIn, onMobileBar: true),
         ShellDestination(icon: Icons.shopping_bag_outlined, selectedIcon: Icons.shopping_bag, label: 'Takeaway', badge: running.takeaway, onMobileBar: true),
+        const ShellDestination(icon: Icons.receipt_long_outlined, selectedIcon: Icons.receipt_long, label: 'Orders'),
         const ShellDestination(icon: Icons.soup_kitchen_outlined, selectedIcon: Icons.soup_kitchen, label: 'Kitchen', onMobileBar: true),
         const ShellDestination(icon: Icons.restaurant_menu_outlined, selectedIcon: Icons.restaurant_menu, label: 'Menu', onMobileBar: true),
         const ShellDestination(icon: Icons.insights_outlined, selectedIcon: Icons.insights, label: 'Reports'),
@@ -173,9 +176,10 @@ class _ManagerShellState extends State<ManagerShell> {
         const ShellDestination(icon: Icons.settings_outlined, selectedIcon: Icons.settings, label: 'Settings'),
       ],
       builders: [
-        (_) => ManagerHomeScreen(onNewOrder: _newOrder, onOpenTables: () => _go(_tables)),
+        (_) => ManagerHomeScreen(onNewOrder: _newOrder, onOpenTables: () => _go(_tables), onOpenOrders: () => _go(_orders)),
         (_) => const OrdersBoardScreen(canDelete: true),
         (_) => const TakeawayScreen(),
+        (_) => const OrdersScreen(),
         (_) => const KitchenScreen(),
         (_) => MenuManagementScreen(cafeId: cafeId),
         (_) => const ReportsScreen(),

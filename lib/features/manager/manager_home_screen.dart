@@ -12,12 +12,15 @@ import '../orders/order_details_sheet.dart';
 import '../orders/order_model.dart';
 import '../orders/order_service.dart';
 import '../pos/pos_screen.dart';
+import '../receipt/bill_view.dart';
+import '../receipt/receipt_actions.dart';
 import '../settings/business_settings.dart';
 import 'sales_stats.dart';
 
 /// Manager's "Today" dashboard. Everything is for the signed-in cafe only.
 class ManagerHomeScreen extends StatefulWidget {
-  const ManagerHomeScreen({super.key, required this.onNewOrder, required this.onOpenTables, this.ordersStream, this.settingsStream});
+  const ManagerHomeScreen({super.key, required this.onNewOrder, required this.onOpenTables, this.onOpenOrders, this.ordersStream, this.settingsStream});
+  final VoidCallback? onOpenOrders;
   final Stream<List<PosOrder>>? ordersStream;
   final Stream<BusinessSettings>? settingsStream;
   final VoidCallback onNewOrder;
@@ -133,7 +136,7 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
         SectionCard(
           title: 'Recent bills',
           icon: Icons.receipt_outlined,
-          trailing: TextButton(onPressed: widget.onOpenTables, child: const Text('All tables')),
+          trailing: TextButton(onPressed: widget.onOpenOrders ?? widget.onOpenTables, child: Text(widget.onOpenOrders != null ? 'All orders' : 'All tables')),
           padding: const EdgeInsets.fromLTRB(Space.lg + 4, Space.lg + 4, Space.lg + 4, Space.sm),
           child: recent.isEmpty
               ? Padding(padding: const EdgeInsets.symmetric(vertical: Space.lg), child: Text('No orders yet today.', style: TextStyle(color: p.inkSubtle)))
@@ -143,7 +146,11 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
                       if (i > 0) Divider(height: 1, color: p.border),
                       _RecentBill(
                         order: recent[i],
-                        onTap: recent[i].isActive ? () => showOrderDetailsSheet(context, recent[i], settings, canDelete: true) : null,
+                        onTap: recent[i].isActive
+                            ? () => showOrderDetailsSheet(context, recent[i], settings, canDelete: true)
+                            : () => showBill(context, order: recent[i].data, orderId: recent[i].id, settings: settings.receiptSettings),
+                        onPrint: () => printSavedBill(context, order: recent[i].data, orderId: recent[i].id, settings: settings.receiptSettings),
+                        onWhatsApp: () => shareSavedBillOnWhatsApp(context, order: recent[i].data, orderId: recent[i].id, settings: settings.receiptSettings),
                         onEdit: () => _edit(recent[i]),
                         onDelete: () => _delete(recent[i]),
                       ),
@@ -573,9 +580,11 @@ class _PaymentSplit extends StatelessWidget {
 
 /// One bill in "Recent bills": header + every item with qty, size and price.
 class _RecentBill extends StatelessWidget {
-  const _RecentBill({required this.order, this.onTap, this.onEdit, this.onDelete});
+  const _RecentBill({required this.order, this.onTap, this.onPrint, this.onWhatsApp, this.onEdit, this.onDelete});
   final PosOrder order;
   final VoidCallback? onTap;
+  final VoidCallback? onPrint;
+  final VoidCallback? onWhatsApp;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
@@ -609,6 +618,22 @@ class _RecentBill extends StatelessWidget {
       ],
     );
     final actions = Row(mainAxisSize: MainAxisSize.min, children: [
+      if (onPrint != null)
+        IconButton(
+          key: Key('recent-print-${o.id}'),
+          tooltip: 'Print receipt',
+          visualDensity: VisualDensity.compact,
+          onPressed: onPrint,
+          icon: Icon(Icons.print_outlined, size: 19, color: p.inkMuted),
+        ),
+      if (onWhatsApp != null)
+        IconButton(
+          key: Key('recent-whatsapp-${o.id}'),
+          tooltip: 'Share on WhatsApp',
+          visualDensity: VisualDensity.compact,
+          onPressed: onWhatsApp,
+          icon: const Icon(Icons.chat_outlined, size: 19, color: Color(0xFF128C4A)),
+        ),
       if (onEdit != null)
         IconButton(
           key: Key('recent-edit-${o.id}'),

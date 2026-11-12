@@ -4,11 +4,11 @@ import 'package:flutter/services.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/ui.dart';
-import '../../receipt_screen.dart';
 import '../menu/menu_models.dart' show formatPrice;
 import '../pos/print_helper.dart';
 import '../settings/business_settings.dart';
 import 'bill.dart';
+import '../receipt/bill_view.dart';
 import 'order_model.dart';
 import 'order_service.dart';
 
@@ -92,19 +92,9 @@ class _SettleSheetState extends State<_SettleSheet> {
       if (!mounted) return;
       final parent = widget.parentContext;
       Navigator.pop(context);
-      if (complete && parent.mounted) {
-        Navigator.push(
-          parent,
-          MaterialPageRoute(
-            builder: (_) => PaymentCompleteReceiptScreen(
-              orderData: data,
-              orderId: widget.order.id,
-              businessSettings: widget.settings.receiptSettings,
-            ),
-          ),
-        );
-      } else if (parent.mounted) {
-        showSuccess(parent, 'Payment saved · ${_method.label}');
+      // Payment is saved: show the confirmation with the receipt.
+      if (parent.mounted) {
+        await showBill(parent, order: data, orderId: widget.order.id, settings: widget.settings.receiptSettings, mode: BillMode.paymentSuccess);
       }
     } catch (e) {
       if (mounted) {

@@ -25,7 +25,8 @@ import 'package:pos_app/features/pos/pos_screen.dart';
 import 'package:pos_app/features/reports/reports_screen.dart';
 import 'package:pos_app/features/settings/business_settings.dart';
 import 'package:pos_app/features/settings/settings_screen.dart';
-import 'package:pos_app/receipt_screen.dart';
+import 'package:pos_app/features/orders/orders_screen.dart';
+import 'package:pos_app/features/receipt/bill_view.dart';
 import 'package:pos_app/features/takeaway/takeaway_screen.dart';
 
 const sizes = {
@@ -181,7 +182,11 @@ void main() {
   );
   checkScreen('Reports', () => ReportsScreen(ordersStream: Stream.value(orders())));
   checkScreen('Customers', () => CustomersScreen(ordersStream: Stream.value(orders())));
-  checkScreen('Receipt with WhatsApp', () => PaymentCompleteReceiptScreen(orderData: orders()[3].data, orderId: 'ORD000004', businessSettings: settings.receiptSettings));
+  checkScreen('Bill · payment successful', () => BillView(order: orders()[3].data, orderId: 'ORD000004', settings: settings.receiptSettings, mode: BillMode.paymentSuccess));
+  checkScreen('Bill · closed unpaid', () => BillView(order: orders()[0].data, orderId: 'ORD000001', settings: settings.receiptSettings, mode: BillMode.closedUnpaid));
+  checkScreen('Bill · details', () => BillView(order: orders()[1].data, orderId: 'ORD000002', settings: settings.receiptSettings));
+  checkScreen('Orders', () => OrdersScreen(ordersStream: Stream.value([...orders(), ...takeawayOrders()]), settingsStream: Stream.value(settings)));
+  checkScreen('Orders (empty)', () => OrdersScreen(ordersStream: Stream.value(const []), settingsStream: Stream.value(settings)));
   checkScreen('Takeaway', () => TakeawayScreen(ordersStream: Stream.value([...orders(), ...takeawayOrders()]), settingsStream: Stream.value(settings)));
   checkScreen('Takeaway (empty)', () => TakeawayScreen(ordersStream: Stream.value(orders()), settingsStream: Stream.value(settings)));
   checkScreen('POS takeaway mode', () => PosScreen(initialOrderType: 'Takeaway', menuStream: Stream.value(menu()), settingsStream: Stream.value(settings)));
@@ -469,4 +474,58 @@ void main() {
       expect(t.takeException(), isNull);
     });
   }
+
+  for (final s in sizes.entries) {
+    testWidgets('Payment success: dialog on wide screens, full screen on phones · ${s.key}', (t) async {
+      await pumpAt(
+        t,
+        s.value,
+        Builder(
+          builder: (context) => Center(
+            child: FilledButton(
+              onPressed: () => showBill(context, order: orders()[3].data, orderId: 'ORD000004', settings: settings.receiptSettings, mode: BillMode.paymentSuccess),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+        AppTheme.light(),
+      );
+      await t.tap(find.text('open'));
+      await t.pumpAndSettle();
+      expect(find.text('Payment successful'), findsOneWidget);
+      expect(find.byType(Dialog), s.value.width >= 760 ? findsOneWidget : findsNothing);
+      expect(find.byKey(const Key('bill-print')), findsOneWidget);
+      expect(find.byKey(const Key('bill-whatsapp')), findsOneWidget);
+      expect(find.text('RECEIPT'), findsOneWidget);
+      expect(t.takeException(), isNull);
+    });
+
+    testWidgets('Orders: every bill has View, Print and WhatsApp · ${s.key}', (t) async {
+      final list = [...orders(), ...takeawayOrders()];
+      await pumpAt(t, s.value, OrdersScreen(ordersStream: Stream.value(list), settingsStream: Stream.value(settings)), AppTheme.light());
+      await t.pump();
+      final first = filterTodayFirstId(list);
+      expect(find.byKey(Key('order-view-$first'), skipOffstage: false), findsOneWidget);
+      expect(find.byKey(Key('order-print-$first'), skipOffstage: false), findsOneWidget);
+      expect(find.byKey(Key('order-whatsapp-$first'), skipOffstage: false), findsOneWidget);
+      expect(t.takeException(), isNull);
+    });
+  }
+
+  testWidgets('Dashboard recent bills: print and WhatsApp on every bill', (t) async {
+    await pumpAt(t, sizes['desktop']!, ManagerHomeScreen(onNewOrder: () {}, onOpenTables: () {}, onOpenOrders: () {}, ordersStream: Stream.value(orders()), settingsStream: Stream.value(settings)), AppTheme.light());
+    final printBtn = find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key as ValueKey<String>).value.startsWith('recent-print-'), skipOffstage: false);
+    final waBtn = find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key as ValueKey<String>).value.startsWith('recent-whatsapp-'), skipOffstage: false);
+    expect(printBtn, findsWidgets);
+    expect(waBtn.evaluate().length, printBtn.evaluate().length);
+    expect(find.text('All orders', skipOffstage: false), findsOneWidget);
+  });
+}
+
+/// Newest order created today (what the Orders screen lists first).
+String filterTodayFirstId(List<PosOrder> list) {
+  final today = DateTime(now.year, now.month, now.day);
+  final todays = list.where((o) => o.createdAt != null && !o.createdAt!.isBefore(today)).toList()
+    ..sort((a, b) => b.createdAt!.compareTo(a.createdAt!));
+  return todays.first.id;
 }

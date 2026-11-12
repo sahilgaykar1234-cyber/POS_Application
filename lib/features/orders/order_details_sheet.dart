@@ -4,11 +4,11 @@ import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/confirm_dialog.dart';
 import '../../core/widgets/ui.dart';
-import '../../receipt_screen.dart';
 import '../menu/menu_models.dart' show formatPrice;
 import '../pos/pos_screen.dart';
 import '../pos/print_helper.dart';
 import '../settings/business_settings.dart';
+import '../receipt/bill_view.dart';
 import 'custom_item_dialog.dart';
 import 'order_model.dart';
 import 'order_service.dart';
@@ -208,11 +208,12 @@ class _OrderDetails extends StatelessWidget {
                     try {
                       final data = await OrderService.instance.complete(o, assignBillNumber: settings.autoGenBillNumber);
                       if (!parent.mounted) return;
-                      Navigator.push(
+                      await showBill(
                         parent,
-                        MaterialPageRoute(
-                          builder: (_) => PaymentCompleteReceiptScreen(orderData: data, orderId: o.id, businessSettings: settings.receiptSettings),
-                        ),
+                        order: data,
+                        orderId: o.id,
+                        settings: settings.receiptSettings,
+                        mode: o.isPaid ? BillMode.details : BillMode.closedUnpaid,
                       );
                     } catch (_) {
                       if (parent.mounted) showError(parent, 'Could not close the bill.');
