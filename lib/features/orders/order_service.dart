@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../core/data/firestore_paths.dart';
+import '../../core/utils/business_day.dart';
 import 'bill.dart';
 import 'bill_numbers.dart';
 import 'order_model.dart';
@@ -157,7 +158,7 @@ class OrderService {
         // counters are read together: one read round trip, then the commit.
         final r = await _txWithBillSeed<({int? token, String? billNo})>((tx, seed) async {
           final billRef = FirestorePaths.cafeCounter(billCounterName(now));
-          final tokenRef = FirestorePaths.cafeCounter('takeaway_${takeawayDayKey(now)}');
+          final tokenRef = FirestorePaths.cafeCounter('takeaway_${takeawayDayKey(BusinessDay.dateOf(now))}');
           // All reads must come before writes in a transaction.
           final reads = await Future.wait([
             if (assignBillNumber) tx.get(billRef),
@@ -483,7 +484,7 @@ class OrderService {
   }
 }
 
-/// yyyymmdd (local day) — token numbers restart every day.
+/// yyyymmdd of a business day — token numbers restart every business day.
 String takeawayDayKey(DateTime d) =>
     '${d.year}${d.month.toString().padLeft(2, '0')}${d.day.toString().padLeft(2, '0')}';
 

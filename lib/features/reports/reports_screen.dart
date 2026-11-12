@@ -5,6 +5,7 @@ import '../../core/theme/app_theme.dart';
 
 import '../../core/layout/breakpoints.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/utils/business_day.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/ui.dart';
 import '../../reports_stub.dart' if (dart.library.html) '../../reports_web.dart';
@@ -30,32 +31,35 @@ class _ReportsScreenState extends State<ReportsScreen> {
   _Period _period = _Period.week;
   late DateTimeRange _range = _rangeFor(_Period.week);
 
+  /// Business days [fromDate]..[toDate] as start .. last second (a night
+  /// that runs past midnight stays in its day).
+  static DateTimeRange _days(DateTime fromDate, DateTime toDate) {
+    final (from, to) = BusinessDay.range(fromDate, toDate);
+    return DateTimeRange(start: from, end: to.subtract(const Duration(seconds: 1)));
+  }
+
   DateTimeRange _rangeFor(_Period p) {
-    final n = DateTime.now();
-    final endOfToday = DateTime(n.year, n.month, n.day, 23, 59, 59);
+    final today = BusinessDay.dateOf(DateTime.now());
     return switch (p) {
-      _Period.today => DateTimeRange(start: DateTime(n.year, n.month, n.day), end: endOfToday),
-      _Period.week => () {
-          final sow = n.subtract(Duration(days: n.weekday - 1));
-          return DateTimeRange(start: DateTime(sow.year, sow.month, sow.day), end: endOfToday);
-        }(),
-      _Period.month => DateTimeRange(start: DateTime(n.year, n.month, 1), end: endOfToday),
+      _Period.today => _days(today, today),
+      _Period.week => _days(DateTime(today.year, today.month, today.day - (today.weekday - 1)), today),
+      _Period.month => _days(DateTime(today.year, today.month), today),
       _Period.custom => _range,
     };
   }
 
   Future<void> _pickCustom() async {
-    final n = DateTime.now();
+    final today = BusinessDay.dateOf(DateTime.now());
     final r = await showDateRangePicker(
       context: context,
-      firstDate: DateTime(n.year - 3),
-      lastDate: n,
-      initialDateRange: DateTimeRange(start: _range.start, end: DateTime(_range.end.year, _range.end.month, _range.end.day)),
+      firstDate: DateTime(today.year - 3),
+      lastDate: today,
+      initialDateRange: DateTimeRange(start: BusinessDay.dateOf(_range.start), end: BusinessDay.dateOf(_range.end)),
     );
     if (r == null) return;
     setState(() {
       _period = _Period.custom;
-      _range = DateTimeRange(start: r.start, end: DateTime(r.end.year, r.end.month, r.end.day, 23, 59, 59));
+      _range = _days(r.start, r.end);
     });
   }
 
@@ -95,7 +99,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final discounts = period.fold<double>(0, (s, o) => s + o.discount);
 
     // Daily series across the range (max 62 points).
-    final days = to.difference(DateTime(from.year, from.month, from.day)).inDays.clamp(1, 62);
+    final days = (BusinessDay.dateOf(_range.end).difference(BusinessDay.dateOf(from)).inDays + 1).clamp(1, 62);
     final daily = SalesStats.dailySales(all, days: days, now: _range.end);
 
     // Items (qty + revenue).

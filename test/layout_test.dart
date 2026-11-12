@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:pos_app/core/layout/app_shell.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
+import 'package:pos_app/core/utils/business_day.dart';
 import 'package:pos_app/features/customers/customers_screen.dart';
 import 'package:pos_app/features/kitchen/kitchen_screen.dart';
 import 'package:pos_app/features/kitchen/order_alerts_host.dart';
@@ -519,6 +520,29 @@ void main() {
     expect(printBtn, findsWidgets);
     expect(waBtn.evaluate().length, printBtn.evaluate().length);
     expect(find.text('All orders', skipOffstage: false), findsOneWidget);
+  });
+
+  testWidgets('Dashboard recent bills: every order of the business day (not just 8)', (t) async {
+    final many = [
+      for (var i = 0; i < 12; i++)
+        PosOrder('MANY$i', {
+          'customerName': 'Guest $i',
+          'tableNo': '${i + 1}',
+          'status': 'completed',
+          'paymentStatus': 'paid_cash',
+          'totalPrice': 100.0,
+          'items': [
+            {'name': 'Tea', 'price': 100, 'qty': 1},
+          ],
+          'createdAt': ago(i),
+        }),
+    ];
+    await pumpAt(t, sizes['desktop']!, ManagerHomeScreen(onNewOrder: () {}, onOpenTables: () {}, ordersStream: Stream.value(many), settingsStream: Stream.value(settings)), AppTheme.light());
+    final rows = find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key as ValueKey<String>).value.startsWith('recent-print-MANY'), skipOffstage: false);
+    // Orders made before today's business day started (e.g. just after 5 AM) are excluded.
+    final expected = many.where((o) => o.createdAt!.isAfter(BusinessDay.today().$1)).length;
+    expect(rows.evaluate().length, expected);
+    expect(t.takeException(), isNull);
   });
 }
 

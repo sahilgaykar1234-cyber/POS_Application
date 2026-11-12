@@ -5,6 +5,8 @@ import '../../core/layout/breakpoints.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/confirm_dialog.dart';
+import '../../core/utils/business_day.dart';
+import '../../core/widgets/day_change.dart';
 import '../../core/widgets/ui.dart';
 import '../menu/menu_models.dart' show formatPrice;
 import '../orders/bill.dart';
@@ -45,7 +47,8 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
         builder: (context, snap) {
           if (snap.hasError) return const ErrorState();
           if (!snap.hasData) return const LoadingState(label: 'Loading today…');
-          return _build(context, snap.data!, setSnap.data ?? BusinessSettings.empty);
+          // "Today" moves on at the business-day end even with no new order.
+          return DayChangeRebuilder(builder: (context) => _build(context, snap.data!, setSnap.data ?? BusinessSettings.empty));
         },
       ),
     );
@@ -54,11 +57,12 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
   Widget _build(BuildContext context, List<PosOrder> all, BusinessSettings settings) {
     final p = context.palette;
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final todayOrders = SalesStats.between(all, today, today.add(const Duration(days: 1)));
-    final lastWeek = SalesStats.between(all, today.subtract(const Duration(days: 7)), today.subtract(const Duration(days: 6)))
-        .where((o) => o.createdAt!.hour <= now.hour)
-        .toList();
+    // Business day: a night that runs past midnight is one day.
+    final today = BusinessDay.dateOf(now);
+    final todayOrders = todaysOrders(all, now);
+    // Same business day last week, up to the same time.
+    final (lwFrom, _) = BusinessDay.range(DateTime(today.year, today.month, today.day - 7), today);
+    final lastWeek = SalesStats.between(all, lwFrom, now.subtract(const Duration(days: 7)));
     final s = SalesStats.of(todayOrders);
     final lw = SalesStats.of(lastWeek);
     final month = MonthSummary.of(all, now);
@@ -66,7 +70,7 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
     String? vsLastWeek;
     if (lw.sales > 0) {
       final pct = ((s.sales - lw.sales) / lw.sales * 100).round();
-      vsLastWeek = '${pct >= 0 ? '▲' : '▼'} ${pct.abs()}% vs last ${_weekdays[now.weekday - 1]}';
+      vsLastWeek = '${pct >= 0 ? '▲' : '▼'} ${pct.abs()}% vs last ${_weekdays[today.weekday - 1]}';
     }
 
     final recent = [...todayOrders]..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
@@ -75,7 +79,7 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
       children: [
         PageHeader(
           title: settings.shopName.isEmpty ? 'Today' : settings.shopName,
-          subtitle: '${_weekdays[now.weekday - 1]}, ${Fmt.date(now)}',
+          subtitle: '${_weekdays[today.weekday - 1]}, ${Fmt.date(today)}',
           actions: [
             OutlinedButton.icon(onPressed: widget.onOpenTables, icon: const Icon(Icons.table_restaurant_outlined, size: 18), label: const Text('Tables')),
             FilledButton.icon(onPressed: widget.onNewOrder, icon: const Icon(Icons.add, size: 18), label: const Text('New order')),
@@ -142,7 +146,8 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
               ? Padding(padding: const EdgeInsets.symmetric(vertical: Space.lg), child: Text('No orders yet today.', style: TextStyle(color: p.inkSubtle)))
               : Column(
                   children: [
-                    for (var i = 0; i < recent.take(8).length; i++) ...[
+                    // Every order of the current business day.
+                    for (var i = 0; i < recent.length; i++) ...[
                       if (i > 0) Divider(height: 1, color: p.border),
                       _RecentBill(
                         order: recent[i],
@@ -241,7 +246,7 @@ class _MonthCard extends StatelessWidget {
               Text('Daily sales will appear here as bills are paid.', style: TextStyle(fontSize: 12, color: p.inkSubtle)),
             ]),
           )
-        : SizedBox(height: 200, child: _MonthChart(daily: m.daily, today: now.day));
+        : SizedBox(height: 200, child: _MonthChart(daily: m.daily, today: BusinessDay.dateOf(now).day));
 
     return SectionCard(
       title: 'This month',
@@ -403,11 +408,15 @@ class _HourlyChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    // Show business hours: first hour with sales (or 10am) to current hour.
-    var start = values.indexWhere((v) => v > 0);
-    if (start < 0 || start > 10) start = start < 0 ? 10 : start;
-    final end = (now.hour >= start ? now.hour : 23).clamp(start, 23);
-    final hours = [for (var h = start; h <= end; h++) h];
+    // Hours in business-day order (e.g. 5 AM … 11 PM, 12 AM … 4 AM), from
+    // the first hour with sales (or 10 AM) to the current hour.
+    final first = BusinessDay.cutoffMinutes ~/ 60;
+    int pos(int h) => (h - first) % 24;
+    final order = [for (var i = 0; i < 24; i++) (first + i) % 24];
+    final firstSale = order.indexWhere((h) => values[h] > 0);
+    final start = firstSale >= 0 && firstSale < pos(10) ? firstSale : (firstSale < 0 ? pos(10) : firstSale.clamp(0, pos(10)));
+    final end = pos(now.hour) >= start ? pos(now.hour) : 23;
+    final hours = [for (var i = start; i <= end; i++) order[i]];
     final maxY = hours.fold<double>(0, (m, h) => values[h] > m ? values[h] : m);
 
     return BarChart(

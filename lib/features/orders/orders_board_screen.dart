@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/layout/breakpoints.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
+import '../../core/widgets/day_change.dart';
 import '../../core/widgets/ui.dart';
 import '../pos/pos_screen.dart';
 import '../settings/business_settings.dart';
@@ -26,7 +27,7 @@ class OrdersBoardScreen extends StatefulWidget {
 
 enum _Filter { all, preparing, ready, completed }
 
-class _OrdersBoardScreenState extends State<OrdersBoardScreen> {
+class _OrdersBoardScreenState extends State<OrdersBoardScreen> with DayChangeRefresh<OrdersBoardScreen> {
   late final _orders = widget.ordersStream ?? OrderService.instance.watchLive();
   late final _settings = widget.settingsStream ?? BusinessSettingsRepository.instance.watch();
   _Filter _filter = _Filter.all;

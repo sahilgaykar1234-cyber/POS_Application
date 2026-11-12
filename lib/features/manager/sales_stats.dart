@@ -1,5 +1,6 @@
 import '../orders/bill.dart';
 import '../orders/order_model.dart';
+import '../../core/utils/business_day.dart';
 
 /// Pure sales maths for the dashboard (unit-tested).
 ///
@@ -86,15 +87,16 @@ class SalesStats {
   static List<PosOrder> between(Iterable<PosOrder> all, DateTime from, DateTime to) =>
       all.where((o) => o.createdAt != null && !o.createdAt!.isBefore(from) && o.createdAt!.isBefore(to)).toList();
 
-  /// Paid sales per day for the last [days] days (oldest first), ending today.
+  /// Paid sales per business day for the last [days] days (oldest first),
+  /// ending with the business day of [now].
   static List<(DateTime, double)> dailySales(Iterable<PosOrder> all, {int days = 7, DateTime? now}) {
-    final n = now ?? DateTime.now();
-    final today = DateTime(n.year, n.month, n.day);
+    final today = BusinessDay.dateOf(now ?? DateTime.now());
     return [
       for (var i = days - 1; i >= 0; i--)
         () {
-          final d = today.subtract(Duration(days: i));
-          final s = between(all, d, d.add(const Duration(days: 1)))
+          final d = DateTime(today.year, today.month, today.day - i);
+          final (from, to) = BusinessDay.range(d, d);
+          final s = between(all, from, to)
               .where((o) => o.isPaid && !o.isCancelled)
               .fold<double>(0, (t, o) => t + o.totalPrice);
           return (d, s);
@@ -137,15 +139,18 @@ class MonthSummary {
   int? get salesChangePct => prevSales > 0 ? ((sales - prevSales) / prevSales * 100).round() : null;
   int? get ordersChangePct => prevOrders > 0 ? ((orders - prevOrders) / prevOrders * 100).round() : null;
 
-  static MonthSummary of(Iterable<PosOrder> all, DateTime now) {
-    final monthStart = DateTime(now.year, now.month);
-    final tomorrow = DateTime(now.year, now.month, now.day + 1);
-    final prevStart = DateTime(now.year, now.month - 1);
+  static MonthSummary of(Iterable<PosOrder> all, DateTime at) {
+    // Months of business days: 1 Dec 1:00 AM still belongs to 30 Nov's night.
+    final now = BusinessDay.dateOf(at);
+    final (curFrom, curTo) = BusinessDay.range(DateTime(now.year, now.month), now);
     final prevDays = DateTime(now.year, now.month, 0).day;
-    final prevEnd = DateTime(now.year, now.month - 1, (now.day < prevDays ? now.day : prevDays) + 1);
+    final (prevFrom, prevTo) = BusinessDay.range(
+      DateTime(now.year, now.month - 1),
+      DateTime(now.year, now.month - 1, now.day < prevDays ? now.day : prevDays),
+    );
 
-    final cur = SalesStats.between(all, monthStart, tomorrow).where((o) => !o.isCancelled).toList();
-    final prev = SalesStats.between(all, prevStart, prevEnd).where((o) => !o.isCancelled).toList();
+    final cur = SalesStats.between(all, curFrom, curTo).where((o) => !o.isCancelled).toList();
+    final prev = SalesStats.between(all, prevFrom, prevTo).where((o) => !o.isCancelled).toList();
 
     final daily = List<double>.filled(now.day, 0);
     var sales = 0.0;
@@ -154,7 +159,7 @@ class MonthSummary {
       if (!o.isPaid) continue;
       sales += o.totalPrice;
       paid++;
-      daily[o.createdAt!.day - 1] += o.totalPrice;
+      daily[BusinessDay.dateOf(o.createdAt!).day - 1] += o.totalPrice;
     }
     var best = -1;
     for (var i = 0; i < daily.length; i++) {

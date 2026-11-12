@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/theme/theme_controller.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/utils/business_day.dart';
 import '../../core/widgets/app_logo.dart';
 import '../../core/widgets/ui.dart';
 import 'business_settings.dart';
@@ -47,6 +48,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _showGst = false;
   bool _autoBill = true;
   bool _autoToken = true;
+  int _dayEnds = BusinessDay.defaultCutoffMinutes;
   String _defaultOrderType = 'Dine-In';
   bool _loading = true;
   bool _saving = false;
@@ -82,6 +84,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _showGst = s.showGst;
         _autoBill = s.autoGenBillNumber;
         _autoToken = s.autoGenTokenNumber;
+        _dayEnds = s.dayEndsAtMinutes;
         _defaultOrderType = s.defaultOrderType;
         _loading = false;
       });
@@ -119,6 +122,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
+  Future<void> _pickDayEnd() async {
+    final t = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: _dayEnds ~/ 60, minute: _dayEnds % 60),
+      helpText: 'BUSINESS DAY ENDS AT (AFTER MIDNIGHT)',
+    );
+    if (t == null || !mounted) return;
+    final m = t.hour * 60 + t.minute;
+    if (m > BusinessDay.maxCutoffMinutes) {
+      showError(context, 'Pick a time between 12:00 AM and 12:00 PM (after midnight).');
+      return;
+    }
+    setState(() {
+      _dayEnds = m;
+      _dirty = true;
+    });
+  }
+
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
     setState(() => _saving = true);
@@ -145,6 +166,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'defaultTax': _c['defaultTax']!.text.trim(),
         'autoGenBillNumber': _autoBill,
         'autoGenTokenNumber': _autoToken,
+        'dayEndsAt': BusinessDay.format(_dayEnds),
         'numberOfTables': tables,
       });
       if (!mounted) return;
@@ -325,6 +347,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _dirty = true;
                         }),
                         title: const Text('Auto token number'),
+                      ),
+                      ListTile(
+                        key: const Key('settings-day-ends'),
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Business day ends at'),
+                        subtitle: const Text(
+                          'Orders after midnight until this time count in the previous day '
+                          '(e.g. open 7 PM – 2 AM = one day). Tokens restart at this time.',
+                        ),
+                        trailing: OutlinedButton.icon(
+                          onPressed: _pickDayEnd,
+                          icon: const Icon(Icons.schedule_rounded, size: 18),
+                          label: Text(BusinessDay.label(_dayEnds)),
+                        ),
                       ),
                     ],
                   ),

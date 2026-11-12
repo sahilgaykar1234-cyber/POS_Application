@@ -1,3 +1,4 @@
+import '../../core/utils/business_day.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'bill_numbers.dart';
@@ -104,11 +105,12 @@ String formatCustomerDisplayName(String rawName, String? tableNo) {
   return 'Counter Customer';
 }
 
-/// Orders created since local midnight.
+/// Orders of the current business day (see [BusinessDay]: a night that runs
+/// past midnight counts as one day). An order just placed on this device has
+/// no server time yet; it belongs to today too.
 List<PosOrder> todaysOrders(Iterable<PosOrder> all, [DateTime? now]) {
-  final n = now ?? DateTime.now();
-  final start = DateTime(n.year, n.month, n.day);
-  return all.where((o) => o.createdAt != null && o.createdAt!.isAfter(start)).toList();
+  final range = BusinessDay.today(now);
+  return all.where((o) => o.createdAt == null || BusinessDay.inRange(o.createdAt!, range)).toList();
 }
 
 /// Result of placing today's active orders on numbered and virtual tables.

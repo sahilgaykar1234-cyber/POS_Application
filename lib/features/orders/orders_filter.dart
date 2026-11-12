@@ -1,3 +1,4 @@
+import '../../core/utils/business_day.dart';
 import 'order_model.dart';
 
 enum OrderStatusFilter {
@@ -32,14 +33,15 @@ enum DatePreset {
   const DatePreset(this.label);
   final String label;
 
-  /// [from, to) for this preset around [now] (custom: null).
+  /// [from, to) of business days for this preset around [now] (custom: null).
   (DateTime, DateTime)? range(DateTime now) {
-    final today = DateTime(now.year, now.month, now.day);
+    final today = BusinessDay.dateOf(now);
+    DateTime back(int days) => DateTime(today.year, today.month, today.day - days);
     return switch (this) {
-      DatePreset.today => (today, today.add(const Duration(days: 1))),
-      DatePreset.yesterday => (today.subtract(const Duration(days: 1)), today),
-      DatePreset.last7 => (today.subtract(const Duration(days: 6)), today.add(const Duration(days: 1))),
-      DatePreset.thisMonth => (DateTime(now.year, now.month), today.add(const Duration(days: 1))),
+      DatePreset.today => BusinessDay.range(today, today),
+      DatePreset.yesterday => BusinessDay.range(back(1), back(1)),
+      DatePreset.last7 => BusinessDay.range(back(6), today),
+      DatePreset.thisMonth => BusinessDay.range(DateTime(today.year, today.month), today),
       DatePreset.custom => null,
     };
   }

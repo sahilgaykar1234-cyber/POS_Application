@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../core/data/firestore_paths.dart';
+import '../../core/utils/business_day.dart';
 
 /// The cafe's business & receipt settings (cafes/{id}/settings/business).
 /// Field names are unchanged from the original app.
@@ -36,6 +37,12 @@ class BusinessSettings {
   String get defaultTax => _s('defaultTax', '5');
   bool get autoGenBillNumber => data['autoGenBillNumber'] ?? true;
   bool get autoGenTokenNumber => data['autoGenTokenNumber'] ?? true;
+
+  /// Minutes after midnight when the business day ends ("dayEndsAt": "05:00").
+  int get dayEndsAtMinutes {
+    final m = BusinessDay.parse(data['dayEndsAt']);
+    return m == null || m > BusinessDay.maxCutoffMinutes ? BusinessDay.defaultCutoffMinutes : m;
+  }
   int get numberOfTables {
     final n = int.tryParse(_s('numberOfTables', '12')) ?? 12;
     return n > 0 ? n : 12;
@@ -61,13 +68,17 @@ class BusinessSettingsRepository {
   BusinessSettingsRepository._();
   static final instance = BusinessSettingsRepository._();
 
-  Stream<BusinessSettings> watch() => FirestorePaths.businessSettings()
-      .snapshots()
-      .map((d) => BusinessSettings(d.data() ?? const {}));
+  Stream<BusinessSettings> watch() => FirestorePaths.businessSettings().snapshots().map((d) => _apply(BusinessSettings(d.data() ?? const {})));
 
   Future<BusinessSettings> load() async {
     final d = await FirestorePaths.businessSettings().get();
-    return BusinessSettings(d.data() ?? const {});
+    return _apply(BusinessSettings(d.data() ?? const {}));
+  }
+
+  /// Every screen uses the cafe's business-day end time from here on.
+  static BusinessSettings _apply(BusinessSettings s) {
+    BusinessDay.setCutoff(s.dayEndsAtMinutes);
+    return s;
   }
 
   Future<void> save(Map<String, dynamic> fields) =>

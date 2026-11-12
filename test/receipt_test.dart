@@ -141,10 +141,13 @@ void main() {
 
     test('date presets and pages', () {
       final now = DateTime(2026, 11, 12, 15);
-      expect(DatePreset.today.range(now), (DateTime(2026, 11, 12), DateTime(2026, 11, 13)));
-      expect(DatePreset.yesterday.range(now), (DateTime(2026, 11, 11), DateTime(2026, 11, 12)));
-      expect(DatePreset.last7.range(now)!.$1, DateTime(2026, 11, 6));
-      expect(DatePreset.thisMonth.range(now)!.$1, DateTime(2026, 11, 1));
+      // Business days end at 5:00 AM (default).
+      expect(DatePreset.today.range(now), (DateTime(2026, 11, 12, 5), DateTime(2026, 11, 13, 5)));
+      expect(DatePreset.yesterday.range(now), (DateTime(2026, 11, 11, 5), DateTime(2026, 11, 12, 5)));
+      expect(DatePreset.last7.range(now)!.$1, DateTime(2026, 11, 6, 5));
+      expect(DatePreset.thisMonth.range(now)!.$1, DateTime(2026, 11, 1, 5));
+      // 1:30 AM is still "yesterday night", i.e. today's business day of the 11th.
+      expect(DatePreset.today.range(DateTime(2026, 11, 12, 1, 30))!.$1, DateTime(2026, 11, 11, 5));
       expect(pageOf([1, 2, 3, 4, 5], 1, 2), [3, 4]);
       expect(pageOf([1, 2, 3], 5, 2), isEmpty);
     });

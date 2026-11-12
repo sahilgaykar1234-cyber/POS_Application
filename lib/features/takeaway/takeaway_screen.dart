@@ -6,6 +6,7 @@ import '../../core/layout/breakpoints.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/confirm_dialog.dart';
+import '../../core/widgets/day_change.dart';
 import '../../core/widgets/ui.dart';
 import '../orders/order_model.dart';
 import '../receipt/bill_view.dart';
@@ -32,7 +33,7 @@ class TakeawayScreen extends StatefulWidget {
   State<TakeawayScreen> createState() => _TakeawayScreenState();
 }
 
-class _TakeawayScreenState extends State<TakeawayScreen> {
+class _TakeawayScreenState extends State<TakeawayScreen> with DayChangeRefresh<TakeawayScreen> {
   late final _orders = widget.ordersStream ?? OrderService.instance.watchLive();
   late final _settings = widget.settingsStream ?? BusinessSettingsRepository.instance.watch();
   String _q = '';

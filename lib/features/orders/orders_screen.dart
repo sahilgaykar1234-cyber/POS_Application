@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens.dart';
+import '../../core/utils/business_day.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/confirm_dialog.dart';
 import '../../core/widgets/ui.dart';
@@ -44,7 +45,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     final r = _preset.range(_now);
     if (r != null) return r;
     final c = _custom!;
-    return (DateTime(c.start.year, c.start.month, c.start.day), DateTime(c.end.year, c.end.month, c.end.day + 1));
+    return BusinessDay.range(c.start, c.end);
   }
 
   Stream<List<PosOrder>> _open() {
@@ -60,8 +61,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
       final picked = await showDateRangePicker(
         context: context,
         firstDate: DateTime(_now.year - 3),
-        lastDate: _now,
-        initialDateRange: _custom ?? DateTimeRange(start: _now.subtract(const Duration(days: 6)), end: _now),
+        lastDate: BusinessDay.dateOf(_now),
+        initialDateRange: _custom ?? DateTimeRange(start: BusinessDay.dateOf(_now).subtract(const Duration(days: 6)), end: BusinessDay.dateOf(_now)),
       );
       if (picked == null) return;
       _custom = picked;
@@ -75,8 +76,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   String get _rangeLabel {
     final (from, to) = _range;
-    final last = to.subtract(const Duration(days: 1));
-    return from == last ? Fmt.date(from) : '${Fmt.date(from)} – ${Fmt.date(last)}';
+    final first = BusinessDay.dateOf(from), last = BusinessDay.dateOf(to.subtract(const Duration(minutes: 1)));
+    return first == last ? Fmt.date(first) : '${Fmt.date(first)} – ${Fmt.date(last)}';
   }
 
   @override
