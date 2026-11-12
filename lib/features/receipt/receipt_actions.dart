@@ -11,6 +11,7 @@ import '../orders/whatsapp_bill.dart';
 import '../orders/whatsapp_launch.dart';
 import 'receipt_data.dart';
 import 'receipt_html.dart';
+import '../../core/utils/friendly_error.dart';
 
 /// Print / WhatsApp / share actions for a SAVED bill. They only read the
 /// order they are given (by its id) – they never change the order, its
@@ -28,23 +29,23 @@ enum ReceiptPrinter {
   final IconData icon;
 
   String get hint => switch (this) {
-        ReceiptPrinter.usb => 'Prints straight to a USB ESC/POS printer (Chrome / Edge)',
-        ReceiptPrinter.a4 => 'Opens the print dialog with an A4 page',
-        _ => 'Opens the print dialog sized for receipt paper',
-      };
+    ReceiptPrinter.usb => 'Prints straight to a USB ESC/POS printer (Chrome / Edge)',
+    ReceiptPrinter.a4 => 'Opens the print dialog with an A4 page',
+    _ => 'Opens the print dialog sized for receipt paper',
+  };
 
   PaperSize? get paper => switch (this) {
-        ReceiptPrinter.thermal80 => PaperSize.thermal80,
-        ReceiptPrinter.thermal58 => PaperSize.thermal58,
-        ReceiptPrinter.a4 => PaperSize.a4,
-        ReceiptPrinter.usb => null,
-      };
+    ReceiptPrinter.thermal80 => PaperSize.thermal80,
+    ReceiptPrinter.thermal58 => PaperSize.thermal58,
+    ReceiptPrinter.a4 => PaperSize.a4,
+    ReceiptPrinter.usb => null,
+  };
 
   /// Options this device can use.
   static List<ReceiptPrinter> get available => [
-        if (canPrintHtml) ...[ReceiptPrinter.thermal80, ReceiptPrinter.thermal58, ReceiptPrinter.a4],
-        if (EscPosUsbPrinter.isSupported) ReceiptPrinter.usb,
-      ];
+    if (canPrintHtml) ...[ReceiptPrinter.thermal80, ReceiptPrinter.thermal58, ReceiptPrinter.a4],
+    if (EscPosUsbPrinter.isSupported) ReceiptPrinter.usb,
+  ];
 }
 
 const _prefKey = 'cafe_pos_receipt_printer';
@@ -94,7 +95,7 @@ Future<void> printSavedBill(
       await printHtml(receiptHtml(ReceiptData.from(order, orderId, settings), paper));
     }
   } catch (e) {
-    if (context.mounted) showError(context, 'Could not print: $e');
+    if (context.mounted) showError(context, friendlyPrintError(e));
   }
 }
 

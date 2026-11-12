@@ -65,28 +65,30 @@ Future<void> showAdminCommand(BuildContext context, {required String title, requ
               const SizedBox(height: Space.xs),
               Container(
                 padding: const EdgeInsets.fromLTRB(Space.md, Space.sm, Space.xs, Space.sm),
-                decoration: BoxDecoration(color: p.surfaceAlt, borderRadius: Radii.controlR, border: Border.all(color: p.border)),
-                child: Row(children: [
-                  Expanded(
-                    child: SelectableText(
-                      '$adminScriptEnv \\\n  $command',
-                      style: const TextStyle(fontFamily: 'monospace', fontSize: 12.5, height: 1.4),
+                decoration: BoxDecoration(
+                  color: p.surfaceAlt,
+                  borderRadius: Radii.controlR,
+                  border: Border.all(color: p.border),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SelectableText('$adminScriptEnv \\\n  $command', style: const TextStyle(fontFamily: 'monospace', fontSize: 12.5, height: 1.4)),
                     ),
-                  ),
-                  IconButton(
-                    key: const Key('copy-command'),
-                    tooltip: 'Copy',
-                    icon: const Icon(Icons.copy_rounded, size: 18),
-                    onPressed: () async {
-                      await Clipboard.setData(ClipboardData(text: '$adminScriptEnv $command'));
-                      if (ctx.mounted) showSuccess(ctx, 'Command copied');
-                    },
-                  ),
-                ]),
+                    IconButton(
+                      key: const Key('copy-command'),
+                      tooltip: 'Copy',
+                      icon: const Icon(Icons.copy_rounded, size: 18),
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: '$adminScriptEnv $command'));
+                        if (ctx.mounted) showSuccess(ctx, 'Command copied');
+                      },
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: Space.sm),
-              Text('Replace the words in <angle brackets>. Passwords are never stored by the app.',
-                  style: TextStyle(color: p.inkSubtle, fontSize: 12)),
+              Text('Replace the words in <angle brackets>. Passwords are never stored by the app.', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
             ],
           ),
         ),
@@ -113,54 +115,75 @@ class MonthlyBars extends StatelessWidget {
       return Container(
         alignment: Alignment.center,
         decoration: BoxDecoration(color: p.surfaceAlt, borderRadius: Radii.cardR),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.insights_outlined, color: p.inkSubtle),
-          const SizedBox(height: Space.xs),
-          Text(emptyText, style: TextStyle(color: p.inkSubtle)),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.insights_outlined, color: p.inkSubtle),
+            const SizedBox(height: Space.xs),
+            Text(emptyText, style: TextStyle(color: p.inkSubtle)),
+          ],
+        ),
       );
     }
-    return BarChart(BarChartData(
-      maxY: maxY * 1.2,
-      gridData: FlGridData(drawVerticalLine: false, horizontalInterval: maxY / 3, getDrawingHorizontalLine: (_) => FlLine(color: p.border, strokeWidth: 1)),
-      borderData: FlBorderData(show: false),
-      titlesData: FlTitlesData(
-        topTitles: const AxisTitles(),
-        rightTitles: const AxisTitles(),
-        leftTitles: AxisTitles(
-          sideTitles: SideTitles(
-            showTitles: true,
-            reservedSize: money ? 56 : 28,
-            getTitlesWidget: (v, meta) => v == meta.max
-                ? const SizedBox.shrink()
-                : Text(money ? Fmt.money(v.round()) : v.round().toString(), style: TextStyle(fontSize: 11, color: p.inkSubtle)),
+    return BarChart(
+      BarChartData(
+        maxY: maxY * 1.2,
+        gridData: FlGridData(
+          drawVerticalLine: false,
+          horizontalInterval: maxY / 3,
+          getDrawingHorizontalLine: (_) => FlLine(color: p.border, strokeWidth: 1),
+        ),
+        borderData: FlBorderData(show: false),
+        titlesData: FlTitlesData(
+          topTitles: const AxisTitles(),
+          rightTitles: const AxisTitles(),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: money ? 56 : 28,
+              getTitlesWidget: (v, meta) => v == meta.max
+                  ? const SizedBox.shrink()
+                  : Text(money ? Fmt.money(v.round()) : v.round().toString(), style: TextStyle(fontSize: 11, color: p.inkSubtle)),
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 22,
+              getTitlesWidget: (v, _) {
+                final i = v.toInt();
+                if (i < 0 || i >= points.length) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(_m[points[i].$1.month - 1], style: TextStyle(fontSize: 11, color: p.inkSubtle)),
+                );
+              },
+            ),
           ),
         ),
-        bottomTitles: AxisTitles(
-          sideTitles: SideTitles(
-            showTitles: true,
-            reservedSize: 22,
-            getTitlesWidget: (v, _) {
-              final i = v.toInt();
-              if (i < 0 || i >= points.length) return const SizedBox.shrink();
-              return Padding(padding: const EdgeInsets.only(top: 4), child: Text(_m[points[i].$1.month - 1], style: TextStyle(fontSize: 11, color: p.inkSubtle)));
-            },
+        barTouchData: BarTouchData(
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipColor: (_) => p.ink,
+            getTooltipItem: (g, _, r, _) =>
+                BarTooltipItem(money ? Fmt.money(r.toY.round()) : r.toY.round().toString(), TextStyle(color: p.surface, fontWeight: FontWeight.w700)),
           ),
         ),
+        barGroups: [
+          for (var i = 0; i < points.length; i++)
+            BarChartGroupData(
+              x: i,
+              barRods: [
+                BarChartRodData(
+                  toY: points[i].$2,
+                  width: 22,
+                  color: p.primary,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                ),
+              ],
+            ),
+        ],
       ),
-      barTouchData: BarTouchData(
-        touchTooltipData: BarTouchTooltipData(
-          getTooltipColor: (_) => p.ink,
-          getTooltipItem: (g, _, r, _) => BarTooltipItem(money ? Fmt.money(r.toY.round()) : r.toY.round().toString(), TextStyle(color: p.surface, fontWeight: FontWeight.w700)),
-        ),
-      ),
-      barGroups: [
-        for (var i = 0; i < points.length; i++)
-          BarChartGroupData(x: i, barRods: [
-            BarChartRodData(toY: points[i].$2, width: 22, color: p.primary, borderRadius: const BorderRadius.vertical(top: Radius.circular(4))),
-          ]),
-      ],
-    ));
+    );
   }
 }
 
@@ -173,16 +196,26 @@ class KvList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    return Column(children: [
-      for (final r in rows)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SizedBox(width: labelWidth, child: Text(r.$1, style: TextStyle(color: p.inkSubtle, fontSize: 13))),
-            Expanded(child: SelectableText(r.$2.isEmpty ? '—' : r.$2, style: const TextStyle(fontWeight: FontWeight.w500))),
-          ]),
-        ),
-    ]);
+    return Column(
+      children: [
+        for (final r in rows)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: labelWidth,
+                  child: Text(r.$1, style: TextStyle(color: p.inkSubtle, fontSize: 13)),
+                ),
+                Expanded(
+                  child: SelectableText(r.$2.isEmpty ? '—' : r.$2, style: const TextStyle(fontWeight: FontWeight.w500)),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
   }
 }
 
@@ -194,13 +227,19 @@ class InlineEmpty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: Space.xl),
-        child: Column(children: [
-          Icon(icon, color: context.palette.inkSubtle),
-          const SizedBox(height: Space.xs),
-          Text(text, textAlign: TextAlign.center, style: TextStyle(color: context.palette.inkSubtle)),
-        ]),
-      );
+    padding: const EdgeInsets.symmetric(vertical: Space.xl),
+    child: Column(
+      children: [
+        Icon(icon, color: context.palette.inkSubtle),
+        const SizedBox(height: Space.xs),
+        Text(
+          text,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: context.palette.inkSubtle),
+        ),
+      ],
+    ),
+  );
 }
 
 String daysLeftLabel(int? d) {

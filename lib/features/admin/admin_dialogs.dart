@@ -9,6 +9,7 @@ import '../../core/widgets/confirm_dialog.dart';
 import '../../core/widgets/ui.dart';
 import 'admin_service.dart';
 import 'admin_widgets.dart';
+import '../../core/utils/friendly_error.dart';
 
 /// Forms of the Super Admin panel. Every save is a Firestore write that the
 /// rules allow only for the Super Admin, and each one is audit-logged.
@@ -116,7 +117,7 @@ Future<String?> showCafeForm(
             }
           } catch (e) {
             setState(() => saving = false);
-            if (ctx.mounted) showError(ctx, 'Could not save: $e');
+            if (ctx.mounted) showError(ctx, friendlyError(e, 'save'));
           }
         }
 
@@ -217,7 +218,7 @@ Future<void> confirmCafeStatus(BuildContext context, CafeSummary cafe, String st
     await AdminService.instance.setCafeStatus(cafe, status);
     if (context.mounted) showSuccess(context, '${cafe.name} is now $status');
   } catch (e) {
-    if (context.mounted) showError(context, 'Could not change the status: $e');
+    if (context.mounted) showError(context, friendlyError(e, 'change the status'));
   }
 }
 
@@ -352,7 +353,7 @@ Future<void> showPlanForm(BuildContext context, {SubscriptionPlan? plan}) {
                     }
                   } catch (e) {
                     setBtn(() => saving = false);
-                    if (ctx.mounted) showError(ctx, 'Could not save: $e');
+                    if (ctx.mounted) showError(ctx, friendlyError(e, 'save'));
                   }
                 },
           child: Text(saving ? 'Saving…' : 'Save plan'),
@@ -501,7 +502,7 @@ Future<void> showAssignPlan(BuildContext context, CafeSummary cafe, List<Subscri
                       }
                     } catch (e) {
                       setBtn(() => saving = false);
-                      if (ctx.mounted) showError(ctx, 'Could not save: $e');
+                      if (ctx.mounted) showError(ctx, friendlyError(e, 'save'));
                     }
                   },
             child: Text(saving ? 'Saving…' : 'Save'),
@@ -570,7 +571,7 @@ Future<void> showRenew(BuildContext context, CafeSummary cafe) {
                     }
                   } catch (e) {
                     setBtn(() => saving = false);
-                    if (ctx.mounted) showError(ctx, 'Could not renew: $e');
+                    if (ctx.mounted) showError(ctx, friendlyError(e, 'renew'));
                   }
                 },
           child: Text(saving ? 'Saving…' : 'Renew'),
@@ -593,7 +594,7 @@ Future<void> confirmCancelSubscription(BuildContext context, CafeSummary cafe) a
     await AdminService.instance.cancel(cafe);
     if (context.mounted) showSuccess(context, 'Subscription cancelled');
   } catch (e) {
-    if (context.mounted) showError(context, 'Could not cancel: $e');
+    if (context.mounted) showError(context, friendlyError(e, 'cancel the subscription'));
   }
 }
 
@@ -726,7 +727,7 @@ Future<void> showRecordPayment(BuildContext context, List<CafeSummary> cafes, {C
                       }
                     } catch (e) {
                       setBtn(() => saving = false);
-                      if (ctx.mounted) showError(ctx, 'Could not record: $e');
+                      if (ctx.mounted) showError(ctx, friendlyError(e, 'record the payment'));
                     }
                   },
             child: Text(saving ? 'Saving…' : 'Record payment'),

@@ -7,6 +7,7 @@ import 'admin_dashboard_screen.dart';
 import 'admin_data.dart';
 import 'admin_service.dart';
 import 'cafe_detail_screen.dart';
+import '../../core/utils/friendly_error.dart';
 
 /// What needs attention now, worked out from live data.
 class AlertsScreen extends StatefulWidget {
@@ -30,25 +31,37 @@ class _AlertsScreenState extends State<AlertsScreen> {
         final list = all.where((a) => _level == null || a.level == _level).toList();
         final p = context.palette;
         int n(AlertLevel l) => all.where((a) => a.level == l).length;
-        return PageBody(children: [
-          PageHeader(title: 'Alerts', subtitle: 'Expiring and expired plans, pending payments, cafes without a login, new cafes. Updated live.'),
-          FilterPills<AlertLevel?>(
-            options: [(null, 'All (${all.length})'), (AlertLevel.critical, 'Critical (${n(AlertLevel.critical)})'), (AlertLevel.warning, 'Warnings (${n(AlertLevel.warning)})'), (AlertLevel.info, 'Info (${n(AlertLevel.info)})')],
-            selected: _level,
-            onSelected: (v) => setState(() => _level = v),
-          ),
-          const SizedBox(height: Space.md),
-          SurfaceCard(
-            child: list.isEmpty
-                ? const EmptyState(icon: Icons.task_alt_rounded, title: 'Nothing needs attention')
-                : Column(children: [
-                    for (var i = 0; i < list.length; i++) ...[
-                      if (i > 0) Divider(height: 1, color: p.border),
-                      Padding(padding: const EdgeInsets.symmetric(horizontal: Space.lg), child: AlertTile(alert: list[i], data: widget.data)),
-                    ],
-                  ]),
-          ),
-        ]);
+        return PageBody(
+          children: [
+            PageHeader(title: 'Alerts', subtitle: 'Expiring and expired plans, pending payments, cafes without a login, new cafes. Updated live.'),
+            FilterPills<AlertLevel?>(
+              options: [
+                (null, 'All (${all.length})'),
+                (AlertLevel.critical, 'Critical (${n(AlertLevel.critical)})'),
+                (AlertLevel.warning, 'Warnings (${n(AlertLevel.warning)})'),
+                (AlertLevel.info, 'Info (${n(AlertLevel.info)})'),
+              ],
+              selected: _level,
+              onSelected: (v) => setState(() => _level = v),
+            ),
+            const SizedBox(height: Space.md),
+            SurfaceCard(
+              child: list.isEmpty
+                  ? const EmptyState(icon: Icons.task_alt_rounded, title: 'Nothing needs attention')
+                  : Column(
+                      children: [
+                        for (var i = 0; i < list.length; i++) ...[
+                          if (i > 0) Divider(height: 1, color: p.border),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: Space.lg),
+                            child: AlertTile(alert: list[i], data: widget.data),
+                          ),
+                        ],
+                      ],
+                    ),
+            ),
+          ],
+        );
       },
     );
   }
@@ -86,7 +99,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       builder: (context, d, _) => StreamBuilder<List<Map<String, dynamic>>>(
         stream: _stream,
         builder: (context, snap) {
-          if (snap.hasError) return ErrorState(message: 'Could not load activity: ${snap.error}');
+          if (snap.hasError) return ErrorState(message: friendlyError(snap.error, 'load the activity'));
           if (!snap.hasData) return const LoadingState(label: 'Loading activity…');
           final p = context.palette;
           final list = snap.data!.where((e) {
@@ -95,45 +108,60 @@ class _ActivityScreenState extends State<ActivityScreen> {
             if (_cafe != null && e['cafeId'] != _cafe) return false;
             return true;
           }).toList();
-          return PageBody(children: [
-            const PageHeader(title: 'Activity log', subtitle: 'Who changed what, and when. Entries can\'t be edited or deleted.'),
-            Wrap(spacing: Space.sm, runSpacing: Space.sm, children: [
-              SizedBox(
-                width: 200,
-                child: DropdownButtonFormField<String>(
-                  initialValue: _kind,
-                  isExpanded: true,
-                  decoration: const InputDecoration(isDense: true),
-                  items: [for (final e in kinds.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
-                  onChanged: (v) => setState(() => _kind = v ?? 'all'),
-                ),
-              ),
-              SizedBox(
-                width: 200,
-                child: DropdownButtonFormField<String?>(
-                  initialValue: _cafe,
-                  isExpanded: true,
-                  decoration: const InputDecoration(isDense: true),
-                  items: [const DropdownMenuItem(value: null, child: Text('All cafes')), for (final c in d.cafes) DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis))],
-                  onChanged: (v) => setState(() => _cafe = v),
-                ),
-              ),
-            ]),
-            const SizedBox(height: Space.lg),
-            SurfaceCard(
-              child: list.isEmpty
-                  ? const EmptyState(icon: Icons.history_rounded, title: 'No activity')
-                  : Column(children: [
-                      for (var i = 0; i < list.length; i++) ...[
-                        if (i > 0) Divider(height: 1, color: p.border),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: Space.lg),
-                          child: AuditTile(entry: list[i], cafeName: list[i]['cafeId'] == null ? null : d.cafeName(list[i]['cafeId'].toString())),
-                        ),
+          return PageBody(
+            children: [
+              const PageHeader(title: 'Activity log', subtitle: 'Who changed what, and when. Entries can\'t be edited or deleted.'),
+              Wrap(
+                spacing: Space.sm,
+                runSpacing: Space.sm,
+                children: [
+                  SizedBox(
+                    width: 200,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: _kind,
+                      isExpanded: true,
+                      decoration: const InputDecoration(isDense: true),
+                      items: [for (final e in kinds.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
+                      onChanged: (v) => setState(() => _kind = v ?? 'all'),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 200,
+                    child: DropdownButtonFormField<String?>(
+                      initialValue: _cafe,
+                      isExpanded: true,
+                      decoration: const InputDecoration(isDense: true),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('All cafes')),
+                        for (final c in d.cafes)
+                          DropdownMenuItem(
+                            value: c.id,
+                            child: Text(c.name, overflow: TextOverflow.ellipsis),
+                          ),
                       ],
-                    ]),
-            ),
-          ]);
+                      onChanged: (v) => setState(() => _cafe = v),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: Space.lg),
+              SurfaceCard(
+                child: list.isEmpty
+                    ? const EmptyState(icon: Icons.history_rounded, title: 'No activity')
+                    : Column(
+                        children: [
+                          for (var i = 0; i < list.length; i++) ...[
+                            if (i > 0) Divider(height: 1, color: p.border),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: Space.lg),
+                              child: AuditTile(entry: list[i], cafeName: list[i]['cafeId'] == null ? null : d.cafeName(list[i]['cafeId'].toString())),
+                            ),
+                          ],
+                        ],
+                      ),
+              ),
+            ],
+          );
         },
       ),
     );

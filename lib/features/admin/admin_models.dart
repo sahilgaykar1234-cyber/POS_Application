@@ -32,8 +32,7 @@ class CafeSummary {
 
   String get location => [city, state, country].where((s) => s.isNotEmpty).join(', ');
 
-  Map<String, dynamic> get subscription =>
-      data['subscription'] is Map ? Map<String, dynamic>.from(data['subscription'] as Map) : const {};
+  Map<String, dynamic> get subscription => data['subscription'] is Map ? Map<String, dynamic>.from(data['subscription'] as Map) : const {};
   bool get hasSubscription => subscription.isNotEmpty && subscription['status'] != null;
   String? get planId => subscription['planId']?.toString();
   String? get planName => subscription['planName']?.toString();
@@ -121,10 +120,7 @@ class SubscriptionPlan {
 
   String get priceLabel {
     if (tier == PlanTier.trial) return 'Free · $trialDays days';
-    final parts = [
-      if (monthlyPrice > 0) '${Fmt.money(monthlyPrice)}/mo',
-      if (yearlyPrice > 0) '${Fmt.money(yearlyPrice)}/yr',
-    ];
+    final parts = [if (monthlyPrice > 0) '${Fmt.money(monthlyPrice)}/mo', if (yearlyPrice > 0) '${Fmt.money(yearlyPrice)}/yr'];
     return parts.isEmpty ? 'Free' : parts.join(' · ');
   }
 }
@@ -181,11 +177,11 @@ class StaffMember {
   }
 
   String get roleLabel => switch (role) {
-        'superAdmin' => 'Super Admin',
-        'manager' => isSharedCafeLogin ? 'Cafe login (Manager + Captain)' : 'Manager',
-        'captain' => 'Captain',
-        _ => 'No role',
-      };
+    'superAdmin' => 'Super Admin',
+    'manager' => isSharedCafeLogin ? 'Cafe login (Manager + Captain)' : 'Manager',
+    'captain' => 'Captain',
+    _ => 'No role',
+  };
 }
 
 // --------------------------------------------------------------- platform --
@@ -315,27 +311,34 @@ class AdminAlert {
 
 /// Things that need the Super Admin's attention, worked out from live data
 /// (no stored or invented notifications). Most urgent first.
-List<AdminAlert> computeAlerts({
-  required List<CafeSummary> cafes,
-  required List<StaffMember> staff,
-  required DateTime now,
-  PlatformSettings? settings,
-}) {
+List<AdminAlert> computeAlerts({required List<CafeSummary> cafes, required List<StaffMember> staff, required DateTime now, PlatformSettings? settings}) {
   final s = settings ?? PlatformSettings.empty;
   final out = <AdminAlert>[];
   for (final c in cafes.where((c) => !c.isDeleted)) {
     final st = c.subState(now);
     final left = c.daysLeft(now);
     if (st == SubState.expired && c.isActive) {
-      out.add(AdminAlert(AlertLevel.critical, '${c.name}: subscription expired',
+      out.add(
+        AdminAlert(
+          AlertLevel.critical,
+          '${c.name}: subscription expired',
           'Expired${c.expiryDate != null ? ' on ${Fmt.date(c.expiryDate)}' : ''}. The POS is blocked until it is renewed.',
-          cafeId: c.id, at: c.expiryDate));
+          cafeId: c.id,
+          at: c.expiryDate,
+        ),
+      );
     } else if (st == SubState.suspended && c.isActive) {
       out.add(AdminAlert(AlertLevel.critical, '${c.name}: subscription suspended', 'The POS is blocked for this cafe.', cafeId: c.id));
     } else if (s.alertExpiring && st.running && left != null && left <= s.reminderDays) {
-      out.add(AdminAlert(AlertLevel.warning, '${c.name}: ${st == SubState.trial ? 'trial' : 'subscription'} ends ${left <= 1 ? 'within a day' : 'in $left days'}',
+      out.add(
+        AdminAlert(
+          AlertLevel.warning,
+          '${c.name}: ${st == SubState.trial ? 'trial' : 'subscription'} ends ${left <= 1 ? 'within a day' : 'in $left days'}',
           'Expires on ${Fmt.date(c.expiryDate)}.${st == SubState.cancelled ? ' It is cancelled and will not renew.' : ''}',
-          cafeId: c.id, at: c.expiryDate));
+          cafeId: c.id,
+          at: c.expiryDate,
+        ),
+      );
     }
     if (s.alertPayments && st == SubState.pending) {
       out.add(AdminAlert(AlertLevel.warning, '${c.name}: payment pending', 'Record the payment when it is received.', cafeId: c.id));
@@ -361,22 +364,22 @@ List<AdminAlert> computeAlerts({
 
 /// Human text for an audit entry's action.
 String auditLabel(String action) => switch (action) {
-      'cafe.create' => 'Cafe created',
-      'cafe.update' => 'Cafe details updated',
-      'cafe.status' => 'Cafe status changed',
-      'cafe.delete' => 'Cafe deleted',
-      'plan.create' => 'Plan created',
-      'plan.update' => 'Plan updated',
-      'plan.delete' => 'Plan deleted',
-      'subscription.set' => 'Subscription assigned',
-      'subscription.renew' => 'Subscription renewed',
-      'subscription.cancel' => 'Subscription cancelled',
-      'payment.record' => 'Payment recorded',
-      'staff.access' => 'Staff access changed',
-      'platform.settings' => 'Platform settings changed',
-      'migration.run' => 'Data migration',
-      _ => action,
-    };
+  'cafe.create' => 'Cafe created',
+  'cafe.update' => 'Cafe details updated',
+  'cafe.status' => 'Cafe status changed',
+  'cafe.delete' => 'Cafe deleted',
+  'plan.create' => 'Plan created',
+  'plan.update' => 'Plan updated',
+  'plan.delete' => 'Plan deleted',
+  'subscription.set' => 'Subscription assigned',
+  'subscription.renew' => 'Subscription renewed',
+  'subscription.cancel' => 'Subscription cancelled',
+  'payment.record' => 'Payment recorded',
+  'staff.access' => 'Staff access changed',
+  'platform.settings' => 'Platform settings changed',
+  'migration.run' => 'Data migration',
+  _ => action,
+};
 
 // ------------------------------------------------------ recommended plans --
 
@@ -441,18 +444,15 @@ const List<Map<String, Object?>> recommendedPlans = [
     'maxStaff': null,
     'maxDevices': null,
     'description': 'For high-volume cafes that want hands-on help.',
-    'features': [
-      'Everything in Standard',
-      'Unlimited logins and devices',
-      'Menu setup done for you',
-      'Logo and receipt branding setup',
-      'Priority support',
-    ],
+    'features': ['Everything in Standard', 'Unlimited logins and devices', 'Menu setup done for you', 'Logo and receipt branding setup', 'Priority support'],
   },
 ];
 
 /// Recommended plans not created yet (matched by name, case-insensitive).
 List<Map<String, Object?>> missingRecommendedPlans(List<SubscriptionPlan> existing) {
   final have = {for (final p in existing) p.name.trim().toLowerCase()};
-  return [for (final p in recommendedPlans) if (!have.contains((p['name'] as String).toLowerCase())) p];
+  return [
+    for (final p in recommendedPlans)
+      if (!have.contains((p['name'] as String).toLowerCase())) p,
+  ];
 }

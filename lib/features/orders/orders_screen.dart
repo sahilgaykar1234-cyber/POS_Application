@@ -334,11 +334,11 @@ class _TableRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: Space.lg, vertical: Space.sm + 2),
         child: Row(children: [
           cell(0, Text(o.billNo, style: const TextStyle(fontWeight: FontWeight.w700))),
-          cell(1, Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          cell(1, Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(date, style: const TextStyle(fontSize: 13.5)),
             Text(time, style: TextStyle(color: p.inkSubtle, fontSize: 12)),
           ])),
-          cell(2, Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          cell(2, Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(who.isEmpty ? '—' : who, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5)),
             if (o.customerPhone.isNotEmpty) Text(o.customerPhone, style: TextStyle(color: p.inkSubtle, fontSize: 12)),
           ])),

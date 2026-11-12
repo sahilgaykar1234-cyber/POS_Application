@@ -34,11 +34,13 @@ List<CafeSummary> filterCafes(
         c.contactNumber.contains(q) ||
         c.id.toLowerCase() == q;
   }).toList();
-  out.sort((a, b) => switch (sort) {
-        CafeSort.name => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-        CafeSort.newest => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)),
-        CafeSort.expiry => (a.expiryDate ?? DateTime(9999)).compareTo(b.expiryDate ?? DateTime(9999)),
-      });
+  out.sort(
+    (a, b) => switch (sort) {
+      CafeSort.name => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      CafeSort.newest => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)),
+      CafeSort.expiry => (a.expiryDate ?? DateTime(9999)).compareTo(b.expiryDate ?? DateTime(9999)),
+    },
+  );
   return out;
 }
 
@@ -71,73 +73,94 @@ class _CafesScreenState extends State<CafesScreen> {
         if (d.loading && d.cafes.isEmpty) return const LoadingState(label: 'Loading cafes…');
         final now = DateTime.now();
         final list = filterCafes(d.cafes, search: _q, status: _status, sub: _sub, sort: _sort, now: now);
-        return PageBody(children: [
-          PageHeader(
-            title: 'Cafes',
-            subtitle: '${d.cafes.where((c) => !c.isDeleted).length} cafes · ${d.cafes.where((c) => c.isActive).length} active',
-            actions: [FilledButton.icon(key: const Key('new-cafe'), onPressed: () => _create(d), icon: const Icon(Icons.add_business_outlined, size: 18), label: const Text('New cafe'))],
-          ),
-          LayoutBuilder(builder: (context, c) {
-            final narrow = c.maxWidth < 700;
-            final w = narrow ? (c.maxWidth - Space.sm) / 2 : 180.0;
-            return Wrap(spacing: Space.sm, runSpacing: Space.sm, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              SearchField(width: narrow ? double.infinity : 300, hint: 'Name, owner, city or phone', onChanged: (v) => setState(() => _q = v)),
-              SizedBox(
-                width: w,
-                child: DropdownButtonFormField<String>(
-                  initialValue: _status,
-                  isExpanded: true,
-                  decoration: const InputDecoration(isDense: true),
-                  items: [
-                    const DropdownMenuItem(value: 'all', child: Text('All statuses')),
-                    for (final s in [CafeStatus.active, CafeStatus.inactive, CafeStatus.suspended]) DropdownMenuItem(value: s, child: Text(s[0].toUpperCase() + s.substring(1))),
-                  ],
-                  onChanged: (v) => setState(() => _status = v ?? 'all'),
+        return PageBody(
+          children: [
+            PageHeader(
+              title: 'Cafes',
+              subtitle: '${d.cafes.where((c) => !c.isDeleted).length} cafes · ${d.cafes.where((c) => c.isActive).length} active',
+              actions: [
+                FilledButton.icon(
+                  key: const Key('new-cafe'),
+                  onPressed: () => _create(d),
+                  icon: const Icon(Icons.add_business_outlined, size: 18),
+                  label: const Text('New cafe'),
                 ),
-              ),
-              SizedBox(
-                width: w,
-                child: DropdownButtonFormField<SubState?>(
-                  initialValue: _sub,
-                  isExpanded: true,
-                  decoration: const InputDecoration(isDense: true),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('Any plan')),
-                    for (final s in SubState.values) DropdownMenuItem(value: s, child: Text(s.label)),
-                  ],
-                  onChanged: (v) => setState(() => _sub = v),
-                ),
-              ),
-              SizedBox(
-                width: w,
-                child: DropdownButtonFormField<CafeSort>(
-                  initialValue: _sort,
-                  isExpanded: true,
-                  decoration: const InputDecoration(isDense: true, prefixIcon: Icon(Icons.sort_rounded, size: 18)),
-                  items: const [
-                    DropdownMenuItem(value: CafeSort.name, child: Text('Name')),
-                    DropdownMenuItem(value: CafeSort.newest, child: Text('Newest')),
-                    DropdownMenuItem(value: CafeSort.expiry, child: Text('Ending soonest')),
-                  ],
-                  onChanged: (v) => setState(() => _sort = v ?? _sort),
-                ),
-              ),
-            ]);
-          }),
-          const SizedBox(height: Space.lg),
-          if (list.isEmpty)
-            SurfaceCard(
-              child: EmptyState(
-                icon: Icons.storefront_outlined,
-                title: d.cafes.isEmpty ? 'No cafes yet' : 'No cafe matches',
-                message: d.cafes.isEmpty ? 'Create the first cafe to get started.' : 'Try another search or filter.',
-              ),
-            )
-          else
-            LayoutBuilder(
-              builder: (context, c) => c.maxWidth >= 980 ? _Table(cafes: list, d: d, data: widget.data, now: now) : Column(children: [for (final x in list) _Card(cafe: x, d: d, data: widget.data, now: now)]),
+              ],
             ),
-        ]);
+            LayoutBuilder(
+              builder: (context, c) {
+                final narrow = c.maxWidth < 700;
+                final w = narrow ? (c.maxWidth - Space.sm) / 2 : 180.0;
+                return Wrap(
+                  spacing: Space.sm,
+                  runSpacing: Space.sm,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    SearchField(width: narrow ? double.infinity : 300, hint: 'Name, owner, city or phone', onChanged: (v) => setState(() => _q = v)),
+                    SizedBox(
+                      width: w,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _status,
+                        isExpanded: true,
+                        decoration: const InputDecoration(isDense: true),
+                        items: [
+                          const DropdownMenuItem(value: 'all', child: Text('All statuses')),
+                          for (final s in [CafeStatus.active, CafeStatus.inactive, CafeStatus.suspended])
+                            DropdownMenuItem(value: s, child: Text(s[0].toUpperCase() + s.substring(1))),
+                        ],
+                        onChanged: (v) => setState(() => _status = v ?? 'all'),
+                      ),
+                    ),
+                    SizedBox(
+                      width: w,
+                      child: DropdownButtonFormField<SubState?>(
+                        initialValue: _sub,
+                        isExpanded: true,
+                        decoration: const InputDecoration(isDense: true),
+                        items: [
+                          const DropdownMenuItem(value: null, child: Text('Any plan')),
+                          for (final s in SubState.values) DropdownMenuItem(value: s, child: Text(s.label)),
+                        ],
+                        onChanged: (v) => setState(() => _sub = v),
+                      ),
+                    ),
+                    SizedBox(
+                      width: w,
+                      child: DropdownButtonFormField<CafeSort>(
+                        initialValue: _sort,
+                        isExpanded: true,
+                        decoration: const InputDecoration(isDense: true, prefixIcon: Icon(Icons.sort_rounded, size: 18)),
+                        items: const [
+                          DropdownMenuItem(value: CafeSort.name, child: Text('Name')),
+                          DropdownMenuItem(value: CafeSort.newest, child: Text('Newest')),
+                          DropdownMenuItem(value: CafeSort.expiry, child: Text('Ending soonest')),
+                        ],
+                        onChanged: (v) => setState(() => _sort = v ?? _sort),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: Space.lg),
+            if (list.isEmpty)
+              SurfaceCard(
+                child: EmptyState(
+                  icon: Icons.storefront_outlined,
+                  title: d.cafes.isEmpty ? 'No cafes yet' : 'No cafe matches',
+                  message: d.cafes.isEmpty ? 'Create the first cafe to get started.' : 'Try another search or filter.',
+                ),
+              )
+            else
+              LayoutBuilder(
+                builder: (context, c) => c.maxWidth >= 980
+                    ? _Table(cafes: list, d: d, data: widget.data, now: now)
+                    : Column(
+                        children: [for (final x in list) _Card(cafe: x, d: d, data: widget.data, now: now)],
+                      ),
+              ),
+          ],
+        );
       },
     );
   }
@@ -156,51 +179,90 @@ class _Table extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final head = TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.4);
-    Widget cell(int i, Widget w) => Expanded(flex: _flex[i], child: Align(alignment: Alignment.centerLeft, child: w));
+    Widget cell(int i, Widget w) => Expanded(
+      flex: _flex[i],
+      child: Align(alignment: Alignment.centerLeft, child: w),
+    );
     return SurfaceCard(
-      child: Column(children: [
-        Container(
-          color: p.surfaceAlt,
-          padding: const EdgeInsets.symmetric(horizontal: Space.lg, vertical: Space.md),
-          child: Row(children: [
-            cell(0, Text('CAFE', style: head)),
-            cell(1, Text('STATUS', style: head)),
-            cell(2, Text('PLAN', style: head)),
-            cell(3, Text('ENDS', style: head)),
-            cell(4, Text('JOINED', style: head)),
-            cell(5, Text('LOGINS', style: head)),
-            const SizedBox(width: 40),
-          ]),
-        ),
-        for (var i = 0; i < cafes.length; i++) ...[
-          if (i > 0) Divider(height: 1, color: p.border),
-          InkWell(
-            key: Key('cafe-row-${cafes[i].id}'),
-            onTap: () => openCafe(context, cafes[i].id, data),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Space.lg, vertical: Space.md),
-              child: Row(children: [
-                cell(0, Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(cafes[i].name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                  Text([cafes[i].ownerName, cafes[i].city].where((s) => s.isNotEmpty).join(' · ').ifEmpty(cafes[i].contactNumber), style: TextStyle(color: p.inkSubtle, fontSize: 12)),
-                ])),
-                cell(1, CafeStatusChip(cafes[i].status)),
-                cell(2, Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  SubStateChip(cafes[i].subState(now)),
-                  if (cafes[i].planName != null) Padding(padding: const EdgeInsets.only(top: 2), child: Text(cafes[i].planName!, style: TextStyle(color: p.inkSubtle, fontSize: 12))),
-                ])),
-                cell(3, Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(fmtDate(cafes[i].expiryDate)),
-                  if (cafes[i].expiryDate != null) Text(daysLeftLabel(cafes[i].daysLeft(now)), style: TextStyle(color: p.inkSubtle, fontSize: 12)),
-                ])),
-                cell(4, Text(fmtDate(cafes[i].createdAt))),
-                cell(5, Text('${d.staff.where((s) => s.cafeId == cafes[i].id && s.isActive).length}')),
-                const SizedBox(width: 40, child: Icon(Icons.chevron_right_rounded)),
-              ]),
+      child: Column(
+        children: [
+          Container(
+            color: p.surfaceAlt,
+            padding: const EdgeInsets.symmetric(horizontal: Space.lg, vertical: Space.md),
+            child: Row(
+              children: [
+                cell(0, Text('CAFE', style: head)),
+                cell(1, Text('STATUS', style: head)),
+                cell(2, Text('PLAN', style: head)),
+                cell(3, Text('ENDS', style: head)),
+                cell(4, Text('JOINED', style: head)),
+                cell(5, Text('LOGINS', style: head)),
+                const SizedBox(width: 40),
+              ],
             ),
           ),
+          for (var i = 0; i < cafes.length; i++) ...[
+            if (i > 0) Divider(height: 1, color: p.border),
+            InkWell(
+              key: Key('cafe-row-${cafes[i].id}'),
+              onTap: () => openCafe(context, cafes[i].id, data),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Space.lg, vertical: Space.md),
+                child: Row(
+                  children: [
+                    cell(
+                      0,
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(cafes[i].name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                          // Only when there is something to show (an empty line would push the name up).
+                          if ([cafes[i].ownerName, cafes[i].city, cafes[i].contactNumber].any((s) => s.isNotEmpty))
+                            Text(
+                              [cafes[i].ownerName, cafes[i].city].where((s) => s.isNotEmpty).join(' · ').ifEmpty(cafes[i].contactNumber),
+                              style: TextStyle(color: p.inkSubtle, fontSize: 12),
+                            ),
+                        ],
+                      ),
+                    ),
+                    cell(1, CafeStatusChip(cafes[i].status)),
+                    cell(
+                      2,
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SubStateChip(cafes[i].subState(now)),
+                          if (cafes[i].planName != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(cafes[i].planName!, style: TextStyle(color: p.inkSubtle, fontSize: 12)),
+                            ),
+                        ],
+                      ),
+                    ),
+                    cell(
+                      3,
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(fmtDate(cafes[i].expiryDate)),
+                          if (cafes[i].expiryDate != null) Text(daysLeftLabel(cafes[i].daysLeft(now)), style: TextStyle(color: p.inkSubtle, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    cell(4, Text(fmtDate(cafes[i].createdAt))),
+                    cell(5, Text('${d.staff.where((s) => s.cafeId == cafes[i].id && s.isActive).length}')),
+                    const SizedBox(width: 40, child: Icon(Icons.chevron_right_rounded)),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
-      ]),
+      ),
     );
   }
 }
@@ -222,30 +284,39 @@ class _Card extends StatelessWidget {
         onTap: () => openCafe(context, cafe.id, data),
         child: Padding(
           padding: const EdgeInsets.all(Space.md),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Row(children: [
-              Expanded(child: Text(cafe.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15))),
-              CafeStatusChip(cafe.status),
-            ]),
-            const SizedBox(height: 4),
-            Text(
-              [cafe.ownerName, cafe.city, 'Joined ${fmtDate(cafe.createdAt)}'].where((s) => s.isNotEmpty).join(' · '),
-              style: TextStyle(color: p.inkSubtle, fontSize: 12),
-            ),
-            const SizedBox(height: Space.sm),
-            Row(children: [
-              SubStateChip(cafe.subState(now)),
-              const SizedBox(width: Space.sm),
-              Expanded(
-                child: Text(
-                  [if (cafe.planName != null) cafe.planName!, if (cafe.expiryDate != null) 'ends ${Fmt.date(cafe.expiryDate)}'].join(' · '),
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: p.inkMuted, fontSize: 12),
-                ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(cafe.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  ),
+                  CafeStatusChip(cafe.status),
+                ],
               ),
-              Text('${d.staff.where((s) => s.cafeId == cafe.id && s.isActive).length} login', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
-            ]),
-          ]),
+              const SizedBox(height: 4),
+              Text(
+                [cafe.ownerName, cafe.city, 'Joined ${fmtDate(cafe.createdAt)}'].where((s) => s.isNotEmpty).join(' · '),
+                style: TextStyle(color: p.inkSubtle, fontSize: 12),
+              ),
+              const SizedBox(height: Space.sm),
+              Row(
+                children: [
+                  SubStateChip(cafe.subState(now)),
+                  const SizedBox(width: Space.sm),
+                  Expanded(
+                    child: Text(
+                      [if (cafe.planName != null) cafe.planName!, if (cafe.expiryDate != null) 'ends ${Fmt.date(cafe.expiryDate)}'].join(' · '),
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: p.inkMuted, fontSize: 12),
+                    ),
+                  ),
+                  Text('${d.staff.where((s) => s.cafeId == cafe.id && s.isActive).length} login', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

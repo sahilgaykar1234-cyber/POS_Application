@@ -37,12 +37,17 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
   }
 
   void _go(int i) => setState(() {
-        _i = i;
-        _built.add(i);
-      });
+    _i = i;
+    _built.add(i);
+  });
 
   Future<void> _logout() async {
-    final ok = await showConfirmDialog(context, title: 'Sign out?', message: 'You will need your email and password to sign in again.', confirmLabel: 'Sign out');
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Sign out?',
+      message: 'You will need your email and password to sign in again.',
+      confirmLabel: 'Sign out',
+    );
     if (ok && mounted) await signOutToLogin(context);
   }
 
@@ -73,9 +78,22 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
             const ShellDestination(icon: Icons.space_dashboard_outlined, selectedIcon: Icons.space_dashboard, label: 'Dashboard', onMobileBar: true),
             ShellDestination(icon: Icons.storefront_outlined, selectedIcon: Icons.storefront, label: 'Cafes', section: 'Manage', onMobileBar: true),
             const ShellDestination(icon: Icons.badge_outlined, selectedIcon: Icons.badge, label: 'Staff'),
-            ShellDestination(icon: Icons.workspace_premium_outlined, selectedIcon: Icons.workspace_premium, label: 'Subscriptions', section: 'Billing', onMobileBar: true),
+            ShellDestination(
+              icon: Icons.workspace_premium_outlined,
+              selectedIcon: Icons.workspace_premium,
+              label: 'Subscriptions',
+              section: 'Billing',
+              onMobileBar: true,
+            ),
             const ShellDestination(icon: Icons.payments_outlined, selectedIcon: Icons.payments, label: 'Payments'),
-            ShellDestination(icon: Icons.notifications_outlined, selectedIcon: Icons.notifications, label: 'Alerts', section: 'Monitor', badge: urgent, onMobileBar: true),
+            ShellDestination(
+              icon: Icons.notifications_outlined,
+              selectedIcon: Icons.notifications,
+              label: 'Alerts',
+              section: 'Monitor',
+              badge: urgent,
+              onMobileBar: true,
+            ),
             const ShellDestination(icon: Icons.history_rounded, selectedIcon: Icons.history, label: 'Activity'),
             const ShellDestination(icon: Icons.settings_outlined, selectedIcon: Icons.settings, label: 'Settings', section: 'Platform'),
           ],

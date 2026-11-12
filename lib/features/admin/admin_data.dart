@@ -38,16 +38,15 @@ class AdminData {
     PlatformSettings? platform,
     bool? loading,
     Object? error,
-  }) =>
-      AdminData(
-        cafes: cafes ?? this.cafes,
-        staff: staff ?? this.staff,
-        plans: plans ?? this.plans,
-        payments: payments ?? this.payments,
-        platform: platform ?? this.platform,
-        loading: loading ?? this.loading,
-        error: error ?? this.error,
-      );
+  }) => AdminData(
+    cafes: cafes ?? this.cafes,
+    staff: staff ?? this.staff,
+    plans: plans ?? this.plans,
+    payments: payments ?? this.payments,
+    platform: platform ?? this.platform,
+    loading: loading ?? this.loading,
+    error: error ?? this.error,
+  );
 }
 
 class AdminDataController extends ValueNotifier<AdminData> {

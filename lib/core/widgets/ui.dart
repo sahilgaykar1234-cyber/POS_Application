@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show OverflowBoxFit;
 
 import '../theme/app_theme.dart';
 
@@ -389,7 +390,13 @@ class SectionCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                ?trailing,
+                // A button/chip on the right must not make this header taller
+                // than its neighbours', or titles of side-by-side cards drift.
+                if (trailing != null)
+                  SizedBox(
+                    height: 24,
+                    child: OverflowBox(maxHeight: 56, fit: OverflowBoxFit.deferToChild, alignment: Alignment.centerRight, child: trailing),
+                  ),
               ],
             ),
             const SizedBox(height: Space.md),
@@ -582,4 +589,32 @@ Future<DateTime?> pickDate(BuildContext context, {DateTime? initial, DateTime? f
     firstDate: first ?? DateTime(now.year - 5),
     lastDate: last ?? DateTime(now.year + 10),
   );
+}
+
+/// A tappable field that looks exactly like a dropdown / text field (same
+/// height and border), for pickers such as a date range in a filter row.
+class PickerField extends StatelessWidget {
+  const PickerField({super.key, required this.text, required this.onTap, this.icon, this.onClear});
+  final String text;
+  final VoidCallback onTap;
+  final IconData? icon;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        borderRadius: Radii.controlR,
+        child: InputDecorator(
+          isEmpty: false,
+          decoration: InputDecoration(
+            isDense: true,
+            prefixIcon: icon == null ? null : Icon(icon, size: 18),
+            suffixIcon: onClear == null
+                ? const Icon(Icons.arrow_drop_down_rounded)
+                : IconButton(tooltip: 'Clear', icon: const Icon(Icons.close_rounded, size: 18), onPressed: onClear),
+          ),
+          // Same text style as a dropdown field, so both are the same height.
+          child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
+        ),
+      );
 }

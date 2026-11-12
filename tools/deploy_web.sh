@@ -6,7 +6,7 @@
 # live site with a "dev.flutter.pigeon...signInWithEmailAndPassword" error).
 #
 # Usage:  ./tools/deploy_web.sh            (build + deploy hosting)
-#         ./tools/deploy_web.sh --rules    (also deploy Firestore/Storage rules)
+#         ./tools/deploy_web.sh --rules    (also deploy Firestore rules + indexes)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -39,7 +39,10 @@ if [ "$(grep -o 'signInWithEmailAndPassword' build/web/main.dart.js | wc -l)" -l
 fi
 
 if [ "${1:-}" = "--rules" ]; then
-  firebase deploy --only hosting
+  # Firestore rules + indexes. Storage rules (menu photos) are left out: they
+  # need a Storage bucket, which the free Spark plan can't create. Deploy them
+  # with `firebase deploy --only storage` once Storage is enabled.
+  firebase deploy --only hosting,firestore:rules,firestore:indexes
 else
   firebase deploy --only hosting
 fi

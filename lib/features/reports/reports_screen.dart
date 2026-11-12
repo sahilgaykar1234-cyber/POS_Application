@@ -66,9 +66,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
   void _export(List<PosOrder> all, String kind) {
     final s = _range.start, e = _range.end;
     final (content, name) = switch (kind) {
-      'sales' => (salesCsv(all, s, e), 'Sales_Report_${fileDate(s)}_to_${fileDate(e)}.csv'),
-      'customers' => (customersCsv(all, s, e), 'Customer_Report_${fileDate(s)}_to_${fileDate(e)}.csv'),
-      _ => (itemsCsv(all, s, e), 'Item_Sales_${fileDate(s)}_to_${fileDate(e)}.csv'),
+      'sales' => (salesCsv(all, s, e), 'Sales_Report_${fileDate(BusinessDay.dateOf(s))}_to_${fileDate(BusinessDay.dateOf(e))}.csv'),
+      'customers' => (customersCsv(all, s, e), 'Customer_Report_${fileDate(BusinessDay.dateOf(s))}_to_${fileDate(BusinessDay.dateOf(e))}.csv'),
+      _ => (itemsCsv(all, s, e), 'Item_Sales_${fileDate(BusinessDay.dateOf(s))}_to_${fileDate(BusinessDay.dateOf(e))}.csv'),
     };
     downloadFileCrossPlatform(content, name);
     showSuccess(context, 'Downloading $name');
@@ -140,7 +140,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
       children: [
         PageHeader(
           title: 'Reports',
-          subtitle: '${Fmt.date(_range.start)} – ${Fmt.date(_range.end)}',
+          subtitle: BusinessDay.dateOf(_range.start) == BusinessDay.dateOf(_range.end)
+              ? Fmt.date(BusinessDay.dateOf(_range.start))
+              : '${Fmt.date(BusinessDay.dateOf(_range.start))} – ${Fmt.date(BusinessDay.dateOf(_range.end))}',
           actions: [
             PopupMenuButton<String>(
               tooltip: 'Export CSV',

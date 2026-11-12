@@ -9,6 +9,7 @@ import '../../core/widgets/ui.dart';
 import 'admin_data.dart';
 import 'admin_service.dart';
 import 'admin_widgets.dart';
+import '../../core/utils/friendly_error.dart';
 
 /// Platform-wide settings (platform/settings). Cafe-specific settings, such
 /// as a cafe's business-day end, stay with each cafe; the value here is only
@@ -72,7 +73,7 @@ class _PlatformSettingsScreenState extends State<PlatformSettingsScreen> {
         showSuccess(context, 'Platform settings saved');
       }
     } catch (e) {
-      if (mounted) showError(context, 'Could not save: $e');
+      if (mounted) showError(context, friendlyError(e, 'save the settings'));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -89,123 +90,202 @@ class _PlatformSettingsScreenState extends State<PlatformSettingsScreen> {
         final me = AuthService.instance.currentUser;
         final digits = [FilteringTextInputFormatter.digitsOnly];
         Widget twoCols(List<Widget> a, List<Widget> b) => LayoutBuilder(
-              builder: (context, c) => c.maxWidth < 1000
-                  ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [...a, ...b])
-                  : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: a)),
-                      const SizedBox(width: Space.lg),
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: b)),
-                    ]),
-            );
-        return PageBody(children: [
-          PageHeader(
-            title: 'Platform settings',
-            subtitle: 'Applies to the whole platform. Each cafe keeps its own settings.',
-            actions: [FilledButton(key: const Key('platform-save'), onPressed: _dirty && !_saving ? _save : null, child: Text(_saving ? 'Saving…' : 'Save changes'))],
-          ),
-          twoCols([
-            SectionCard(
-              title: 'Platform',
-              icon: Icons.apps_rounded,
-              child: Column(children: [
-                TextField(controller: _name, onChanged: (_) => _touch(), decoration: const InputDecoration(labelText: 'Platform name')),
-                const SizedBox(height: Space.md),
-                TextField(controller: _email, onChanged: (_) => _touch(), keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Support email (shown to cafes)')),
-                const SizedBox(height: Space.md),
-                TextField(controller: _phone, onChanged: (_) => _touch(), keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Support phone')),
-              ]),
-            ),
-            SectionCard(
-              title: 'New cafes',
-              subtitle: 'Starting values only; change any cafe from its own page.',
-              icon: Icons.add_business_outlined,
-              child: Column(children: [
-                TextField(controller: _trial, onChanged: (_) => _touch(), keyboardType: TextInputType.number, inputFormatters: digits, decoration: const InputDecoration(labelText: 'Free trial length (days)')),
-                const SizedBox(height: Space.md),
-                DropdownButtonFormField<String?>(
-                  initialValue: d.plans.any((x) => x.id == _defaultPlan) ? _defaultPlan : null,
-                  decoration: const InputDecoration(labelText: 'Suggested plan after the trial'),
-                  items: [const DropdownMenuItem(value: null, child: Text('None')), for (final x in d.plans) DropdownMenuItem(value: x.id, child: Text(x.name))],
-                  onChanged: (v) {
-                    _defaultPlan = v;
-                    _touch();
-                  },
+          builder: (context, c) => c.maxWidth < 1000
+              ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [...a, ...b])
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: a),
+                    ),
+                    const SizedBox(width: Space.lg),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: b),
+                    ),
+                  ],
                 ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Business day ends at'),
-                  subtitle: const Text('Default for new cafes'),
-                  trailing: OutlinedButton(
-                    onPressed: () async {
-                      final t = await showTimePicker(context: context, initialTime: TimeOfDay(hour: _dayEnds ~/ 60, minute: _dayEnds % 60));
-                      if (t == null) return;
-                      final m = t.hour * 60 + t.minute;
-                      if (m > BusinessDay.maxCutoffMinutes) {
-                        if (context.mounted) showError(context, 'Pick a time between 12:00 AM and 12:00 PM.');
-                        return;
-                      }
-                      setState(() {
-                        _dayEnds = m;
-                        _dirty = true;
-                      });
-                    },
-                    child: Text(BusinessDay.label(_dayEnds)),
+        );
+        return PageBody(
+          children: [
+            PageHeader(
+              title: 'Platform settings',
+              subtitle: 'Applies to the whole platform. Each cafe keeps its own settings.',
+              actions: [
+                FilledButton(key: const Key('platform-save'), onPressed: _dirty && !_saving ? _save : null, child: Text(_saving ? 'Saving…' : 'Save changes')),
+              ],
+            ),
+            twoCols(
+              [
+                SectionCard(
+                  title: 'Platform',
+                  icon: Icons.apps_rounded,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: _name,
+                        onChanged: (_) => _touch(),
+                        decoration: const InputDecoration(labelText: 'Platform name'),
+                      ),
+                      const SizedBox(height: Space.md),
+                      TextField(
+                        controller: _email,
+                        onChanged: (_) => _touch(),
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(labelText: 'Support email (shown to cafes)'),
+                      ),
+                      const SizedBox(height: Space.md),
+                      TextField(
+                        controller: _phone,
+                        onChanged: (_) => _touch(),
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(labelText: 'Support phone'),
+                      ),
+                    ],
                   ),
                 ),
-              ]),
-            ),
-          ], [
-            SectionCard(
-              title: 'Alerts',
-              icon: Icons.notifications_outlined,
-              child: Column(children: [
-                TextField(controller: _reminder, onChanged: (_) => _touch(), keyboardType: TextInputType.number, inputFormatters: digits, decoration: const InputDecoration(labelText: 'Warn before expiry (days)')),
-                SwitchListTile(contentPadding: EdgeInsets.zero, value: _alertExpiring, onChanged: (v) => setState(() { _alertExpiring = v; _dirty = true; }), title: const Text('Expiring subscriptions')),
-                SwitchListTile(contentPadding: EdgeInsets.zero, value: _alertPayments, onChanged: (v) => setState(() { _alertPayments = v; _dirty = true; }), title: const Text('Pending payments')),
-                SwitchListTile(contentPadding: EdgeInsets.zero, value: _alertNew, onChanged: (v) => setState(() { _alertNew = v; _dirty = true; }), title: const Text('New cafes (first 7 days)')),
-                Text('Expired and suspended subscriptions are always shown.', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
-              ]),
-            ),
-            SectionCard(
-              title: 'Your account',
-              icon: Icons.admin_panel_settings_outlined,
-              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                KvList([
-                  ('Signed in as', me?.email ?? ''),
-                  ('Role', 'Super Admin (verified by the server)'),
-                ]),
-                const SizedBox(height: Space.sm),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed: me == null || me.email.isEmpty
-                        ? null
-                        : () async {
-                            try {
-                              await AuthService.instance.sendPasswordResetEmail(me.email);
-                              if (context.mounted) showSuccess(context, 'Password reset email sent to ${me.email}');
-                            } catch (e) {
-                              if (context.mounted) showError(context, 'Could not send the email: $e');
+                SectionCard(
+                  title: 'New cafes',
+                  subtitle: 'Starting values only; change any cafe from its own page.',
+                  icon: Icons.add_business_outlined,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: _trial,
+                        onChanged: (_) => _touch(),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: digits,
+                        decoration: const InputDecoration(labelText: 'Free trial length (days)'),
+                      ),
+                      const SizedBox(height: Space.md),
+                      DropdownButtonFormField<String?>(
+                        initialValue: d.plans.any((x) => x.id == _defaultPlan) ? _defaultPlan : null,
+                        decoration: const InputDecoration(labelText: 'Suggested plan after the trial'),
+                        items: [
+                          const DropdownMenuItem(value: null, child: Text('None')),
+                          for (final x in d.plans) DropdownMenuItem(value: x.id, child: Text(x.name)),
+                        ],
+                        onChanged: (v) {
+                          _defaultPlan = v;
+                          _touch();
+                        },
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Business day ends at'),
+                        subtitle: const Text('Default for new cafes'),
+                        trailing: OutlinedButton(
+                          onPressed: () async {
+                            final t = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay(hour: _dayEnds ~/ 60, minute: _dayEnds % 60),
+                            );
+                            if (t == null) return;
+                            final m = t.hour * 60 + t.minute;
+                            if (m > BusinessDay.maxCutoffMinutes) {
+                              if (context.mounted) showError(context, 'Pick a time between 12:00 AM and 12:00 PM.');
+                              return;
                             }
+                            setState(() {
+                              _dayEnds = m;
+                              _dirty = true;
+                            });
                           },
-                    icon: const Icon(Icons.lock_reset_rounded, size: 18),
-                    label: const Text('Change password (email link)'),
+                          child: Text(BusinessDay.label(_dayEnds)),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ]),
+              ],
+              [
+                SectionCard(
+                  title: 'Alerts',
+                  icon: Icons.notifications_outlined,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: _reminder,
+                        onChanged: (_) => _touch(),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: digits,
+                        decoration: const InputDecoration(labelText: 'Warn before expiry (days)'),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _alertExpiring,
+                        onChanged: (v) => setState(() {
+                          _alertExpiring = v;
+                          _dirty = true;
+                        }),
+                        title: const Text('Expiring subscriptions'),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _alertPayments,
+                        onChanged: (v) => setState(() {
+                          _alertPayments = v;
+                          _dirty = true;
+                        }),
+                        title: const Text('Pending payments'),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _alertNew,
+                        onChanged: (v) => setState(() {
+                          _alertNew = v;
+                          _dirty = true;
+                        }),
+                        title: const Text('New cafes (first 7 days)'),
+                      ),
+                      Text('Expired and suspended subscriptions are always shown.', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                SectionCard(
+                  title: 'Your account',
+                  icon: Icons.admin_panel_settings_outlined,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      KvList([('Signed in as', me?.email ?? ''), ('Role', 'Super Admin (verified by the server)')]),
+                      const SizedBox(height: Space.sm),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          onPressed: me == null || me.email.isEmpty
+                              ? null
+                              : () async {
+                                  try {
+                                    await AuthService.instance.sendPasswordResetEmail(me.email);
+                                    if (context.mounted) showSuccess(context, 'Password reset email sent to ${me.email}');
+                                  } catch (e) {
+                                    if (context.mounted) showError(context, friendlyError(e, 'send the email'));
+                                  }
+                                },
+                          icon: const Icon(Icons.lock_reset_rounded, size: 18),
+                          label: const Text('Change password (email link)'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SectionCard(
+                  title: 'Security',
+                  icon: Icons.shield_outlined,
+                  child: Text(
+                    'Roles come from server-side claims: nobody can make themselves Super Admin from the app. '
+                    'Firestore rules keep each cafe\'s data separate and allow these pages only for the Super Admin. '
+                    'Every change here is written to the activity log without passwords or tokens.',
+                    style: TextStyle(color: p.inkMuted, height: 1.45),
+                  ),
+                ),
+              ],
             ),
-            SectionCard(
-              title: 'Security',
-              icon: Icons.shield_outlined,
-              child: Text(
-                'Roles come from server-side claims: nobody can make themselves Super Admin from the app. '
-                'Firestore rules keep each cafe\'s data separate and allow these pages only for the Super Admin. '
-                'Every change here is written to the activity log without passwords or tokens.',
-                style: TextStyle(color: p.inkMuted, height: 1.45),
-              ),
-            ),
-          ]),
-        ]);
+          ],
+        );
       },
     );
   }

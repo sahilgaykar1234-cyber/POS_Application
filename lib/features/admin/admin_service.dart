@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../core/auth/auth_service.dart';
 import '../../core/data/firestore_paths.dart';
@@ -21,8 +22,10 @@ class CafeOpsSummary {
     required this.billed30d,
     required this.lastOrderAt,
   });
-  final int categories, menuItems, availableItems, ordersToday, orders30d;
-  final double billed30d;
+
+  /// null = that number could not be read (e.g. offline); shown as "—".
+  final int? categories, menuItems, availableItems, ordersToday, orders30d;
+  final double? billed30d;
   final DateTime? lastOrderAt;
 }
 
@@ -41,26 +44,25 @@ class AdminService {
   // ---------------------------------------------------------------- streams
 
   Stream<List<CafeSummary>> watchCafes() => FirestorePaths.cafes().snapshots().map((s) {
-        final list = s.docs.map((d) => CafeSummary(d.id, d.data())).toList();
-        list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-        return list;
-      });
+    final list = s.docs.map((d) => CafeSummary(d.id, d.data())).toList();
+    list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return list;
+  });
 
-  Stream<CafeSummary?> watchCafe(String id) =>
-      FirestorePaths.cafe(id).snapshots().map((d) => d.exists ? CafeSummary(d.id, d.data()!) : null);
+  Stream<CafeSummary?> watchCafe(String id) => FirestorePaths.cafe(id).snapshots().map((d) => d.exists ? CafeSummary(d.id, d.data()!) : null);
 
   /// Every login with a role (users/{uid}, written by the admin script).
   Stream<List<StaffMember>> watchStaff() => FirestorePaths.users().snapshots().map((s) {
-        final list = s.docs.map((d) => StaffMember(d.id, d.data())).toList();
-        list.sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
-        return list;
-      });
+    final list = s.docs.map((d) => StaffMember(d.id, d.data())).toList();
+    list.sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
+    return list;
+  });
 
   Stream<List<SubscriptionPlan>> watchPlans() => FirestorePaths.plans().snapshots().map((s) {
-        final list = s.docs.map((d) => SubscriptionPlan(d.id, d.data())).toList();
-        list.sort((a, b) => a.tier.index != b.tier.index ? a.tier.index.compareTo(b.tier.index) : a.monthlyPrice.compareTo(b.monthlyPrice));
-        return list;
-      });
+    final list = s.docs.map((d) => SubscriptionPlan(d.id, d.data())).toList();
+    list.sort((a, b) => a.tier.index != b.tier.index ? a.tier.index.compareTo(b.tier.index) : a.monthlyPrice.compareTo(b.monthlyPrice));
+    return list;
+  });
 
   /// All subscription payments (newest first), or one cafe's.
   Stream<List<SubscriptionPayment>> watchPayments({String? cafeId}) {
@@ -83,21 +85,19 @@ class AdminService {
     });
   }
 
-  Stream<List<Map<String, dynamic>>> watchSubscriptionHistory(String cafeId) =>
-      FirestorePaths.subscriptionHistory(cafeId).snapshots().map((s) {
-        final list = s.docs.map((d) => {'id': d.id, ...d.data()}).toList();
-        list.sort((a, b) => (Fmt.toDate(b['at']) ?? DateTime(0)).compareTo(Fmt.toDate(a['at']) ?? DateTime(0)));
-        return list;
-      });
+  Stream<List<Map<String, dynamic>>> watchSubscriptionHistory(String cafeId) => FirestorePaths.subscriptionHistory(cafeId).snapshots().map((s) {
+    final list = s.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+    list.sort((a, b) => (Fmt.toDate(b['at']) ?? DateTime(0)).compareTo(Fmt.toDate(a['at']) ?? DateTime(0)));
+    return list;
+  });
 
-  Stream<PlatformSettings> watchPlatformSettings() =>
-      FirestorePaths.platformSettings().snapshots().map((d) => PlatformSettings(d.data() ?? const {}));
+  Stream<PlatformSettings> watchPlatformSettings() => FirestorePaths.platformSettings().snapshots().map((d) => PlatformSettings(d.data() ?? const {}));
 
-  Stream<Map<String, dynamic>> watchCafeSettings(String cafeId) =>
-      FirestorePaths.businessSettings(cafeId).snapshots().map((d) => d.data() ?? const {});
+  Stream<Map<String, dynamic>> watchCafeSettings(String cafeId) => FirestorePaths.businessSettings(cafeId).snapshots().map((d) => d.data() ?? const {});
 
-  /// Menu + order counts for one cafe (aggregates only; current business day
-  /// uses the cafe's own day-end time).
+  /// Menu + order counts for one cafe (aggregates only; the current
+  /// business day uses the cafe's own day-end time). Each number is read on
+  /// its own, so one failing query never hides the others.
   Future<CafeOpsSummary> cafeOps(String cafeId, {int dayEndsAt = BusinessDay.defaultCutoffMinutes}) async {
     final cafe = FirestorePaths.cafe(cafeId);
     final now = DateTime.now();
@@ -105,23 +105,40 @@ class AdminService {
     final todayStart = DateTime(shifted.year, shifted.month, shifted.day, 0, dayEndsAt);
     final since = Timestamp.fromDate(now.subtract(const Duration(days: 30)));
     final orders = cafe.collection('orders');
-    final results = await Future.wait([
-      cafe.collection('categories').count().get(),
-      cafe.collection('menuItems').count().get(),
-      cafe.collection('menuItems').where('isAvailable', isEqualTo: true).count().get(),
-      orders.where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart)).count().get(),
-      orders.where('createdAt', isGreaterThanOrEqualTo: since).aggregate(count(), sum('totalPrice')).get(),
+    final recent = orders.where('createdAt', isGreaterThanOrEqualTo: since);
+
+    Future<Object?> safe(Future<Object?> Function() f) async {
+      try {
+        return await f();
+      } catch (e) {
+        debugPrint('cafeOps($cafeId): $e');
+        return null;
+      }
+    }
+
+    final r = await Future.wait<Object?>([
+      safe(() async => (await cafe.collection('categories').count().get()).count),
+      safe(() async => (await cafe.collection('menuItems').count().get()).count),
+      safe(() async => (await cafe.collection('menuItems').where('isAvailable', isEqualTo: false).count().get()).count),
+      safe(() async => (await orders.where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart)).count().get()).count),
+      safe(() async => (await recent.count().get()).count),
+      // Needs the (createdAt, totalPrice) index from firestore.indexes.json.
+      safe(() async => (await recent.aggregate(sum('totalPrice')).get()).getSum('totalPrice')),
+      safe(() async {
+        final last = await orders.orderBy('createdAt', descending: true).limit(1).get();
+        return last.docs.isEmpty ? null : Fmt.toDate(last.docs.first.data()['createdAt']);
+      }),
     ]);
-    final last = await orders.orderBy('createdAt', descending: true).limit(1).get();
-    final agg = results[4];
+    final items = r[1] as int?;
+    final hidden = r[2] as int?;
     return CafeOpsSummary(
-      categories: results[0].count ?? 0,
-      menuItems: results[1].count ?? 0,
-      availableItems: results[2].count ?? 0,
-      ordersToday: results[3].count ?? 0,
-      orders30d: agg.count ?? 0,
-      billed30d: agg.getSum('totalPrice') ?? 0,
-      lastOrderAt: last.docs.isEmpty ? null : Fmt.toDate(last.docs.first.data()['createdAt']),
+      categories: r[0] as int?,
+      menuItems: items,
+      availableItems: items == null || hidden == null ? null : items - hidden,
+      ordersToday: r[3] as int?,
+      orders30d: r[4] as int?,
+      billed30d: r[5] as double?,
+      lastOrderAt: r[6] as DateTime?,
     );
   }
 
@@ -129,22 +146,11 @@ class AdminService {
 
   /// Creates a cafe (record + its settings, optionally a trial). Its login
   /// is created afterwards with the admin script (see [loginCommand]).
-  Future<String> createCafe({
-    required Map<String, dynamic> profile,
-    required int dayEndsAt,
-    SubscriptionPlan? trialPlan,
-    int? trialDays,
-  }) async {
+  Future<String> createCafe({required Map<String, dynamic> profile, required int dayEndsAt, SubscriptionPlan? trialPlan, int? trialDays}) async {
     final ref = FirestorePaths.cafes().doc();
     final now = DateTime.now();
     final batch = _db.batch();
-    final cafe = <String, dynamic>{
-      ...profile,
-      'status': CafeStatus.active,
-      'legacyData': false,
-      'createdAt': FieldValue.serverTimestamp(),
-      'createdBy': _uid,
-    };
+    final cafe = <String, dynamic>{...profile, 'status': CafeStatus.active, 'legacyData': false, 'createdAt': FieldValue.serverTimestamp(), 'createdBy': _uid};
     if (trialDays != null && trialDays > 0) {
       cafe['subscription'] = {
         'planId': trialPlan?.id,
@@ -188,20 +194,22 @@ class AdminService {
   Future<void> updateCafe(CafeSummary cafe, Map<String, dynamic> profile, {int? dayEndsAt}) async {
     final batch = _db.batch();
     batch.update(FirestorePaths.cafe(cafe.id), {...profile, 'updatedAt': FieldValue.serverTimestamp()});
-    batch.set(
-      FirestorePaths.businessSettings(cafe.id),
-      {
-        if (profile['name'] != null) 'shopName': profile['name'],
-        if (profile['contactNumber'] != null) 'mobileNumber': profile['contactNumber'],
-        if (profile['address'] != null) 'address': profile['address'],
-        if (profile['gstNumber'] != null) 'gstNumber': profile['gstNumber'],
-        'dayEndsAt': ?(dayEndsAt == null ? null : BusinessDay.format(dayEndsAt)),
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    batch.set(FirestorePaths.businessSettings(cafe.id), {
+      if (profile['name'] != null) 'shopName': profile['name'],
+      if (profile['contactNumber'] != null) 'mobileNumber': profile['contactNumber'],
+      if (profile['address'] != null) 'address': profile['address'],
+      if (profile['gstNumber'] != null) 'gstNumber': profile['gstNumber'],
+      'dayEndsAt': ?(dayEndsAt == null ? null : BusinessDay.format(dayEndsAt)),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
     await batch.commit();
-    await audit('cafe.update', cafeId: cafe.id, details: {'fields': [...profile.keys, if (dayEndsAt != null) 'dayEndsAt']});
+    await audit(
+      'cafe.update',
+      cafeId: cafe.id,
+      details: {
+        'fields': [...profile.keys, if (dayEndsAt != null) 'dayEndsAt'],
+      },
+    );
   }
 
   /// Active / inactive / suspended. Data is never touched.
@@ -236,15 +244,15 @@ class AdminService {
     if (missing.isEmpty) return 0;
     final batch = _db.batch();
     for (final p in missing) {
-      batch.set(FirestorePaths.plans().doc(), {
-        ...p,
-        'isActive': true,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      batch.set(FirestorePaths.plans().doc(), {...p, 'isActive': true, 'createdAt': FieldValue.serverTimestamp(), 'updatedAt': FieldValue.serverTimestamp()});
     }
     await batch.commit();
-    await audit('plan.create', details: {'recommended': [for (final p in missing) p['name']]});
+    await audit(
+      'plan.create',
+      details: {
+        'recommended': [for (final p in missing) p['name']],
+      },
+    );
     return missing.length;
   }
 
@@ -261,60 +269,70 @@ class AdminService {
     required DateTime expiry,
     required double amount,
     required String paymentStatus, // paid | pending | none
-  }) =>
-      _changeSubscription(cafe, 'subscription.set', {
-        'subscription.planId': plan?.id,
-        'subscription.planName': plan?.name ?? 'Custom',
-        'subscription.billingCycle': cycle,
-        'subscription.status': status,
-        'subscription.startDate': Timestamp.fromDate(start),
-        'subscription.expiryDate': Timestamp.fromDate(expiry),
-        'subscription.amount': amount,
-        'subscription.paymentStatus': paymentStatus,
-      }, {
-        'action': cafe.hasSubscription ? 'changed' : 'assigned',
-        'planName': plan?.name ?? 'Custom',
-        'status': status,
-        'cycle': cycle,
-        'startDate': Timestamp.fromDate(start),
-        'expiryDate': Timestamp.fromDate(expiry),
-        'amount': amount,
-      });
+  }) => _changeSubscription(
+    cafe,
+    'subscription.set',
+    {
+      'subscription.planId': plan?.id,
+      'subscription.planName': plan?.name ?? 'Custom',
+      'subscription.billingCycle': cycle,
+      'subscription.status': status,
+      'subscription.startDate': Timestamp.fromDate(start),
+      'subscription.expiryDate': Timestamp.fromDate(expiry),
+      'subscription.amount': amount,
+      'subscription.paymentStatus': paymentStatus,
+    },
+    {
+      'action': cafe.hasSubscription ? 'changed' : 'assigned',
+      'planName': plan?.name ?? 'Custom',
+      'status': status,
+      'cycle': cycle,
+      'startDate': Timestamp.fromDate(start),
+      'expiryDate': Timestamp.fromDate(expiry),
+      'amount': amount,
+    },
+  );
 
   /// Extends the current plan to [newExpiry] and makes it active.
-  Future<void> renew(CafeSummary cafe, {required DateTime newExpiry, required String paymentStatus}) =>
-      _changeSubscription(cafe, 'subscription.renew', {
-        'subscription.status': paymentStatus == 'pending' ? SubscriptionStatus.pending : SubscriptionStatus.active,
-        'subscription.expiryDate': Timestamp.fromDate(newExpiry),
-        'subscription.paymentStatus': paymentStatus,
-        if (cafe.expiryDate == null || !cafe.expiryDate!.isAfter(DateTime.now())) 'subscription.startDate': Timestamp.now(),
-      }, {
-        'action': 'renewed',
-        'planName': cafe.planName,
-        'from': cafe.expiryDate == null ? null : Timestamp.fromDate(cafe.expiryDate!),
-        'expiryDate': Timestamp.fromDate(newExpiry),
-        'amount': cafe.amount,
-      });
+  Future<void> renew(CafeSummary cafe, {required DateTime newExpiry, required String paymentStatus}) => _changeSubscription(
+    cafe,
+    'subscription.renew',
+    {
+      'subscription.status': paymentStatus == 'pending' ? SubscriptionStatus.pending : SubscriptionStatus.active,
+      'subscription.expiryDate': Timestamp.fromDate(newExpiry),
+      'subscription.paymentStatus': paymentStatus,
+      if (cafe.expiryDate == null || !cafe.expiryDate!.isAfter(DateTime.now())) 'subscription.startDate': Timestamp.now(),
+    },
+    {
+      'action': 'renewed',
+      'planName': cafe.planName,
+      'from': cafe.expiryDate == null ? null : Timestamp.fromDate(cafe.expiryDate!),
+      'expiryDate': Timestamp.fromDate(newExpiry),
+      'amount': cafe.amount,
+    },
+  );
 
   /// Stops renewal: the cafe keeps working until the current expiry date.
-  Future<void> cancel(CafeSummary cafe) => _changeSubscription(cafe, 'subscription.cancel', {
-        'subscription.status': SubscriptionStatus.cancelled,
-        'subscription.cancelledAt': FieldValue.serverTimestamp(),
-      }, {
-        'action': 'cancelled',
-        'planName': cafe.planName,
-        'expiryDate': cafe.expiryDate == null ? null : Timestamp.fromDate(cafe.expiryDate!),
-      });
+  Future<void> cancel(CafeSummary cafe) => _changeSubscription(
+    cafe,
+    'subscription.cancel',
+    {'subscription.status': SubscriptionStatus.cancelled, 'subscription.cancelledAt': FieldValue.serverTimestamp()},
+    {'action': 'cancelled', 'planName': cafe.planName, 'expiryDate': cafe.expiryDate == null ? null : Timestamp.fromDate(cafe.expiryDate!)},
+  );
 
   Future<void> _changeSubscription(CafeSummary cafe, String auditAction, Map<String, dynamic> update, Map<String, dynamic> history) async {
     final batch = _db.batch();
     batch.update(FirestorePaths.cafe(cafe.id), {...update, 'updatedAt': FieldValue.serverTimestamp()});
     batch.set(FirestorePaths.subscriptionHistory(cafe.id).doc(), {...history, 'by': _uid, 'at': FieldValue.serverTimestamp()});
     await batch.commit();
-    await audit(auditAction, cafeId: cafe.id, details: {
-      for (final e in history.entries)
-        if (e.value != null) e.key: e.value is Timestamp ? Fmt.date((e.value as Timestamp).toDate()) : e.value,
-    });
+    await audit(
+      auditAction,
+      cafeId: cafe.id,
+      details: {
+        for (final e in history.entries)
+          if (e.value != null) e.key: e.value is Timestamp ? Fmt.date((e.value as Timestamp).toDate()) : e.value,
+      },
+    );
   }
 
   /// Records money received (manual: UPI / cash / bank). Sequential receipt
@@ -380,12 +398,11 @@ class AdminService {
       });
     });
 
-    await audit('payment.record', cafeId: cafe.id, details: {
-      'receiptNo': receiptNo,
-      'amount': amount,
-      'method': method,
-      if (extendTo != null) 'extendedTo': Fmt.date(extendTo),
-    });
+    await audit(
+      'payment.record',
+      cafeId: cafe.id,
+      details: {'receiptNo': receiptNo, 'amount': amount, 'method': method, if (extendTo != null) 'extendedTo': Fmt.date(extendTo)},
+    );
     return receiptNo;
   }
 
@@ -418,10 +435,8 @@ class AdminService {
 /// Admin-script commands for what needs the Admin SDK (run on the owner's
 /// computer from the project folder). Passwords are typed by the owner,
 /// never stored by the app.
-String loginCommand(String cafeId, {String username = '<username>'}) =>
-    'node tools/admin/admin.js create-cafe-login $username <password> $cafeId';
+String loginCommand(String cafeId, {String username = '<username>'}) => 'node tools/admin/admin.js create-cafe-login $username <password> $cafeId';
 
-String accessCommand(String login, {required bool enable}) =>
-    'node tools/admin/admin.js set-login-active $login ${enable ? 'on' : 'off'}';
+String accessCommand(String login, {required bool enable}) => 'node tools/admin/admin.js set-login-active $login ${enable ? 'on' : 'off'}';
 
 const adminScriptEnv = 'GOOGLE_APPLICATION_CREDENTIALS=~/secrets/suratpos-admin.json';
