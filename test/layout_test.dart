@@ -455,4 +455,18 @@ void main() {
       unawaited(ctrl.close());
     });
   }
+
+  for (final s in sizes.entries) {
+    testWidgets('Takeaway shows exactly one "New takeaway" button · ${s.key}', (t) async {
+      await pumpAt(t, s.value, TakeawayScreen(ordersStream: Stream.value(orders()), settingsStream: Stream.value(settings)), AppTheme.light());
+      expect(find.text('No takeaway orders yet today'), findsOneWidget);
+      expect(find.text('New takeaway'), findsOneWidget);
+      expect(find.byType(FloatingActionButton), findsNothing);
+
+      await pumpAt(t, s.value, TakeawayScreen(ordersStream: Stream.value([...orders(), ...takeawayOrders()]), settingsStream: Stream.value(settings)), AppTheme.light());
+      final buttons = find.text('New takeaway').evaluate().length + find.byType(FloatingActionButton).evaluate().length;
+      expect(buttons, 1);
+      expect(t.takeException(), isNull);
+    });
+  }
 }

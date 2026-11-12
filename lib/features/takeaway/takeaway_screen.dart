@@ -81,9 +81,12 @@ class _TakeawayScreenState extends State<TakeawayScreen> {
               'ready': board.ready.where(_match).toList(),
             };
 
+            // One "New takeaway" button at a time: the big one in the empty
+            // state, otherwise the header button (FAB on phones).
+            final empty = board.active == 0 && board.pickedUp.isEmpty;
             return Scaffold(
               backgroundColor: Colors.transparent,
-              floatingActionButton: context.isMobile
+              floatingActionButton: context.isMobile && !empty
                   ? FloatingActionButton.extended(onPressed: _newTakeaway, icon: const Icon(Icons.add), label: const Text('Takeaway'))
                   : null,
               body: Column(
@@ -134,7 +137,7 @@ class _TakeawayScreenState extends State<TakeawayScreen> {
                                     icon: const Icon(Icons.task_alt_rounded, size: 18),
                                     label: Text('Picked up (${board.pickedUp.length})'),
                                   ),
-                                if (!context.isMobile)
+                                if (!context.isMobile && !empty)
                                   FilledButton.icon(onPressed: _newTakeaway, icon: const Icon(Icons.add, size: 18), label: const Text('New takeaway')),
                               ],
                             ),
@@ -147,7 +150,7 @@ class _TakeawayScreenState extends State<TakeawayScreen> {
                     ),
                   ),
                   Expanded(
-                    child: board.active == 0 && board.pickedUp.isEmpty
+                    child: empty
                         ? EmptyState(
                             icon: Icons.shopping_bag_outlined,
                             title: 'No takeaway orders yet today',
