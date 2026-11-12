@@ -79,6 +79,13 @@ class _SignedInGateState extends State<_SignedInGate> {
         }
 
         final appUser = snap.data!;
+        if (appUser.loginDisabled) {
+          return const _SignOutMessage(
+            icon: Icons.lock_outline_rounded,
+            title: 'This login is turned off',
+            message: 'Please contact the administrator to turn it on again. Your cafe\'s data is safe.',
+          );
+        }
         if (!appUser.hasValidAssignment) {
           return _SignOutMessage(
             icon: Icons.manage_accounts_outlined,
@@ -103,6 +110,24 @@ class _CafeGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A login turned off by the Super Admin stops right away (the rules
+    // already refuse its reads/writes; this explains why).
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirestorePaths.users().doc(user.uid).snapshots(),
+      builder: (context, me) {
+        if (me.data?.data()?['status'] == 'disabled') {
+          return const _SignOutMessage(
+            icon: Icons.lock_outline_rounded,
+            title: 'This login is turned off',
+            message: 'Please contact the administrator to turn it on again. Your cafe\'s data is safe.',
+          );
+        }
+        return _cafe(context);
+      },
+    );
+  }
+
+  Widget _cafe(BuildContext context) {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirestorePaths.cafe(user.cafeId!).snapshots(),
       builder: (context, snap) {

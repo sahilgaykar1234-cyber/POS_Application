@@ -61,8 +61,12 @@ class _CafesScreenState extends State<CafesScreen> {
   Future<void> _create(AdminData d) async {
     final id = await showCafeForm(context, platform: d.settings, plans: d.plans);
     if (id == null || !mounted) return;
-    final name = widget.data.value.cafeName(id);
-    await showNewCafeLoginHelp(context, id, name == 'Unknown cafe' ? 'The cafe' : name);
+    showSuccess(context, 'Cafe created');
+    // Its first login (the new cafe arrives through the live data shortly).
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
+    final cafe = widget.data.value.cafe(id);
+    if (cafe != null) await showAddLogin(context, cafe);
   }
 
   @override

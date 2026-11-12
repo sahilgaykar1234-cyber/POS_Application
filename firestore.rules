@@ -15,12 +15,30 @@ service cloud.firestore {
     // ---------------------------------------------------------------- helpers
 
     function signedIn() { return request.auth != null; }
-    function role() { return signedIn() ? request.auth.token.get('role', null) : null; }
-    function myCafe() { return signedIn() ? request.auth.token.get('cafeId', null) : null; }
 
-    function isSuper() { return role() == 'superAdmin'; }
-    function isStaffOf(cafeId) { return role() in ['manager', 'captain'] && myCafe() == cafeId; }
-    function isManagerOf(cafeId) { return role() == 'manager' && myCafe() == cafeId; }
+    // Logins created in the Super Admin panel have no token claims; their role
+    // and cafe are in users/{uid}, which only the Super Admin can write (see
+    // /users below). Only manager/captain are ever taken from that document –
+    // Super Admin comes from the server-set claim alone.
+    function userPath() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function hasUserDoc() { return signedIn() && exists(userPath()); }
+    function docRole() {
+      return hasUserDoc() && get(userPath()).data.get('role', '') in ['manager', 'captain']
+        ? get(userPath()).data.role : null;
+    }
+    function claimRole() { return signedIn() ? request.auth.token.get('role', null) : null; }
+    function role() { return claimRole() != null ? claimRole() : docRole(); }
+    function myCafe() {
+      return !signedIn() ? null
+        : (request.auth.token.get('cafeId', null) != null ? request.auth.token.cafeId
+          : (docRole() != null ? get(userPath()).data.get('cafeId', null) : null));
+    }
+    // A login turned off by the Super Admin loses access at once.
+    function loginActive() { return !hasUserDoc() || get(userPath()).data.get('status', 'active') != 'disabled'; }
+
+    function isSuper() { return claimRole() == 'superAdmin'; }
+    function isStaffOf(cafeId) { return role() in ['manager', 'captain'] && myCafe() == cafeId && loginActive(); }
+    function isManagerOf(cafeId) { return role() == 'manager' && myCafe() == cafeId && loginActive(); }
 
     function cafeData(cafeId) { return get(/databases/$(database)/documents/cafes/$(cafeId)).data; }
 
@@ -69,7 +87,7 @@ service cloud.firestore {
         // Managers run the POS: create, edit, bill, complete, delete.
         allow create, update, delete: if isManagerOf(cafeId) && cafeOperational(cafeId);
         // Captains (kitchen screen) may only change the cooking status.
-        allow update: if role() == 'captain' && myCafe() == cafeId && cafeOperational(cafeId)
+        allow update: if role() == 'captain' && myCafe() == cafeId && loginActive() && cafeOperational(cafeId)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'kitchenStatus'])
           && request.resource.data.status in ['pending', 'preparing', 'ready'];
       }
@@ -87,12 +105,18 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------ users
-    // Written ONLY by Cloud Functions (Admin SDK bypasses rules).
+    // Written by the Super Admin (panel) or the admin script (Admin SDK).
+    // Nobody can write their own document, and a document can never grant
+    // Super Admin.
     match /users/{uid} {
       allow read: if isSuper()
         || (signedIn() && request.auth.uid == uid)
         || (role() == 'manager' && resource.data.cafeId == myCafe());
-      allow write: if false;
+      allow create, update: if isSuper() && request.auth.uid != uid
+        && request.resource.data.role in ['manager', 'captain']
+        && request.resource.data.cafeId is string
+        && exists(/databases/$(database)/documents/cafes/$(request.resource.data.cafeId));
+      allow delete: if isSuper() && request.auth.uid != uid;
     }
 
     // -------------------------------------------------- SaaS billing (platform)

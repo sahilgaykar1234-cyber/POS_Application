@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/subscription/cafe_access.dart';
@@ -8,7 +9,6 @@ import '../../core/utils/formatters.dart';
 import '../../core/widgets/confirm_dialog.dart';
 import '../../core/widgets/ui.dart';
 import 'admin_service.dart';
-import 'admin_widgets.dart';
 import '../../core/utils/friendly_error.dart';
 
 /// Forms of the Super Admin panel. Every save is a Firestore write that the
@@ -737,20 +737,281 @@ Future<void> showRecordPayment(BuildContext context, List<CafeSummary> cafes, {C
   );
 }
 
-/// After a cafe is created: how to give it a login.
-Future<void> showNewCafeLoginHelp(BuildContext context, String cafeId, String cafeName) => showAdminCommand(
-  context,
-  title: '$cafeName is created',
-  why:
-      'Now create its login. Logins need the admin script (they are Firebase accounts with a role and the cafe ID). '
-      'Pick a short username; staff sign in with it and choose Manager or Captain view.',
-  command: loginCommand(cafeId),
-);
+// ================================================================= logins ==
+
+/// Checks a new login before it is created (pure, unit-tested). Same rules
+/// as the admin script: username 3–30 of a-z 0-9 . _ -, password 3+ chars.
+String? validateNewLogin(String username, String password, String confirm) {
+  final u = username.trim().toLowerCase();
+  if (!RegExp(r'^[a-z0-9._-]{3,30}$').hasMatch(u)) return 'Username: 3–30 letters or numbers, no spaces (you can use . _ -).';
+  if (password.length < 3) return 'Password must be at least 3 characters.';
+  if (password != confirm) return 'The two passwords don\'t match.';
+  return null;
+}
+
+String _loginError(Object e, String username) {
+  if (e is FirebaseAuthException) {
+    switch (e.code) {
+      case 'email-already-in-use':
+        return 'The username "$username" is already taken. Please choose another.';
+      case 'wrong-password':
+      case 'invalid-credential':
+      case 'invalid-login-credentials':
+        return 'The current password is not correct.';
+      case 'weak-password':
+        return 'Please choose a longer password.';
+      case 'operation-not-allowed':
+        return 'Username logins are switched off in Firebase (Authentication › Sign-in method › Email/Password).';
+    }
+  }
+  return friendlyError(e, 'save the login');
+}
+
+/// Creates a login for [cafe] right here (username + password).
+Future<void> showAddLogin(BuildContext context, CafeSummary cafe) {
+  final user = TextEditingController();
+  final name = TextEditingController();
+  final pass = TextEditingController();
+  final confirm = TextEditingController();
+  var role = 'manager';
+  var hide = true;
+  var saving = false;
+  String? error;
+
+  return showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) {
+        Future<void> save() async {
+          final problem = validateNewLogin(user.text, pass.text, confirm.text);
+          if (problem != null) return setState(() => error = problem);
+          setState(() {
+            error = null;
+            saving = true;
+          });
+          try {
+            await AdminService.instance.createLogin(cafe: cafe, username: user.text, password: pass.text, role: role, displayName: name.text);
+            if (ctx.mounted) {
+              Navigator.pop(ctx);
+              showSuccess(context, 'Login "${user.text.trim().toLowerCase()}" created for ${cafe.name}');
+            }
+          } catch (e) {
+            setState(() {
+              saving = false;
+              error = _loginError(e, user.text.trim().toLowerCase());
+            });
+          }
+        }
+
+        final p = ctx.palette;
+        return AlertDialog(
+          title: Text('New login · ${cafe.name}'),
+          scrollable: true,
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  key: const Key('login-username'),
+                  controller: user,
+                  autofocus: true,
+                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9._-]'))],
+                  decoration: const InputDecoration(labelText: 'Username *', hintText: 'e.g. flammywood', prefixIcon: Icon(Icons.person_outline_rounded)),
+                ),
+                const SizedBox(height: Space.md),
+                TextField(
+                  controller: name,
+                  decoration: const InputDecoration(labelText: 'Name (optional)', hintText: 'e.g. Counter, Ravi'),
+                ),
+                const SizedBox(height: Space.md),
+                _two(
+                  ctx,
+                  TextField(
+                    key: const Key('login-password'),
+                    controller: pass,
+                    obscureText: hide,
+                    decoration: InputDecoration(
+                      labelText: 'Password *',
+                      suffixIcon: IconButton(
+                        tooltip: hide ? 'Show' : 'Hide',
+                        onPressed: () => setState(() => hide = !hide),
+                        icon: Icon(hide ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                      ),
+                    ),
+                  ),
+                  TextField(
+                    key: const Key('login-confirm'),
+                    controller: confirm,
+                    obscureText: hide,
+                    decoration: const InputDecoration(labelText: 'Confirm password *'),
+                    onSubmitted: (_) => save(),
+                  ),
+                ),
+                const SizedBox(height: Space.md),
+                Text('Access', style: TextStyle(color: p.inkSubtle, fontSize: 13)),
+                RadioGroup<String>(
+                  groupValue: role,
+                  onChanged: (v) => setState(() => role = v ?? role),
+                  child: const Column(
+                    children: [
+                      RadioListTile<String>(
+                        contentPadding: EdgeInsets.zero,
+                        value: 'manager',
+                        title: Text('Cafe login'),
+                        subtitle: Text('Takes orders, bills, menu, reports; can switch to the kitchen (Captain) view'),
+                      ),
+                      RadioListTile<String>(
+                        contentPadding: EdgeInsets.zero,
+                        value: 'captain',
+                        title: Text('Kitchen only'),
+                        subtitle: Text('Only the kitchen screen: new orders and cooking status'),
+                      ),
+                    ],
+                  ),
+                ),
+                if (error != null)
+                  Container(
+                    margin: const EdgeInsets.only(top: Space.sm),
+                    padding: const EdgeInsets.all(Space.sm),
+                    decoration: BoxDecoration(color: p.dangerTint, borderRadius: Radii.controlR),
+                    child: Text(
+                      error!,
+                      key: const Key('login-error'),
+                      style: TextStyle(color: p.danger, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                const SizedBox(height: Space.sm),
+                Text(
+                  'Staff sign in with this username and password. The password is never stored or shown by the app.',
+                  style: TextStyle(color: p.inkSubtle, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            OutlinedButton(onPressed: saving ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(key: const Key('login-save'), onPressed: saving ? null : save, child: Text(saving ? 'Creating…' : 'Create login')),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+/// Turn a login off (with confirmation) or on.
+Future<void> confirmLoginAccess(BuildContext context, StaffMember member, String cafeName) async {
+  final turnOff = member.isActive;
+  final ok = turnOff
+      ? await showDangerConfirmDialog(
+          context,
+          title: 'Turn off "${member.loginName}"?',
+          message: 'Anyone using this login is stopped right away and can\'t sign in to $cafeName. No data is deleted; you can turn it on again any time.',
+          confirmLabel: 'Turn off',
+        )
+      : await showConfirmDialog(
+          context,
+          title: 'Turn on "${member.loginName}"?',
+          message: 'It works again with its current password.',
+          confirmLabel: 'Turn on',
+        );
+  if (!ok || !context.mounted) return;
+  try {
+    await AdminService.instance.setLoginActive(member, !turnOff);
+    if (context.mounted) showSuccess(context, '"${member.loginName}" is ${turnOff ? 'off' : 'on'}');
+  } catch (e) {
+    if (context.mounted) showError(context, friendlyError(e, 'change the login'));
+  }
+}
+
+/// New password for a login (needs the current one).
+Future<void> showChangePassword(BuildContext context, StaffMember member) {
+  final current = TextEditingController();
+  final next = TextEditingController();
+  final confirm = TextEditingController();
+  var saving = false;
+  String? error;
+  return showDialog<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) {
+        Future<void> save() async {
+          if (current.text.isEmpty) return setState(() => error = 'Enter the current password.');
+          final problem = validateNewLogin(member.loginName, next.text, confirm.text);
+          if (problem != null) return setState(() => error = problem);
+          setState(() {
+            error = null;
+            saving = true;
+          });
+          try {
+            await AdminService.instance.changeLoginPassword(member, current: current.text, next: next.text);
+            if (ctx.mounted) {
+              Navigator.pop(ctx);
+              showSuccess(context, 'Password changed for "${member.loginName}"');
+            }
+          } catch (e) {
+            setState(() {
+              saving = false;
+              error = _loginError(e, member.loginName);
+            });
+          }
+        }
+
+        final p = ctx.palette;
+        return AlertDialog(
+          title: Text('Change password · ${member.loginName}'),
+          scrollable: true,
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: current,
+                  obscureText: true,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: 'Current password'),
+                ),
+                const SizedBox(height: Space.md),
+                TextField(
+                  controller: next,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'New password'),
+                ),
+                const SizedBox(height: Space.md),
+                TextField(
+                  controller: confirm,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'Confirm new password'),
+                  onSubmitted: (_) => save(),
+                ),
+                if (error != null)
+                  Container(
+                    margin: const EdgeInsets.only(top: Space.md),
+                    padding: const EdgeInsets.all(Space.sm),
+                    decoration: BoxDecoration(color: p.dangerTint, borderRadius: Radii.controlR),
+                    child: Text(
+                      error!,
+                      style: TextStyle(color: p.danger, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                const SizedBox(height: Space.sm),
+                Text('Forgot the current password? Create a new login and turn this one off.', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
+              ],
+            ),
+          ),
+          actions: [
+            OutlinedButton(onPressed: saving ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(onPressed: saving ? null : save, child: Text(saving ? 'Saving…' : 'Change password')),
+          ],
+        );
+      },
+    ),
+  );
+}
 
 /// Short date or a dash.
 String fmtDate(DateTime? d) => d == null ? '—' : Fmt.date(d);
-
-/// Why logins are not created inside the app.
-const kLoginHelp =
-    'Logins are Firebase accounts with a role and a cafe. They are created and switched on/off with the '
-    'admin script on your computer (it needs the private service key, which must never be in the app).';

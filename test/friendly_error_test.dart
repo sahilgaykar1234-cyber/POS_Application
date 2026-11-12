@@ -1,5 +1,4 @@
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
 import 'package:pos_app/core/utils/friendly_error.dart';

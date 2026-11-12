@@ -165,7 +165,7 @@ class _Overview extends StatelessWidget {
               label: const Text('Record payment'),
             ),
             OutlinedButton.icon(
-              onPressed: () => showAdminCommand(context, title: 'Add a login for ${cafe.name}', why: kLoginHelp, command: loginCommand(cafe.id)),
+              onPressed: () => showAddLogin(context, cafe),
               icon: const Icon(Icons.person_add_alt_outlined, size: 18),
               label: const Text('Add login'),
             ),
@@ -271,10 +271,11 @@ class _Staff extends StatelessWidget {
     return _page([
       SectionCard(
         title: 'Logins',
-        subtitle: kLoginHelp,
+        subtitle: 'Staff sign in with a username and password. Turn a login off to stop it at once.',
         icon: Icons.badge_outlined,
         trailing: FilledButton.icon(
-          onPressed: () => showAdminCommand(context, title: 'Add a login for ${cafe.name}', why: kLoginHelp, command: loginCommand(cafe.id)),
+          key: const Key('add-login'),
+          onPressed: () => showAddLogin(context, cafe),
           icon: const Icon(Icons.person_add_alt_outlined, size: 18),
           label: const Text('Add login'),
         ),
@@ -319,31 +320,42 @@ class StaffTile extends StatelessWidget {
               borderRadius: Radii.controlR,
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.storefront_outlined, size: 14, color: p.primary),
-                  const SizedBox(width: 4),
-                  Flexible(child: Text(cafeName, overflow: TextOverflow.ellipsis, style: TextStyle(color: p.primary, fontWeight: FontWeight.w600))),
-                ]),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.storefront_outlined, size: 14, color: p.primary),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        cafeName,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: p.primary, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
         ],
       ),
-      trailing: Wrap(
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: Space.xs,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          StatusChip(s.isActive ? 'Active' : 'Off', color: s.isActive ? p.success : p.inkSubtle, tint: s.isActive ? p.successTint : p.surfaceAlt),
-          IconButton(
-            tooltip: s.isActive ? 'Turn access off' : 'Turn access on',
-            icon: Icon(s.isActive ? Icons.lock_outline_rounded : Icons.lock_open_rounded, size: 20),
-            onPressed: () => showAdminCommand(
-              context,
-              title: '${s.isActive ? 'Turn off' : 'Turn on'} ${s.loginName}',
-              why: s.isActive
-                  ? 'The login stops working ($cafeName staff using it are signed out within an hour). No data is deleted.'
-                  : 'The login works again with its old password.',
-              command: accessCommand(s.loginName, enable: !s.isActive),
-            ),
+          Text(
+            s.isActive ? 'On' : 'Off',
+            style: TextStyle(color: s.isActive ? p.success : p.inkSubtle, fontWeight: FontWeight.w700, fontSize: 13),
+          ),
+          Switch(key: Key('login-switch-${s.uid}'), value: s.isActive, onChanged: (_) => confirmLoginAccess(context, s, cafeName)),
+          PopupMenuButton<String>(
+            key: Key('login-menu-${s.uid}'),
+            tooltip: 'More',
+            onSelected: (v) => v == 'password' ? showChangePassword(context, s) : null,
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'password',
+                child: ListTile(leading: Icon(Icons.password_rounded), title: Text('Change password')),
+              ),
+            ],
           ),
         ],
       ),
@@ -436,7 +448,15 @@ class _Subscription extends StatelessWidget {
                 ('Amount', cafe.amount > 0 ? Fmt.money(cafe.amount) : '—'),
                 ('Started', fmtDate(cafe.startDate)),
                 ('Ends', '${fmtDate(cafe.expiryDate)} · ${daysLeftLabel(cafe.daysLeft(now))}'),
-                ('Payment', switch (cafe.paymentStatus) { 'paid' => 'Paid', 'pending' => 'Pending', 'none' || '' => '—', final s => s }),
+                (
+                  'Payment',
+                  switch (cafe.paymentStatus) {
+                    'paid' => 'Paid',
+                    'pending' => 'Pending',
+                    'none' || '' => '—',
+                    final s => s,
+                  },
+                ),
               ]),
             const SizedBox(height: Space.md),
             Wrap(

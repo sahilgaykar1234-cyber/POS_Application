@@ -170,7 +170,10 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        [list[i].cafeName.isEmpty ? d.cafeName(list[i].cafeId) : list[i].cafeName, if (list[i].receiptNo.isNotEmpty) list[i].receiptNo].join(' · '),
+                                        [
+                                          list[i].cafeName.isEmpty ? d.cafeName(list[i].cafeId) : list[i].cafeName,
+                                          if (list[i].receiptNo.isNotEmpty) list[i].receiptNo,
+                                        ].join(' · '),
                                         style: const TextStyle(fontWeight: FontWeight.w700),
                                       ),
                                       Text(

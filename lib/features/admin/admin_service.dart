@@ -1,7 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../core/auth/auth_service.dart';
+import '../../core/config/app_config.dart';
 import '../../core/data/firestore_paths.dart';
 import '../../core/subscription/cafe_access.dart';
 import '../../core/utils/business_day.dart';
@@ -145,7 +148,7 @@ class AdminService {
   // ---------------------------------------------------------------- cafes
 
   /// Creates a cafe (record + its settings, optionally a trial). Its login
-  /// is created afterwards with the admin script (see [loginCommand]).
+  /// is created afterwards in the panel (Add login).
   Future<String> createCafe({required Map<String, dynamic> profile, required int dayEndsAt, SubscriptionPlan? trialPlan, int? trialDays}) async {
     final ref = FirestorePaths.cafes().doc();
     final now = DateTime.now();
@@ -406,6 +409,89 @@ class AdminService {
     return receiptNo;
   }
 
+  // ---------------------------------------------------------------- logins
+
+  /// Creates the Firebase Auth account for a login. Replaceable in tests.
+  /// Uses a separate Firebase app instance, so the Super Admin stays signed
+  /// in (creating an account signs that instance in as the new user).
+  @visibleForTesting
+  static Future<String> Function(String email, String password) createAuthAccount = _createAuthAccount;
+
+  /// Changes a login's password with its current one. Replaceable in tests.
+  @visibleForTesting
+  static Future<void> Function(String email, String oldPassword, String newPassword) changeAuthPassword = _changeAuthPassword;
+
+  static Future<FirebaseAuth> _helperAuth() async {
+    const name = 'admin-helper';
+    final app = Firebase.apps.where((a) => a.name == name).firstOrNull ?? await Firebase.initializeApp(name: name, options: Firebase.app().options);
+    final auth = FirebaseAuth.instanceFor(app: app);
+    if (kIsWeb) {
+      try {
+        await auth.setPersistence(Persistence.NONE);
+      } catch (_) {}
+    }
+    return auth;
+  }
+
+  static Future<String> _createAuthAccount(String email, String password) async {
+    final auth = await _helperAuth();
+    try {
+      final cred = await auth.createUserWithEmailAndPassword(email: email, password: password);
+      return cred.user!.uid;
+    } finally {
+      await auth.signOut();
+    }
+  }
+
+  static Future<void> _changeAuthPassword(String email, String oldPassword, String newPassword) async {
+    final auth = await _helperAuth();
+    try {
+      final cred = await auth.signInWithEmailAndPassword(email: email, password: oldPassword);
+      await cred.user!.updatePassword(newPassword);
+    } finally {
+      await auth.signOut();
+    }
+  }
+
+  /// Creates a cafe login (username + PIN, like flammywood / 123). Its role
+  /// and cafe go to users/{uid}; firestore.rules accept them from there. The
+  /// password goes only to Firebase Authentication – never stored or logged.
+  Future<void> createLogin({
+    required CafeSummary cafe,
+    required String username,
+    required String password,
+    required String role, // manager (Manager + Captain view) | captain (kitchen only)
+    String displayName = '',
+  }) async {
+    final user = username.trim().toLowerCase();
+    final email = AppConfig.loginEmail(user);
+    final uid = await createAuthAccount(email, AppConfig.loginPassword(user, password));
+    await FirestorePaths.users().doc(uid).set({
+      'email': email,
+      'displayName': displayName.trim().isEmpty ? '${cafe.name} ($user)' : displayName.trim(),
+      'role': role,
+      'cafeId': cafe.id,
+      'status': 'active',
+      'createdBy': _uid,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    await audit('staff.create', cafeId: cafe.id, details: {'login': user, 'role': role});
+  }
+
+  /// Turns a login off (it can't use any cafe data) or on again.
+  Future<void> setLoginActive(StaffMember member, bool active) async {
+    await FirestorePaths.users().doc(member.uid).update({'status': active ? 'active' : 'disabled', 'updatedAt': FieldValue.serverTimestamp()});
+    await audit('staff.access', cafeId: member.cafeId, details: {'login': member.loginName, 'access': active ? 'on' : 'off'});
+  }
+
+  /// New password for a login (needs its current password).
+  Future<void> changeLoginPassword(StaffMember member, {required String current, required String next}) async {
+    final login = member.loginName;
+    await changeAuthPassword(member.email, AppConfig.loginPassword(login, current), AppConfig.loginPassword(login, next));
+    await audit('staff.password', cafeId: member.cafeId, details: {'login': login});
+  }
+
   // ---------------------------------------------------------- platform
 
   Future<void> savePlatformSettings(Map<String, dynamic> fields) async {
@@ -431,12 +517,3 @@ class AdminService {
     }
   }
 }
-
-/// Admin-script commands for what needs the Admin SDK (run on the owner's
-/// computer from the project folder). Passwords are typed by the owner,
-/// never stored by the app.
-String loginCommand(String cafeId, {String username = '<username>'}) => 'node tools/admin/admin.js create-cafe-login $username <password> $cafeId';
-
-String accessCommand(String login, {required bool enable}) => 'node tools/admin/admin.js set-login-active $login ${enable ? 'on' : 'off'}';
-
-const adminScriptEnv = 'GOOGLE_APPLICATION_CREDENTIALS=~/secrets/suratpos-admin.json';

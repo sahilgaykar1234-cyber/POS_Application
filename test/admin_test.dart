@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pos_app/core/auth/app_user.dart';
 import 'package:pos_app/core/data/firestore_paths.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
 import 'package:pos_app/features/admin/admin_data.dart';
@@ -216,13 +218,16 @@ void main() {
       }
     }
 
-    testWidgets('a login turn-off shows the admin command, never a password', (t) async {
+    testWidgets('staff list: on/off switch and password menu (no commands)', (t) async {
       final controller = AdminDataController.fixed(sampleData());
       await lt.pumpAt(t, lt.sizes['desktop']!, StaffScreen(data: controller), AppTheme.light());
-      await t.tap(find.byTooltip('Turn access off').first);
+      expect(find.byKey(const Key('login-switch-u1')), findsOneWidget);
+      expect(find.textContaining('admin.js'), findsNothing);
+      await t.tap(find.byKey(const Key('login-switch-u1')));
       await t.pumpAndSettle();
-      expect(find.textContaining('set-login-active flammywood off'), findsOneWidget);
-      expect(find.textContaining('Passwords are never stored'), findsOneWidget);
+      expect(find.text('Turn off "flammywood"?'), findsOneWidget);
+      await t.tap(find.text('Cancel'));
+      await t.pumpAndSettle();
       expect(t.takeException(), isNull);
     });
 
@@ -368,5 +373,105 @@ void main() {
     expect(left!.docs, isEmpty);
     final log = await t.runAsync(() => db.collection('auditLogs').get());
     expect(log!.docs.single.data()['action'], 'plan.delete');
+  });
+
+  group('logins created in the panel', () {
+    late FakeFirebaseFirestore db;
+    final created = <String, String>{};
+    setUpAll(lt.loadInter);
+    setUp(() async {
+      db = FakeFirebaseFirestore();
+      FirestorePaths.overrideDb = db;
+      created.clear();
+      AdminService.createAuthAccount = (email, password) async {
+        if (email == 'taken@pos.example.com') {
+          throw FirebaseAuthException(code: 'email-already-in-use');
+        }
+        created[email] = password;
+        return 'uid-${email.split('@').first}';
+      };
+      await db.collection('cafes').doc('flammy').set(sampleCafes().first.data);
+    });
+    tearDown(() => FirestorePaths.overrideDb = null);
+
+    test('validation', () {
+      expect(validateNewLogin('ab', '123', '123'), contains('Username'));
+      expect(validateNewLogin('flammy wood', '123', '123'), contains('Username'));
+      expect(validateNewLogin('counter1', '12', '12'), contains('at least 3'));
+      expect(validateNewLogin('counter1', '123', '124'), contains("don't match"));
+      expect(validateNewLogin('Counter.1', '123', '123'), isNull);
+    });
+
+    for (final s in {'phone': lt.sizes['phone']!, 'desktop': lt.sizes['desktop']!}.entries) {
+      testWidgets('add login from the cafe page · ${s.key}', (t) async {
+        await lt.pumpAt(
+          t,
+          s.value,
+          Builder(builder: (c) => Center(child: TextButton(onPressed: () => showAddLogin(c, sampleCafes().first), child: const Text('open')))),
+          AppTheme.light(),
+        );
+        await t.tap(find.text('open'));
+        await t.pumpAndSettle();
+        expect(t.takeException(), isNull);
+        await t.enterText(find.byKey(const Key('login-username')), 'Counter1');
+        await t.enterText(find.byKey(const Key('login-password')), '1234');
+        await t.enterText(find.byKey(const Key('login-confirm')), '1234');
+        await t.tap(find.text('Kitchen only'));
+        await t.ensureVisible(find.byKey(const Key('login-save')));
+        await t.tap(find.byKey(const Key('login-save')));
+        await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await t.pumpAndSettle();
+        // Same email/password scheme as the login screen and the admin script.
+        expect(created, {'counter1@pos.example.com': 'cafepos-1234'});
+        final user = await t.runAsync(() => db.collection('users').doc('uid-counter1').get());
+        expect(user!.data()!['role'], 'captain');
+        expect(user.data()!['cafeId'], 'flammy');
+        expect(user.data()!['status'], 'active');
+        expect(user.data()!.values.join(' '), isNot(contains('1234')), reason: 'password never stored');
+        expect(find.byKey(const Key('login-username')), findsNothing, reason: 'dialog closed');
+      });
+    }
+
+    testWidgets('a taken username explains itself', (t) async {
+      await lt.pumpAt(
+        t,
+        lt.sizes['desktop']!,
+        Builder(builder: (c) => Center(child: TextButton(onPressed: () => showAddLogin(c, sampleCafes().first), child: const Text('open')))),
+        AppTheme.light(),
+      );
+      await t.tap(find.text('open'));
+      await t.pumpAndSettle();
+      await t.enterText(find.byKey(const Key('login-username')), 'taken');
+      await t.enterText(find.byKey(const Key('login-password')), '1234');
+      await t.enterText(find.byKey(const Key('login-confirm')), '1234');
+      await t.tap(find.byKey(const Key('login-save')));
+      await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await t.pumpAndSettle();
+      expect(find.text('The username "taken" is already taken. Please choose another.'), findsOneWidget);
+    });
+
+    test('turn off / on and change password', () async {
+      final m = StaffMember('u9', {'email': 'counter1@pos.example.com', 'role': 'manager', 'cafeId': 'flammy', 'status': 'active'});
+      await db.collection('users').doc('u9').set(m.data);
+      await AdminService.instance.setLoginActive(m, false);
+      expect((await db.collection('users').doc('u9').get()).data()!['status'], 'disabled');
+      String? seen;
+      AdminService.changeAuthPassword = (email, old, next) async => seen = '$email $old $next';
+      await AdminService.instance.changeLoginPassword(m, current: '123', next: '999');
+      expect(seen, 'counter1@pos.example.com cafepos-123 cafepos-999');
+    });
+
+    test('roles: claims first, panel logins from users/{uid}, never Super Admin from a document', () {
+      AppUser r({Map<String, dynamic>? claims, Map<String, dynamic>? doc}) =>
+          AppUser.resolve(uid: 'x', email: 'x@pos.example.com', displayName: null, claims: claims, userDoc: doc);
+      expect(r(claims: {'role': 'manager', 'cafeId': 'A'}).cafeId, 'A');
+      final panel = r(doc: {'role': 'captain', 'cafeId': 'B', 'status': 'active'});
+      expect(panel.role, UserRole.captain);
+      expect(panel.cafeId, 'B');
+      expect(r(doc: {'role': 'superAdmin'}).role, isNull);
+      expect(r(doc: {'role': 'manager', 'cafeId': 'A', 'status': 'disabled'}).loginDisabled, isTrue);
+      expect(r(claims: {'role': 'manager', 'cafeId': 'A'}, doc: {'status': 'disabled'}).loginDisabled, isTrue);
+      expect(r(claims: {'role': 'superAdmin'}, doc: {'status': 'disabled'}).loginDisabled, isFalse);
+    });
   });
 }

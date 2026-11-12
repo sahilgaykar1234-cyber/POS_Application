@@ -27,7 +27,11 @@ class AppUser {
     required this.displayName,
     required this.role,
     required this.cafeId,
+    this.loginDisabled = false,
   });
+
+  /// Turned off by the Super Admin (users/{uid}.status == "disabled").
+  final bool loginDisabled;
 
   final String uid;
   final String email;
@@ -46,6 +50,38 @@ class AppUser {
   /// Manager/Captain must be tied to a cafe to be usable.
   bool get hasValidAssignment =>
       role == UserRole.superAdmin || (role != null && (cafeId?.isNotEmpty ?? false));
+
+  /// Role and cafe from the server-set token claims; for logins created in
+  /// the Super Admin panel (no claims) from users/{uid}, which only the Super
+  /// Admin can write. A Super Admin role is NEVER taken from the document.
+  factory AppUser.resolve({
+    required String uid,
+    required String? email,
+    required String? displayName,
+    required Map<String, dynamic>? claims,
+    Map<String, dynamic>? userDoc,
+  }) {
+    final base = AppUser.fromClaims(uid: uid, email: email, displayName: displayName, claims: claims);
+    var role = base.role;
+    var cafeId = base.cafeId;
+    if (role == null && userDoc != null) {
+      final docRole = UserRole.fromClaim(userDoc['role']);
+      final docCafe = userDoc['cafeId'];
+      if ((docRole == UserRole.manager || docRole == UserRole.captain) && docCafe is String && docCafe.isNotEmpty) {
+        role = docRole;
+        cafeId = docCafe;
+      }
+    }
+    final docName = (userDoc?['displayName'] ?? '').toString().trim();
+    return AppUser(
+      uid: uid,
+      email: base.email,
+      displayName: docName.isNotEmpty ? docName : base.displayName,
+      role: role,
+      cafeId: cafeId,
+      loginDisabled: role != UserRole.superAdmin && userDoc?['status'] == 'disabled',
+    );
+  }
 
   factory AppUser.fromClaims({
     required String uid,

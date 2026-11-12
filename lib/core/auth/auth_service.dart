@@ -25,11 +25,19 @@ class AuthService {
   /// admin take effect on next sign-in/refresh.
   Future<AppUser> loadAppUser(User user) async {
     final token = await user.getIdTokenResult(true);
-    final appUser = AppUser.fromClaims(
+    // users/{uid}: role for panel-created logins + on/off status.
+    Map<String, dynamic>? doc;
+    try {
+      doc = (await FirestorePaths.users().doc(user.uid).get()).data();
+    } catch (e) {
+      debugPrint('users/${user.uid} not readable: $e');
+    }
+    final appUser = AppUser.resolve(
       uid: user.uid,
       email: user.email,
       displayName: user.displayName,
       claims: token.claims,
+      userDoc: doc,
     );
     currentUser = appUser;
     return appUser;

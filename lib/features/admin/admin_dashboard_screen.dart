@@ -203,7 +203,10 @@ class AdminDashboardScreen extends StatelessWidget {
                         .take(6)
                         .toList();
                     if (!snap.hasData) {
-                      return const Padding(padding: EdgeInsets.all(Space.lg), child: Center(child: CircularProgressIndicator()));
+                      return const Padding(
+                        padding: EdgeInsets.all(Space.lg),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
                     }
                     if (items.isEmpty) return const InlineEmpty('No subscription or payment activity yet');
                     return Column(

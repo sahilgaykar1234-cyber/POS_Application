@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/ui.dart';
 import 'admin_data.dart';
-import 'admin_dialogs.dart';
 import 'admin_service.dart';
 import 'cafe_detail_screen.dart';
 
@@ -63,8 +62,8 @@ class _StaffScreenState extends State<StaffScreen> {
                   const SizedBox(width: Space.sm),
                   Expanded(
                     child: Text(
-                      'Shared cafe logins choose Manager or Captain view after signing in. Passwords are never shown or stored here. '
-                      '$kLoginHelp',
+                      'Cafe logins choose Manager or Captain view after signing in; kitchen-only logins open the kitchen screen. '
+                      'Add a login from a cafe\'s page (Staff tab). Passwords are never shown or stored here.',
                       style: TextStyle(color: p.ink, fontSize: 13),
                     ),
                   ),

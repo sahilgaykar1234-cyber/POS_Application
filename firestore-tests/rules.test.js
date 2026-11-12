@@ -162,6 +162,57 @@ test('super admin panel: platform settings, subscription history, new cafes', as
   await assertFails(getDoc(doc(ctx.anon(), 'platform/settings')));
 });
 
+test('logins created in the Super Admin panel (role in users/{uid}, no claims)', async () => {
+  await seed();
+  await env.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    await setDoc(doc(db, 'users/pm'), { role: 'manager', cafeId: 'A', status: 'active' });
+    await setDoc(doc(db, 'users/pc'), { role: 'captain', cafeId: 'A', status: 'active' });
+    await setDoc(doc(db, 'users/fake'), { role: 'superAdmin', cafeId: 'A' });
+    await setDoc(doc(db, 'users/off'), { role: 'manager', cafeId: 'A', status: 'disabled' });
+  });
+  const pm = env.authenticatedContext('pm', {}).firestore();
+  await assertSucceeds(getDoc(doc(pm, 'cafes/A/orders/o1')), 'panel manager reads own cafe');
+  await assertSucceeds(setDoc(doc(pm, 'cafes/A/orders/new'), { status: 'pending', totalPrice: 10 }), 'and takes orders');
+  await assertFails(getDoc(doc(pm, 'cafes/B/orders/o1')), 'never another cafe');
+  await assertFails(getDoc(doc(pm, 'platform/settings')));
+  await assertFails(setDoc(doc(pm, 'users/pm'), { role: 'manager', cafeId: 'B', status: 'active' }), 'cannot move itself to another cafe');
+
+  const pc = env.authenticatedContext('pc', {}).firestore();
+  await assertSucceeds(updateDoc(doc(pc, 'cafes/A/orders/o1'), { status: 'preparing', kitchenStatus: 'preparing' }));
+  await assertFails(updateDoc(doc(pc, 'cafes/A/orders/o1'), { totalPrice: 1 }), 'captain: status only');
+
+  const fake = env.authenticatedContext('fake', {}).firestore();
+  await assertFails(getDoc(doc(fake, 'platform/settings')), 'a document can never grant Super Admin');
+  await assertFails(getDoc(doc(fake, 'cafes/B')));
+  await assertFails(getDoc(doc(fake, 'cafes/A/orders/o1')), 'superAdmin in a doc is not a cafe role either');
+
+  const off = env.authenticatedContext('off', {}).firestore();
+  await assertFails(getDoc(doc(off, 'cafes/A/orders/o1')), 'turned-off login loses access');
+});
+
+test('turning a login off also works for claim-based logins', async () => {
+  await seed();
+  await env.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), 'users/mA'), { role: 'manager', cafeId: 'A', status: 'disabled' });
+  });
+  await assertFails(getDoc(doc(ctx.managerA(), 'cafes/A/orders/o1')));
+  await assertFails(setDoc(doc(ctx.managerA(), 'cafes/A/orders/x'), { status: 'pending' }));
+});
+
+test('only the Super Admin writes users, and never a Super Admin role', async () => {
+  await seed();
+  const sa = ctx.superAdmin();
+  await assertSucceeds(setDoc(doc(sa, 'users/n1'), { role: 'manager', cafeId: 'A', status: 'active', email: 'n1@pos.example.com' }));
+  await assertSucceeds(updateDoc(doc(sa, 'users/n1'), { status: 'disabled' }));
+  await assertSucceeds(setDoc(doc(sa, 'users/n2'), { role: 'captain', cafeId: 'B', status: 'active' }));
+  await assertFails(setDoc(doc(sa, 'users/n3'), { role: 'superAdmin', cafeId: 'A' }), 'no Super Admin from the panel');
+  await assertFails(setDoc(doc(sa, 'users/n4'), { role: 'manager', cafeId: 'ZZZ' }), 'cafe must exist');
+  await assertFails(setDoc(doc(sa, 'users/sa'), { role: 'manager', cafeId: 'A' }), 'not its own document');
+  await assertFails(setDoc(doc(ctx.managerA(), 'users/n5'), { role: 'manager', cafeId: 'A' }), 'managers cannot create logins');
+  await assertFails(updateDoc(doc(ctx.managerA(), 'users/mA'), { status: 'active' }), 'nobody edits their own login');
+});
+
 test('subscription payments: manager sees only own cafe', async () => {
   await seed();
   const db = ctx.managerA();
