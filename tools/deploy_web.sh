@@ -10,6 +10,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# `flutter clean` deletes build/, which a running `flutter run -d chrome`
+# serves its assets from: that session then shows 404s for
+# assets/FontManifest.json and shaders. Restart `flutter run` afterwards.
+if pgrep -f "[f]lutter_tools.*run" >/dev/null 2>&1; then
+  echo "NOTE: a 'flutter run' session is open. After this deploy, stop it (q) and run it again." >&2
+fi
+
 flutter clean
 flutter pub get
 
@@ -32,7 +39,7 @@ if [ "$(grep -o 'signInWithEmailAndPassword' build/web/main.dart.js | wc -l)" -l
 fi
 
 if [ "${1:-}" = "--rules" ]; then
-  firebase deploy --only hosting,firestore:rules,storage
+  firebase deploy --only hosting
 else
   firebase deploy --only hosting
 fi

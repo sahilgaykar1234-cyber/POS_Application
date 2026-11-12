@@ -996,10 +996,19 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
                 ListTile(
                   title: const Text('Spicy level'),
                   trailing: SegmentedButton<int>(
+                    // Same flame icon as the menu list and POS (an emoji
+                    // would need a font download on the web).
                     segments: const [
                       ButtonSegment(value: 0, label: Text('None')),
-                      ButtonSegment(value: 1, label: Text('🌶')),
-                      ButtonSegment(value: 2, label: Text('🌶🌶')),
+                      ButtonSegment(value: 1, tooltip: 'Spicy', label: Icon(Icons.local_fire_department_rounded, size: 18)),
+                      ButtonSegment(
+                        value: 2,
+                        tooltip: 'Extra spicy',
+                        label: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.local_fire_department_rounded, size: 18),
+                          Icon(Icons.local_fire_department_rounded, size: 18),
+                        ]),
+                      ),
                     ],
                     selected: {_spicy},
                     onSelectionChanged: (s) => setState(() => _spicy = s.first),
