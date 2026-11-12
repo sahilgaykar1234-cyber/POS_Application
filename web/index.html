@@ -18,16 +18,90 @@
 
   <title>Cafe POS</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    html, body { margin: 0; height: 100%; background: #F6F7F9; }
+    #cafepos-splash {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px; padding: 24px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #111827; text-align: center; box-sizing: border-box;
+    }
+    #cafepos-splash img { width: 64px; height: 64px; border-radius: 14px; }
+    #cafepos-splash .spin {
+      width: 26px; height: 26px; border-radius: 50%;
+      border: 3px solid #F3D9CC; border-top-color: #C2410C;
+      animation: cafepos-spin 0.9s linear infinite;
+    }
+    #cafepos-splash .msg { font-size: 15px; color: #4B5563; max-width: 420px; line-height: 1.45; }
+    #cafepos-splash .err { display: none; font-size: 14px; color: #374151; max-width: 440px; line-height: 1.5; }
+    #cafepos-splash .err b { color: #B91C1C; }
+    #cafepos-splash .err ul { text-align: left; padding-left: 20px; margin: 10px 0; }
+    #cafepos-splash .err code { display: block; margin-top: 10px; font-size: 11px; color: #6B7280; word-break: break-word; }
+    #cafepos-splash button {
+      margin-top: 6px; padding: 12px 22px; border: 0; border-radius: 10px;
+      background: #C2410C; color: #fff; font-size: 15px; font-weight: 600;
+    }
+    @keyframes cafepos-spin { to { transform: rotate(360deg); } }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
-
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+  <!-- Shown until the app draws its first frame, so the page is never blank.
+       If the app can't start, it explains why instead of staying white. -->
+  <div id="cafepos-splash">
+    <img src="favicon.png" alt="">
+    <div class="spin"></div>
+    <div class="msg" id="cafepos-msg">Loading Cafe POS…</div>
+    <div class="err" id="cafepos-err">
+      <b>The app could not start on this device.</b>
+      <ul>
+        <li>Update the phone (iPhone: iOS 16.4 or newer).</li>
+        <li>Turn off <b>Lockdown Mode</b> for this site (Settings › Privacy &amp; Security).</li>
+        <li>Don't use Private browsing; turn off content blockers for this site.</li>
+        <li>Safari: Settings › Safari › Advanced › Website Data › remove this site, then reload.</li>
+      </ul>
+      <button onclick="location.reload()">Reload</button>
+      <code id="cafepos-detail"></code>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var shown = false;
+      function fail(reason) {
+        if (shown) return; shown = true;
+        var splash = document.getElementById('cafepos-splash');
+        if (!splash) return;
+        splash.querySelector('.spin').style.display = 'none';
+        document.getElementById('cafepos-msg').style.display = 'none';
+        document.getElementById('cafepos-err').style.display = 'block';
+        document.getElementById('cafepos-detail').textContent =
+          (reason ? String(reason).slice(0, 300) + ' · ' : '') + navigator.userAgent;
+      }
+      window.cafePosStartupError = fail;
+      window.addEventListener('flutter-first-frame', function () {
+        var s = document.getElementById('cafepos-splash');
+        if (s) s.remove();
+        window.cafePosStartupError = function () {};
+      });
+      window.addEventListener('error', function (e) {
+        if (document.getElementById('cafepos-splash')) fail(e.message || e.error);
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        if (document.getElementById('cafepos-splash')) fail(e.reason && (e.reason.message || e.reason));
+      });
+      // The engine needs WebAssembly (blocked by Lockdown Mode / very old iOS).
+      if (typeof WebAssembly !== 'object') fail('WebAssembly is not available in this browser');
+      // Still nothing after 25 s: show the help instead of an endless spinner.
+      setTimeout(function () {
+        if (document.getElementById('cafepos-splash')) {
+          var m = document.getElementById('cafepos-msg');
+          if (m) m.textContent = 'Still loading… a slow connection can take a little longer.';
+        }
+      }, 10000);
+      setTimeout(function () {
+        if (document.getElementById('cafepos-splash')) fail('Timed out while starting');
+      }, 25000);
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
