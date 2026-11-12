@@ -108,15 +108,22 @@ class OrderService {
       }
       final now = DateTime.now();
       try {
-        final lastSeq = assignBillNumber ? await _lastSeqInOrders(now) : null;
+        // Only needed the very first time (no counter yet this year).
+        final seed = assignBillNumber ? await _billSeed(now) : null;
         // One transaction: next bill number in the cafe's series (and the
         // next daily takeaway token), so two devices never share a number.
+        // Both counters are read together: one round trip, then one commit.
         final r = await FirebaseFirestore.instance.runTransaction<({int? token, String? billNo})>((tx) async {
           final billRef = FirestorePaths.cafeCounter(billCounterName(now));
           final tokenRef = FirestorePaths.cafeCounter('takeaway_${takeawayDayKey(now)}');
           // All reads must come before writes in a transaction.
-          final tokenSnap = wantToken ? await tx.get(tokenRef) : null;
-          final seq = assignBillNumber ? await _takeBillSeq(tx, billRef, ref.id, now, lastSeq!) : null;
+          final reads = await Future.wait([
+            if (assignBillNumber) tx.get(billRef),
+            if (wantToken) tx.get(tokenRef),
+          ]);
+          final billSnap = assignBillNumber ? reads.first : null;
+          final tokenSnap = wantToken ? reads.last : null;
+          final seq = billSnap == null ? null : _takeBillSeq(tx, billRef, billSnap, seed!);
           final extra = <String, dynamic>{};
           String? billNo;
           int? token;
@@ -185,13 +192,14 @@ class OrderService {
   Future<void> ensureBillNumber(String id) async {
     final now = DateTime.now();
     final ref = _orders.doc(id);
-    final lastSeq = await _lastSeqInOrders(now);
+    final seed = await _billSeed(now);
     await FirebaseFirestore.instance.runTransaction<void>((tx) async {
-      final order = await tx.get(ref);
+      final billRef = FirestorePaths.cafeCounter(billCounterName(now));
+      final reads = await Future.wait([tx.get(ref), tx.get(billRef)]);
+      final order = reads[0];
       final has = order.data()?['billNo'];
       if (!order.exists || (has is String && has.isNotEmpty)) return;
-      final billRef = FirestorePaths.cafeCounter(billCounterName(now));
-      final seq = await _takeBillSeq(tx, billRef, id, now, lastSeq);
+      final seq = _takeBillSeq(tx, billRef, reads[1], seed);
       tx.update(ref, _billFields(now, seq));
     });
   }
@@ -202,6 +210,23 @@ class OrderService {
         'billFy': financialYear(now),
         'billKey': billKey(now, seq),
       };
+
+  /// Which counters already exist (so the bill-number queries run only once
+  /// per financial year, not on every order).
+  final Set<String> _knownCounters = {};
+
+  /// First number of the year's series when its counter doesn't exist yet:
+  /// right after the latest existing bill (null = counter exists, no query).
+  Future<int?> _billSeed(DateTime now) async {
+    final name = billCounterName(now);
+    if (_knownCounters.contains(name)) return null;
+    final c = await FirestorePaths.cafeCounter(name).get();
+    if (c.exists && c.data()?['next'] != null) {
+      _knownCounters.add(name);
+      return null;
+    }
+    return await _lastSeqInOrders(now) + 1;
+  }
 
   /// Highest bill number this financial year among bills that still exist.
   Future<int> _lastSeqInOrders(DateTime now) async {
@@ -220,19 +245,13 @@ class OrderService {
     return last;
   }
 
-  /// Reserves the next bill number inside [tx] (see [nextBillSeq]). Only
-  /// reads before its single write, so call it after the other reads.
-  Future<int> _takeBillSeq(Transaction tx, DocumentReference<Map<String, dynamic>> billRef, String orderId,
-      DateTime now, int lastSeqInOrders) async {
-    final c = await tx.get(billRef);
-    final lastId = c.data()?['lastOrderId'] as String?;
-    final lastExists = lastId != null && (await tx.get(_orders.doc(lastId))).exists;
-    final seq = nextBillSeq(
-      counterNext: (c.data()?['next'] as num?)?.toInt(),
-      counterLastOrderExists: lastExists,
-      lastSeqInOrders: lastSeqInOrders,
-    );
-    tx.set(billRef, {'next': seq + 1, 'lastOrderId': orderId, 'updatedAt': FieldValue.serverTimestamp()});
+  /// Takes the next number from the counter snapshot read in [tx] (write
+  /// only; the caller has done all reads). [seed] is used when the counter
+  /// doesn't exist yet.
+  int _takeBillSeq(Transaction tx, DocumentReference<Map<String, dynamic>> billRef,
+      DocumentSnapshot<Map<String, dynamic>> counter, int? seed) {
+    final seq = (counter.data()?['next'] as num?)?.toInt() ?? seed ?? 1;
+    tx.set(billRef, {'next': seq + 1, 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
     return seq;
   }
 
@@ -303,7 +322,30 @@ class OrderService {
     return fresh.data() ?? {};
   }
 
-  Future<void> delete(String id) => _orders.doc(id).delete();
+  /// Deletes an order. If it was the latest bill of this year's series, the
+  /// series goes back so the next bill follows the latest one that remains.
+  Future<void> delete(String id) async {
+    final ref = _orders.doc(id);
+    final snap = await ref.get();
+    await ref.delete();
+    final d = snap.data();
+    final seq = (d?['billSeq'] as num?)?.toInt();
+    final now = DateTime.now();
+    if (seq == null || d?['billFy'] != financialYear(now)) return;
+    try {
+      final last = await _lastSeqInOrders(now);
+      final billRef = FirestorePaths.cafeCounter(billCounterNameForFy(financialYear(now)));
+      await FirebaseFirestore.instance.runTransaction<void>((tx) async {
+        final c = await tx.get(billRef);
+        final next = (c.data()?['next'] as num?)?.toInt();
+        if (next == null) return;
+        final rewound = rewindAfterDelete(counterNext: next, deletedSeq: seq, lastSeqInOrders: last);
+        if (rewound != null) tx.update(billRef, {'next': rewound, 'updatedAt': FieldValue.serverTimestamp()});
+      });
+    } catch (e) {
+      debugPrint('Bill series not rewound after delete: $e');
+    }
+  }
 
   /// Adds an off-menu item (with the manager's price) to an existing order.
   Future<void> addCustomItem(PosOrder order, Map<String, dynamic> line) async {

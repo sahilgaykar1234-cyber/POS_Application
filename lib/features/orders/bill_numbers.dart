@@ -18,7 +18,7 @@ String financialYearShort(DateTime d) {
 String formatBillNumber(DateTime d, int seq) => '${financialYearShort(d)}/${seq.toString().padLeft(4, '0')}';
 
 /// Counter document name for the bill series of [d]'s financial year.
-String billCounterName(DateTime d) => 'bills_${financialYear(d)}';
+String billCounterName(DateTime d) => billCounterNameForFy(financialYear(d));
 
 /// The bill number to show for an order: the stored sequential number, or
 /// (for orders made before bill series existed) the old id-based one.
@@ -44,17 +44,15 @@ int? seqInYear(int? key, DateTime d) {
   return key ~/ 100000 == start ? key % 100000 : null;
 }
 
-/// Decides the next bill number. The previous bill decides it: normally the
-/// counter continues (it is what keeps two devices from sharing a number),
-/// but if the bill that last used the counter was deleted, numbering resumes
-/// right after the latest bill that still exists ([lastSeqInOrders]).
-/// Never goes back to a number an existing bill already has.
-int nextBillSeq({
-  required int? counterNext,
-  required bool counterLastOrderExists,
-  required int lastSeqInOrders,
-}) {
-  final afterLast = lastSeqInOrders + 1;
-  if (counterNext == null || !counterLastOrderExists) return afterLast;
-  return counterNext > afterLast ? counterNext : afterLast;
+/// Counter document name for financial year [fy] ("2026-27").
+String billCounterNameForFy(String fy) => 'bills_$fy';
+
+/// After deleting bill number [deletedSeq]: if it was the latest bill
+/// (the counter would have given [deletedSeq] + 1 next), numbering resumes
+/// right after the latest bill that still exists. Returns the counter's new
+/// "next", or null when nothing changes (an older bill was deleted).
+int? rewindAfterDelete({required int counterNext, required int deletedSeq, required int lastSeqInOrders}) {
+  if (deletedSeq != counterNext - 1) return null;
+  final next = lastSeqInOrders + 1;
+  return next < counterNext ? next : null;
 }

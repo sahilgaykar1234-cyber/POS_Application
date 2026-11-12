@@ -380,18 +380,23 @@ void main() {
   });
 
   group('Next bill number follows the previous bill', () {
-    test('no bills yet -> 0001 even if an old counter exists', () {
-      expect(nextBillSeq(counterNext: null, counterLastOrderExists: false, lastSeqInOrders: 0), 1);
-      expect(nextBillSeq(counterNext: 3, counterLastOrderExists: false, lastSeqInOrders: 0), 1);
+    test('deleting the latest bill rewinds to after the latest remaining one', () {
+      // Bills 1..8 exist, counter.next = 9. Delete 8 -> next is 8 again.
+      expect(rewindAfterDelete(counterNext: 9, deletedSeq: 8, lastSeqInOrders: 7), 8);
+      // All bills deleted (last one was 1) -> back to 0001.
+      expect(rewindAfterDelete(counterNext: 2, deletedSeq: 1, lastSeqInOrders: 0), 1);
+      // 7 was deleted earlier, now 8 -> next follows 6.
+      expect(rewindAfterDelete(counterNext: 9, deletedSeq: 8, lastSeqInOrders: 6), 7);
     });
-    test('continues after the latest bill', () {
-      expect(nextBillSeq(counterNext: 8, counterLastOrderExists: true, lastSeqInOrders: 7), 8);
+    test('deleting an older bill keeps the series', () {
+      expect(rewindAfterDelete(counterNext: 9, deletedSeq: 5, lastSeqInOrders: 8), isNull);
     });
-    test('latest bill deleted -> reuse its number', () {
-      expect(nextBillSeq(counterNext: 8, counterLastOrderExists: false, lastSeqInOrders: 6), 7);
+    test('never goes back to a number an existing bill has', () {
+      expect(rewindAfterDelete(counterNext: 9, deletedSeq: 8, lastSeqInOrders: 8), isNull);
     });
-    test('never repeats a number a bill already has', () {
-      expect(nextBillSeq(counterNext: 3, counterLastOrderExists: true, lastSeqInOrders: 9), 10);
+    test('counter names', () {
+      expect(billCounterName(DateTime(2026, 11, 12)), 'bills_2026-27');
+      expect(billCounterNameForFy('2026-27'), 'bills_2026-27');
     });
     test('billKey sorts across years and restarts on 1 April', () {
       expect(billKey(DateTime(2026, 11, 11), 42), 202600042);
