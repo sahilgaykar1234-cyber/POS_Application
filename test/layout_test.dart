@@ -352,10 +352,10 @@ void main() {
     expect(t.takeException(), isNull);
   });
 
-  testWidgets('POS takeaway: pickup picker replaces the table field', (t) async {
+  testWidgets('POS takeaway: no table field and no pickup-time picker', (t) async {
     await pumpAt(t, sizes['desktop']!, PosScreen(initialOrderType: 'Takeaway', menuStream: Stream.value(menu()), settingsStream: Stream.value(settings)), AppTheme.light());
-    expect(find.text('Pickup in'), findsOneWidget);
-    expect(find.text('ASAP'), findsOneWidget);
+    expect(find.text('Pickup in'), findsNothing);
+    expect(find.text('ASAP'), findsNothing);
     expect(find.widgetWithText(TextField, 'Table / counter'), findsNothing);
     await t.tap(find.text('Dine-in'));
     await t.pumpAndSettle();

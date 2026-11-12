@@ -52,8 +52,7 @@ class _TakeawayScreenState extends State<TakeawayScreen> {
     super.dispose();
   }
 
-  void _newTakeaway() =>
-      Navigator.push(context, MaterialPageRoute(builder: (_) => const PosScreen(standalone: true, initialOrderType: 'Takeaway')));
+  void _newTakeaway() => Navigator.push(context, MaterialPageRoute(builder: (_) => const PosScreen(standalone: true, initialOrderType: 'Takeaway')));
 
   bool _match(PosOrder o) {
     if (_q.isEmpty) return true;
@@ -120,7 +119,11 @@ class _TakeawayScreenState extends State<TakeawayScreen> {
                               runSpacing: Space.sm,
                               crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
-                                SearchField(width: context.isMobile ? null : 240, hint: 'Token, name or phone', onChanged: (v) => setState(() => _q = v.trim().toLowerCase())),
+                                SearchField(
+                                  width: context.isMobile ? null : 240,
+                                  hint: 'Token, name or phone',
+                                  onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),
+                                ),
                                 if (context.isTablet)
                                   OutlinedButton.icon(
                                     onPressed: () => showModalBottomSheet<void>(
@@ -158,8 +161,8 @@ class _TakeawayScreenState extends State<TakeawayScreen> {
                             action: FilledButton.icon(onPressed: _newTakeaway, icon: const Icon(Icons.add), label: const Text('New takeaway')),
                           )
                         : context.isMobile
-                            ? _mobile(context, cols, board, settings)
-                            : _desktop(context, cols, board, settings),
+                        ? _mobile(context, cols, board, settings)
+                        : _desktop(context, cols, board, settings),
                   ),
                 ],
               ),
@@ -177,10 +180,16 @@ class _TakeawayScreenState extends State<TakeawayScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (final k in ['pending', 'preparing', 'ready']) ...[
-            Expanded(child: _Column(status: k, orders: cols[k]!, settings: settings)),
+            Expanded(
+              child: _Column(status: k, orders: cols[k]!, settings: settings),
+            ),
             if (k != 'ready' || context.isDesktop) const SizedBox(width: Space.lg),
           ],
-          if (context.isDesktop) SizedBox(width: 300, child: _PickedUp(orders: board.pickedUp, settings: settings)),
+          if (context.isDesktop)
+            SizedBox(
+              width: 300,
+              child: _PickedUp(orders: board.pickedUp, settings: settings),
+            ),
         ],
       ),
     );
@@ -207,7 +216,10 @@ class _TakeawayScreenState extends State<TakeawayScreen> {
         const SizedBox(height: Space.sm),
         Expanded(
           child: _mobileCol == 'done'
-              ? Padding(padding: const EdgeInsets.symmetric(horizontal: Space.lg), child: _PickedUp(orders: board.pickedUp, settings: settings, showTitle: false))
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: Space.lg),
+                  child: _PickedUp(orders: board.pickedUp, settings: settings, showTitle: false),
+                )
               : _Column(status: _mobileCol, orders: cols[_mobileCol]!, settings: settings, showHeader: false),
         ),
       ],
@@ -225,14 +237,20 @@ class _SummaryStrip extends StatelessWidget {
     final p = context.palette;
     final tokens = readyTokens(board);
     Widget pill(IconData i, String text, Color c, Color tint) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(color: tint, borderRadius: BorderRadius.circular(Radii.pill)),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(i, size: 16, color: c),
-            const SizedBox(width: 6),
-            Text(text, style: TextStyle(color: c, fontWeight: FontWeight.w700, fontSize: 13)),
-          ]),
-        );
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(color: tint, borderRadius: BorderRadius.circular(Radii.pill)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(i, size: 16, color: c),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(color: c, fontWeight: FontWeight.w700, fontSize: 13),
+          ),
+        ],
+      ),
+    );
     return Wrap(
       spacing: Space.sm,
       runSpacing: Space.sm,
@@ -268,16 +286,29 @@ class _Column extends StatelessWidget {
           if (showHeader)
             Padding(
               padding: const EdgeInsets.fromLTRB(Space.lg, Space.md, Space.lg, Space.xs),
-              child: Row(children: [
-                Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-                const SizedBox(width: Space.sm),
-                Expanded(child: Text(title, style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
-                Text('${orders.length}', style: TextStyle(color: p.inkSubtle, fontWeight: FontWeight.w700)),
-              ]),
+              child: Row(
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: Space.sm),
+                  Expanded(
+                    child: Text(title, style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                  ),
+                  Text(
+                    '${orders.length}',
+                    style: TextStyle(color: p.inkSubtle, fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
             ),
           Expanded(
             child: orders.isEmpty
-                ? Center(child: Text('Nothing here', style: TextStyle(color: p.inkSubtle)))
+                ? Center(
+                    child: Text('Nothing here', style: TextStyle(color: p.inkSubtle)),
+                  )
                 : ListView.separated(
                     padding: EdgeInsets.fromLTRB(showHeader ? Space.md : Space.lg, Space.sm, showHeader ? Space.md : Space.lg, 96),
                     itemCount: orders.length,
@@ -317,7 +348,9 @@ class _TakeawayCard extends StatelessWidget {
       showSuccess(context, '${order.tokenLabel} picked up');
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => PaymentCompleteReceiptScreen(orderData: data, orderId: order.id, businessSettings: settings.receiptSettings)),
+        MaterialPageRoute(
+          builder: (_) => PaymentCompleteReceiptScreen(orderData: data, orderId: order.id, businessSettings: settings.receiptSettings),
+        ),
       );
     } catch (_) {
       if (context.mounted) showError(context, 'Could not complete. Please check your connection.');
@@ -361,7 +394,10 @@ class _TakeawayCard extends StatelessWidget {
                   decoration: BoxDecoration(color: accent.withValues(alpha: 0.12), borderRadius: Radii.controlR),
                   child: Column(
                     children: [
-                      Text('TOKEN', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: accent, letterSpacing: 0.8)),
+                      Text(
+                        'TOKEN',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: accent, letterSpacing: 0.8),
+                      ),
                       Text(
                         o.tokenNo != null ? '#${o.tokenNo}' : o.billNo,
                         style: TextStyle(fontSize: o.tokenNo != null ? 26 : 14, fontWeight: FontWeight.w800, color: accent, height: 1.1),
@@ -374,22 +410,38 @@ class _TakeawayCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(o.takeawayName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                      Text(
+                        o.takeawayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                      ),
                       if (o.customerPhone.isNotEmpty) Text(o.customerPhone, style: TextStyle(color: p.inkSubtle, fontSize: 12)),
                       const SizedBox(height: 4),
-                      Wrap(spacing: 6, runSpacing: 4, children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(color: pt, borderRadius: BorderRadius.circular(Radii.pill)),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(Icons.schedule_rounded, size: 12, color: pc),
-                            const SizedBox(width: 3),
-                            Text(pickup.label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: pc)),
-                          ]),
-                        ),
-                        if (o.createdAt != null) TableTimer(start: o.createdAt!, stoppedAt: o.isPaid ? (o.paidAt ?? o.completedAt) : null),
-                        StatusChip(o.isPaid ? 'Paid' : 'Unpaid', color: o.isPaid ? p.success : p.warning, tint: o.isPaid ? p.successTint : p.warningTint),
-                      ]),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          if (o.pickupAt != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(color: pt, borderRadius: BorderRadius.circular(Radii.pill)),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.schedule_rounded, size: 12, color: pc),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    pickup.label,
+                                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: pc),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (o.createdAt != null) TableTimer(start: o.createdAt!, stoppedAt: o.isPaid ? (o.paidAt ?? o.completedAt) : null),
+                          StatusChip(o.isPaid ? 'Paid' : 'Unpaid', color: o.isPaid ? p.success : p.warning, tint: o.isPaid ? p.successTint : p.warningTint),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -399,18 +451,29 @@ class _TakeawayCard extends StatelessWidget {
             for (final it in o.items)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 1.5),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  SizedBox(width: 28, child: Text('${it['qty'] ?? 1}×', style: const TextStyle(fontWeight: FontWeight.w700))),
-                  Expanded(
-                    child: Text('${it['name']}${(it['size'] ?? 'Standard') != 'Standard' ? ' · ${it['size']}' : ''}',
-                        style: TextStyle(color: p.inkMuted, fontSize: 13)),
-                  ),
-                ]),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 28,
+                      child: Text('${it['qty'] ?? 1}×', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                    Expanded(
+                      child: Text(
+                        '${it['name']}${(it['size'] ?? 'Standard') != 'Standard' ? ' · ${it['size']}' : ''}',
+                        style: TextStyle(color: p.inkMuted, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             if (o.specialRequest.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text('Note: ${o.specialRequest}', style: TextStyle(color: p.warning, fontSize: 12, fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Note: ${o.specialRequest}',
+                  style: TextStyle(color: p.warning, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
               ),
             Divider(height: Space.lg, color: p.border),
             Row(
@@ -450,7 +513,10 @@ class _TakeawayCard extends StatelessWidget {
                     const PopupMenuItem(value: 'print', child: Text('Print bill / token')),
                     if (!o.isPaid) const PopupMenuItem(value: 'pay', child: Text('Take payment')),
                     if (o.status != 'pending') const PopupMenuItem(value: 'back', child: Text('Move back')),
-                    PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: p.danger))),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Text('Delete', style: TextStyle(color: p.danger)),
+                    ),
                   ],
                 ),
               ],
@@ -458,7 +524,10 @@ class _TakeawayCard extends StatelessWidget {
             const SizedBox(height: Space.xs),
             if (o.status == 'pending')
               OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(foregroundColor: p.info, side: BorderSide(color: p.info)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: p.info,
+                  side: BorderSide(color: p.info),
+                ),
                 onPressed: () => _set(context, 'preparing'),
                 icon: const Icon(Icons.local_fire_department_outlined, size: 18),
                 label: const Text('Start preparing'),
@@ -500,20 +569,29 @@ class _PickedUp extends StatelessWidget {
           if (showTitle)
             Padding(
               padding: const EdgeInsets.fromLTRB(Space.lg, Space.md, Space.lg, Space.sm),
-              child: Row(children: [
-                Icon(Icons.task_alt_rounded, size: 18, color: p.success),
-                const SizedBox(width: Space.sm),
-                Expanded(child: Text('Picked up today', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
-              ]),
+              child: Row(
+                children: [
+                  Icon(Icons.task_alt_rounded, size: 18, color: p.success),
+                  const SizedBox(width: Space.sm),
+                  Expanded(
+                    child: Text('Picked up today', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
             ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: Space.lg),
-            child: Text('${orders.length} ${orders.length == 1 ? 'order' : 'orders'} · ${Fmt.money(total)}', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
+            child: Text(
+              '${orders.length} ${orders.length == 1 ? 'order' : 'orders'} · ${Fmt.money(total)}',
+              style: TextStyle(color: p.inkSubtle, fontSize: 12),
+            ),
           ),
           Divider(height: Space.lg, color: p.border),
           Expanded(
             child: orders.isEmpty
-                ? Center(child: Text('None yet', style: TextStyle(color: p.inkSubtle)))
+                ? Center(
+                    child: Text('None yet', style: TextStyle(color: p.inkSubtle)),
+                  )
                 : ListView.separated(
                     padding: const EdgeInsets.only(bottom: Space.md),
                     itemCount: orders.length,
@@ -522,7 +600,12 @@ class _PickedUp extends StatelessWidget {
                       final o = orders[i];
                       return ListTile(
                         dense: true,
-                        title: Text('${o.tokenLabel} · ${o.takeawayName}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        title: Text(
+                          '${o.tokenLabel} · ${o.takeawayName}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                         subtitle: Text('${Fmt.dateTime(o.completedAt ?? o.createdAt).split(', ').last} · ${o.paymentLabel}'),
                         trailing: MoneyText(o.totalPrice, style: const TextStyle(fontWeight: FontWeight.w700)),
                         onTap: () => Navigator.push(

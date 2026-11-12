@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_theme.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/auth/auth_service.dart';
@@ -65,7 +64,6 @@ class _PosScreenState extends State<PosScreen> {
   bool _saving = false;
 
   /// Takeaway: promised pickup in N minutes (null = as soon as possible).
-  int? _pickupMinutes;
 
   late final Stream<MenuData> _menu = widget.menuStream ?? MenuRepository(FirestorePaths.activeCafeId).watchMenu();
   late final Stream<BusinessSettings> _settings = widget.settingsStream ?? BusinessSettingsRepository.instance.watch();
@@ -214,7 +212,6 @@ class _PosScreenState extends State<PosScreen> {
         gstEnabled: _bs.showGst,
         gstPercent: _bs.gstPercent,
         createdByRole: AuthService.instance.currentUser?.role?.claim,
-        pickupInMinutes: isTakeaway ? _pickupMinutes : null,
         assignToken: _bs.autoGenTokenNumber,
         assignBillNumber: _bs.autoGenBillNumber,
       );
@@ -239,7 +236,6 @@ class _PosScreenState extends State<PosScreen> {
         }
         _known = null;
         _autoName = null;
-        _pickupMinutes = null;
       });
       widget.onDone?.call();
     } catch (e) {
@@ -268,10 +264,6 @@ class _PosScreenState extends State<PosScreen> {
                 token == null ? displayBillNo(order, orderId) : '#$token',
                 style: TextStyle(fontSize: 64, fontWeight: FontWeight.w800, color: p.primary, height: 1.1, letterSpacing: -1),
               ),
-              if (_pickupMinutes != null)
-                Text('Ready in about $_pickupMinutes min', style: TextStyle(color: p.inkMuted))
-              else
-                Text('Ready as soon as possible', style: TextStyle(color: p.inkMuted)),
             ],
           ),
           actionsAlignment: MainAxisAlignment.center,
@@ -508,20 +500,13 @@ class _PosScreenState extends State<PosScreen> {
                     showSelectedIcon: false,
                   ),
                   const SizedBox(height: Space.md),
-                  if (cart.orderType == 'Takeaway')
-                    _PickupPicker(
-                      minutes: _pickupMinutes,
-                      onChanged: (m) {
-                        setState(() => _pickupMinutes = m);
-                        cart.touch();
-                      },
-                    )
-                  else
+                  if (cart.orderType != 'Takeaway') ...[
                     TextField(
                       controller: _table,
                       decoration: const InputDecoration(labelText: 'Table / counter', prefixIcon: Icon(Icons.table_restaurant_outlined, size: 20)),
                     ),
-                  const SizedBox(height: Space.md),
+                    const SizedBox(height: Space.md),
+                  ],
                   Row(
                     children: [
                       Expanded(
@@ -1025,42 +1010,6 @@ class _MobileCartBar extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Takeaway "Pickup in" selector: ASAP / 10 / 15 / 20 / 30 / 45 min.
-class _PickupPicker extends StatelessWidget {
-  const _PickupPicker({required this.minutes, required this.onChanged});
-  final int? minutes;
-  final ValueChanged<int?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          Icon(Icons.schedule_rounded, size: 18, color: p.inkSubtle),
-          const SizedBox(width: 6),
-          Text('Pickup in', style: context.text.titleSmall),
-        ]),
-        const SizedBox(height: Space.sm),
-        Wrap(
-          spacing: Space.sm,
-          runSpacing: Space.sm,
-          children: [
-            for (final m in const <int?>[null, 10, 15, 20, 30, 45])
-              ChoiceChip(
-                label: Text(m == null ? 'ASAP' : '$m min'),
-                selected: minutes == m,
-                onSelected: (_) => onChanged(m),
-                labelStyle: TextStyle(fontFamily: AppTheme.fontFamily, color: minutes == m ? p.surface : p.inkMuted, fontWeight: FontWeight.w600),
-              ),
-          ],
-        ),
-      ],
     );
   }
 }
