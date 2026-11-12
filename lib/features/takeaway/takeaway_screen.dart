@@ -33,7 +33,7 @@ class TakeawayScreen extends StatefulWidget {
 }
 
 class _TakeawayScreenState extends State<TakeawayScreen> {
-  late final _orders = widget.ordersStream ?? OrderService.instance.watchAll();
+  late final _orders = widget.ordersStream ?? OrderService.instance.watchLive();
   late final _settings = widget.settingsStream ?? BusinessSettingsRepository.instance.watch();
   String _q = '';
   String _mobileCol = 'pending';
@@ -309,7 +309,7 @@ class _TakeawayCard extends StatelessWidget {
       return;
     }
     try {
-      final data = await OrderService.instance.complete(order.id, assignBillNumber: settings.autoGenBillNumber);
+      final data = await OrderService.instance.complete(order, assignBillNumber: settings.autoGenBillNumber);
       if (!context.mounted) return;
       showSuccess(context, '${order.tokenLabel} picked up');
       Navigator.push(
@@ -439,7 +439,7 @@ class _TakeawayCard extends StatelessWidget {
                           message: '${o.takeawayName} · ${Fmt.money(o.totalPrice)}\nThis cannot be undone.',
                           confirmLabel: 'Delete',
                         );
-                        if (ok) await OrderService.instance.delete(o.id);
+                        if (ok) await OrderService.instance.delete(o.id, data: o.data);
                     }
                   },
                   itemBuilder: (_) => [

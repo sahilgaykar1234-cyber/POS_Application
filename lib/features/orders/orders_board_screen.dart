@@ -27,7 +27,7 @@ class OrdersBoardScreen extends StatefulWidget {
 enum _Filter { all, preparing, ready, completed }
 
 class _OrdersBoardScreenState extends State<OrdersBoardScreen> {
-  late final _orders = widget.ordersStream ?? OrderService.instance.watchAll();
+  late final _orders = widget.ordersStream ?? OrderService.instance.watchLive();
   late final _settings = widget.settingsStream ?? BusinessSettingsRepository.instance.watch();
   _Filter _filter = _Filter.all;
 

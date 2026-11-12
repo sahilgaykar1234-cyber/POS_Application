@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 /// Single source of truth for every Firestore location the app reads/writes.
 ///
@@ -22,7 +23,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class FirestorePaths {
   FirestorePaths._();
 
-  static FirebaseFirestore get _db => FirebaseFirestore.instance;
+  /// Tests can point the app at a fake Firestore.
+  @visibleForTesting
+  static FirebaseFirestore? overrideDb;
+
+  static FirebaseFirestore get db => overrideDb ?? FirebaseFirestore.instance;
+  static FirebaseFirestore get _db => db;
 
   // ---------------------------------------------------------------------------
   // Active cafe (set by AuthGate after sign-in from the user's verified claim).
@@ -30,7 +36,17 @@ class FirestorePaths {
 
   static String? _activeCafeId;
 
-  static void setActiveCafe(String? cafeId) => _activeCafeId = cafeId;
+  /// Called when the signed-in cafe changes (sign-in, sign-out), e.g. to
+  /// close shared listeners of the previous cafe.
+  static final List<void Function()> onCafeChanged = [];
+
+  static void setActiveCafe(String? cafeId) {
+    if (cafeId == _activeCafeId) return;
+    _activeCafeId = cafeId;
+    for (final f in [...onCafeChanged]) {
+      f();
+    }
+  }
 
   /// The signed-in staff member's cafe. Throws if used before sign-in, which
   /// is a programming error (it can never silently fall back to another cafe).

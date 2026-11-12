@@ -19,7 +19,7 @@ class KitchenScreen extends StatefulWidget {
 }
 
 class _KitchenScreenState extends State<KitchenScreen> {
-  late final _orders = widget.ordersStream ?? OrderService.instance.watchAll();
+  late final _orders = widget.ordersStream ?? OrderService.instance.watchLive();
   Timer? _tick;
   String _mobileTab = 'pending';
 

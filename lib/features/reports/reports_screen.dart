@@ -26,7 +26,7 @@ class ReportsScreen extends StatefulWidget {
 }
 
 class _ReportsScreenState extends State<ReportsScreen> {
-  late final _orders = widget.ordersStream ?? OrderService.instance.watchAll();
+  late final _orders = widget.ordersStream ?? OrderService.instance.watchHistory();
   _Period _period = _Period.week;
   late DateTimeRange _range = _rangeFor(_Period.week);
 

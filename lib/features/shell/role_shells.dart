@@ -58,7 +58,7 @@ Future<void> _confirmSignOut(BuildContext context) async {
 /// Running orders count for the Tables badge.
 /// Active orders today: (dine-in, takeaway) for the nav badges.
 typedef _Counts = ({int dineIn, int takeaway});
-Stream<_Counts> _runningCount() => OrderService.instance.watchAll().map((l) {
+Stream<_Counts> _runningCount() => OrderService.instance.watchLive().map((l) {
       final active = todaysOrders(l).where((o) => o.isActive);
       final take = active.where((o) => o.isTakeaway && o.tableNo.trim().isEmpty).length;
       return (dineIn: active.length - take, takeaway: take);

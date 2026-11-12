@@ -37,7 +37,7 @@ class _OrderAlertsHostState extends State<OrderAlertsHost> {
   @override
   void initState() {
     super.initState();
-    _sub = (widget.ordersStream ?? OrderService.instance.watchAll()).listen(_onOrders, onError: (_) {});
+    _sub = (widget.ordersStream ?? OrderService.instance.watchLive()).listen(_onOrders, onError: (_) {});
   }
 
   @override

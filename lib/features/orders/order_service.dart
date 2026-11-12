@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
@@ -41,13 +43,48 @@ class KnownCustomer {
 /// All order writes for the signed-in cafe. Field names and values match the
 /// original app, so old and new orders read the same everywhere.
 class OrderService {
-  OrderService._();
+  OrderService._() {
+    FirestorePaths.onCafeChanged.add(resetStreams);
+  }
   static final instance = OrderService._();
 
   CollectionReference<Map<String, dynamic>> get _orders => FirestorePaths.orders();
 
-  Stream<List<PosOrder>> watchAll() =>
-      _orders.snapshots().map((s) => s.docs.map(PosOrder.fromDoc).toList());
+  /// Orders the daily screens need (Dashboard, Tables, Takeaway, Kitchen,
+  /// alerts, nav badges): every unfinished order + everything created since
+  /// the 1st of last month. One shared listener for the whole session, so
+  /// switching screens is instant and old history is never re-downloaded.
+  Stream<List<PosOrder>> watchLive() => _shared('live', () {
+        final now = DateTime.now();
+        final since = Timestamp.fromDate(DateTime(now.year, now.month - 1));
+        return mergeOrderSnapshots([
+          _orders.where('status', whereIn: kActiveStatuses).snapshots(),
+          _orders.where('createdAt', isGreaterThanOrEqualTo: since).snapshots(),
+        ]);
+      });
+
+  /// Every order ever (Reports, Customers only).
+  Stream<List<PosOrder>> watchHistory() =>
+      _shared('history', () => _orders.snapshots().map((s) => s.docs.map(PosOrder.fromDoc).toList()));
+
+  final Map<String, SharedLatest<List<PosOrder>>> _streams = {};
+  String? _streamsCafe;
+
+  Stream<List<PosOrder>> _shared(String key, Stream<List<PosOrder>> Function() open) {
+    final cafe = FirestorePaths.activeCafeId;
+    if (cafe != _streamsCafe) resetStreams();
+    _streamsCafe = cafe;
+    return _streams.putIfAbsent(key, () => SharedLatest(open)).stream;
+  }
+
+  /// Closes the shared listeners (sign-out / other cafe).
+  void resetStreams() {
+    for (final s in _streams.values) {
+      s.close();
+    }
+    _streams.clear();
+    _streamsCafe = null;
+  }
 
   Stream<PosOrder?> watchOne(String id) =>
       _orders.doc(id).snapshots().map((d) => d.exists ? PosOrder.fromDoc(d) : null);
@@ -108,12 +145,10 @@ class OrderService {
       }
       final now = DateTime.now();
       try {
-        // Only needed the very first time (no counter yet this year).
-        final seed = assignBillNumber ? await _billSeed(now) : null;
-        // One transaction: next bill number in the cafe's series (and the
-        // next daily takeaway token), so two devices never share a number.
-        // Both counters are read together: one round trip, then one commit.
-        final r = await FirebaseFirestore.instance.runTransaction<({int? token, String? billNo})>((tx) async {
+        // One transaction: next bill number in the cafe's series and the next
+        // daily takeaway token (so two devices never share a number). Both
+        // counters are read together: one read round trip, then the commit.
+        final r = await _txWithBillSeed<({int? token, String? billNo})>((tx, seed) async {
           final billRef = FirestorePaths.cafeCounter(billCounterName(now));
           final tokenRef = FirestorePaths.cafeCounter('takeaway_${takeawayDayKey(now)}');
           // All reads must come before writes in a transaction.
@@ -121,18 +156,17 @@ class OrderService {
             if (assignBillNumber) tx.get(billRef),
             if (wantToken) tx.get(tokenRef),
           ]);
-          final billSnap = assignBillNumber ? reads.first : null;
-          final tokenSnap = wantToken ? reads.last : null;
-          final seq = billSnap == null ? null : _takeBillSeq(tx, billRef, billSnap, seed!);
           final extra = <String, dynamic>{};
           String? billNo;
-          int? token;
-          if (seq != null) {
+          if (assignBillNumber) {
+            final seq = _takeBillSeq(tx, billRef, reads.first, seed);
+            if (seq == null) return null; // series not started: seed it first
             billNo = formatBillNumber(now, seq);
             extra.addAll(_billFields(now, seq));
           }
-          if (tokenSnap != null) {
-            token = (tokenSnap.data()?['next'] as num?)?.toInt() ?? 1;
+          int? token;
+          if (wantToken) {
+            token = (reads.last.data()?['next'] as num?)?.toInt() ?? 1;
             tx.set(tokenRef, {'next': token + 1, 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
             extra['tokenNo'] = token;
           }
@@ -144,7 +178,7 @@ class OrderService {
         debugPrint('Bill number / token not assigned: $e');
         // Offline / transaction failed: never lose the order. It is saved
         // without numbers; the bill number is given when it is settled.
-        await ref.set(data);
+        unawaited(ref.set(data).catchError((Object e) => debugPrint('Order not saved: $e')));
         return (id: ref.id, token: null, billNo: null);
       }
     }
@@ -192,15 +226,14 @@ class OrderService {
   Future<void> ensureBillNumber(String id) async {
     final now = DateTime.now();
     final ref = _orders.doc(id);
-    final seed = await _billSeed(now);
-    await FirebaseFirestore.instance.runTransaction<void>((tx) async {
+    await _txWithBillSeed<bool>((tx, seed) async {
       final billRef = FirestorePaths.cafeCounter(billCounterName(now));
       final reads = await Future.wait([tx.get(ref), tx.get(billRef)]);
-      final order = reads[0];
-      final has = order.data()?['billNo'];
-      if (!order.exists || (has is String && has.isNotEmpty)) return;
+      if (!reads[0].exists || hasBillNumber(reads[0].data()!)) return true;
       final seq = _takeBillSeq(tx, billRef, reads[1], seed);
+      if (seq == null) return null;
       tx.update(ref, _billFields(now, seq));
+      return true;
     });
   }
 
@@ -211,21 +244,27 @@ class OrderService {
         'billKey': billKey(now, seq),
       };
 
-  /// Which counters already exist (so the bill-number queries run only once
-  /// per financial year, not on every order).
-  final Set<String> _knownCounters = {};
+  /// Runs [body] in a transaction. [body] returns null when this year's bill
+  /// series has no counter yet; then the series is started right after the
+  /// latest existing bill and [body] runs again. (Only happens once a year,
+  /// so normal orders never pay for the search.)
+  Future<T> _txWithBillSeed<T extends Object>(Future<T?> Function(Transaction tx, int? seed) body) async {
+    final first = await FirestorePaths.db.runTransaction<T?>((tx) => body(tx, null));
+    if (first != null) return first;
+    final seed = await _lastSeqInOrders(DateTime.now()) + 1;
+    final second = await FirestorePaths.db.runTransaction<T?>((tx) => body(tx, seed));
+    if (second == null) throw StateError('Bill series could not be started');
+    return second;
+  }
 
-  /// First number of the year's series when its counter doesn't exist yet:
-  /// right after the latest existing bill (null = counter exists, no query).
-  Future<int?> _billSeed(DateTime now) async {
-    final name = billCounterName(now);
-    if (_knownCounters.contains(name)) return null;
-    final c = await FirestorePaths.cafeCounter(name).get();
-    if (c.exists && c.data()?['next'] != null) {
-      _knownCounters.add(name);
-      return null;
-    }
-    return await _lastSeqInOrders(now) + 1;
+  /// Takes the next number from the counter [counter] read in [tx], or null
+  /// when the counter doesn't exist and no [seed] is given (nothing written).
+  int? _takeBillSeq(Transaction tx, DocumentReference<Map<String, dynamic>> billRef,
+      DocumentSnapshot<Map<String, dynamic>> counter, int? seed) {
+    final seq = (counter.data()?['next'] as num?)?.toInt() ?? seed;
+    if (seq == null) return null;
+    tx.set(billRef, {'next': seq + 1, 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+    return seq;
   }
 
   /// Highest bill number this financial year among bills that still exist.
@@ -245,30 +284,12 @@ class OrderService {
     return last;
   }
 
-  /// Takes the next number from the counter snapshot read in [tx] (write
-  /// only; the caller has done all reads). [seed] is used when the counter
-  /// doesn't exist yet.
-  int _takeBillSeq(Transaction tx, DocumentReference<Map<String, dynamic>> billRef,
-      DocumentSnapshot<Map<String, dynamic>> counter, int? seed) {
-    final seq = (counter.data()?['next'] as num?)?.toInt() ?? seed ?? 1;
-    tx.set(billRef, {'next': seq + 1, 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
-    return seq;
-  }
-
-  /// Never let numbering problems block taking payment.
-  Future<void> _tryEnsureBillNumber(String id) async {
-    try {
-      await ensureBillNumber(id);
-    } catch (e) {
-      debugPrint('Bill number not assigned for $id: $e');
-    }
-  }
-
   Future<void> setStatus(String id, String status) =>
       _orders.doc(id).update({'status': status, 'kitchenStatus': status});
 
   /// Records payment (and optionally completes the order / frees the table).
   /// Applies the discount and recomputes the total with [Bill.compute].
+  /// Returns the order as saved (for the receipt) without reading it again.
   Future<Map<String, dynamic>> settle({
     required PosOrder order,
     required PaymentMethod method,
@@ -277,74 +298,115 @@ class OrderService {
     required double? cashReceived,
     required bool complete,
     bool assignBillNumber = true,
-  }) async {
-    if (assignBillNumber && order.data['billNo'] == null) await _tryEnsureBillNumber(order.id);
-    final bill = Bill.compute(
-      items: order.items,
-      gstEnabled: order.hasGst,
-      gstPercent: ((order.data['gstPercentage'] ?? 5) as num).toDouble(),
-      discountType: discountType,
-      discountValue: discountValue,
-    );
-    final update = <String, dynamic>{
-      'subtotal': bill.subtotal,
-      'totalPrice': bill.total,
-      'discountType': discountType == DiscountType.none ? FieldValue.delete() : discountType.name,
-      'discountValue': discountType == DiscountType.none ? FieldValue.delete() : discountValue,
-      'discountGiven': bill.discount > 0 ? bill.discount : FieldValue.delete(),
-      'paymentStatus': method.status,
-      'paymentMethod': method.name,
-      'paidAt': FieldValue.serverTimestamp(),
-      'cashReceived': method == PaymentMethod.cash && cashReceived != null ? cashReceived : FieldValue.delete(),
-      'changeReturned': method == PaymentMethod.cash && cashReceived != null
-          ? (cashReceived - bill.total).clamp(0, double.infinity)
-          : FieldValue.delete(),
-    };
-    if (complete) {
-      update['status'] = 'completed';
-      update['kitchenStatus'] = 'completed';
-      update['completedAt'] = FieldValue.serverTimestamp();
-    }
-    await _orders.doc(order.id).update(update);
-    final fresh = await _orders.doc(order.id).get();
-    return fresh.data() ?? {};
+  }) {
+    return _patchOrder(order, assignBillNumber: assignBillNumber, (cur) {
+      final bill = Bill.compute(
+        items: ((cur['items'] as List?) ?? const []).whereType<Map>().map((e) => Map<String, dynamic>.from(e)),
+        gstEnabled: cur['hasGst'] == true,
+        gstPercent: ((cur['gstPercentage'] ?? 5) as num).toDouble(),
+        discountType: discountType,
+        discountValue: discountValue,
+      );
+      final cash = method == PaymentMethod.cash && cashReceived != null;
+      return OrderPatch(
+        {
+          'subtotal': bill.subtotal,
+          'totalPrice': bill.total,
+          'paymentStatus': method.status,
+          'paymentMethod': method.name,
+          if (discountType != DiscountType.none) 'discountType': discountType.name,
+          if (discountType != DiscountType.none) 'discountValue': discountValue,
+          if (bill.discount > 0) 'discountGiven': bill.discount,
+          if (cash) 'cashReceived': cashReceived,
+          if (cash) 'changeReturned': (cashReceived - bill.total).clamp(0, double.infinity),
+          if (complete) 'status': 'completed',
+          if (complete) 'kitchenStatus': 'completed',
+        },
+        remove: {
+          if (discountType == DiscountType.none) ...['discountType', 'discountValue'],
+          if (bill.discount <= 0) 'discountGiven',
+          if (!cash) ...['cashReceived', 'changeReturned'],
+        },
+        serverTime: {'paidAt', if (complete) 'completedAt'},
+      );
+    });
   }
 
   /// Frees the table without changing payment (original "Done" action).
-  Future<Map<String, dynamic>> complete(String id, {bool assignBillNumber = true}) async {
-    if (assignBillNumber) await _tryEnsureBillNumber(id);
-    await _orders.doc(id).update({
-      'status': 'completed',
-      'kitchenStatus': 'completed',
-      'completedAt': FieldValue.serverTimestamp(),
-    });
-    final fresh = await _orders.doc(id).get();
-    return fresh.data() ?? {};
+  Future<Map<String, dynamic>> complete(PosOrder order, {bool assignBillNumber = true}) => _patchOrder(
+        order,
+        assignBillNumber: assignBillNumber,
+        (_) => OrderPatch({'status': 'completed', 'kitchenStatus': 'completed'}, serverTime: {'completedAt'}),
+      );
+
+  /// Applies [build]'s changes to [order]. Usually one plain update (the bill
+  /// number was given when the order was placed); only an order without a
+  /// number needs a transaction to take the next one. If the transaction
+  /// can't run (offline), the change is still saved and payment is never
+  /// blocked. Returns the order as it is now, without reading it back.
+  Future<Map<String, dynamic>> _patchOrder(
+    PosOrder order,
+    OrderPatch Function(Map<String, dynamic> current) build, {
+    required bool assignBillNumber,
+  }) async {
+    final ref = _orders.doc(order.id);
+    if (assignBillNumber && !hasBillNumber(order.data)) {
+      final now = DateTime.now();
+      try {
+        return await _txWithBillSeed<Map<String, dynamic>>((tx, seed) async {
+          final billRef = FirestorePaths.cafeCounter(billCounterName(now));
+          final reads = await Future.wait([tx.get(ref), tx.get(billRef)]);
+          final cur = reads[0].data() ?? order.data;
+          final patch = build(cur);
+          final extra = <String, dynamic>{};
+          if (!hasBillNumber(cur)) {
+            final seq = _takeBillSeq(tx, billRef, reads[1], seed);
+            if (seq == null) return null;
+            extra.addAll(_billFields(now, seq));
+          }
+          tx.update(ref, {...patch.toWrite(), ...extra});
+          return {...patch.applyTo(cur), ...extra};
+        }).timeout(const Duration(seconds: 12));
+      } catch (e) {
+        debugPrint('Bill number not assigned for ${order.id}: $e');
+      }
+    }
+    final patch = build(order.data);
+    // Not awaited past a short wait: offline, Firestore keeps the change and
+    // sends it later; the screen already shows it.
+    try {
+      await ref.update(patch.toWrite()).timeout(const Duration(seconds: 8));
+    } on TimeoutException {
+      debugPrint('Order ${order.id} saved offline; will sync later');
+    }
+    return patch.applyTo(order.data);
   }
 
   /// Deletes an order. If it was the latest bill of this year's series, the
-  /// series goes back so the next bill follows the latest one that remains.
-  Future<void> delete(String id) async {
+  /// series goes back (in the background) so the next bill follows the
+  /// latest one that remains.
+  Future<void> delete(String id, {Map<String, dynamic>? data}) async {
     final ref = _orders.doc(id);
-    final snap = await ref.get();
+    final d = data ?? (await ref.get()).data();
     await ref.delete();
-    final d = snap.data();
     final seq = (d?['billSeq'] as num?)?.toInt();
     final now = DateTime.now();
     if (seq == null || d?['billFy'] != financialYear(now)) return;
-    try {
-      final last = await _lastSeqInOrders(now);
-      final billRef = FirestorePaths.cafeCounter(billCounterNameForFy(financialYear(now)));
-      await FirebaseFirestore.instance.runTransaction<void>((tx) async {
-        final c = await tx.get(billRef);
-        final next = (c.data()?['next'] as num?)?.toInt();
-        if (next == null) return;
-        final rewound = rewindAfterDelete(counterNext: next, deletedSeq: seq, lastSeqInOrders: last);
-        if (rewound != null) tx.update(billRef, {'next': rewound, 'updatedAt': FieldValue.serverTimestamp()});
-      });
-    } catch (e) {
-      debugPrint('Bill series not rewound after delete: $e');
-    }
+    unawaited(() async {
+      try {
+        final last = await _lastSeqInOrders(now);
+        final billRef = FirestorePaths.cafeCounter(billCounterNameForFy(financialYear(now)));
+        await FirestorePaths.db.runTransaction<void>((tx) async {
+          final c = await tx.get(billRef);
+          final next = (c.data()?['next'] as num?)?.toInt();
+          if (next == null) return;
+          final rewound = rewindAfterDelete(counterNext: next, deletedSeq: seq, lastSeqInOrders: last);
+          if (rewound != null) tx.update(billRef, {'next': rewound, 'updatedAt': FieldValue.serverTimestamp()});
+        });
+      } catch (e) {
+        debugPrint('Bill series not rewound after delete: $e');
+      }
+    }());
   }
 
   /// Adds an off-menu item (with the manager's price) to an existing order.
@@ -423,4 +485,114 @@ String takeawayDayKey(DateTime d) =>
 String statusAfterEdit(String current, {required bool hasNewItems}) {
   if (hasNewItems) return 'pending';
   return const ['pending', 'preparing', 'ready'].contains(current) ? current : 'pending';
+}
+
+/// Statuses of orders that are still running (table busy / in the kitchen).
+const kActiveStatuses = ['pending', 'preparing', 'ready'];
+
+bool hasBillNumber(Map<String, dynamic> order) {
+  final b = order['billNo'];
+  return b is String && b.isNotEmpty;
+}
+
+/// A change to an order: fields to set, fields to remove and fields that get
+/// the server time. [toWrite] is what goes to Firestore; [applyTo] is the
+/// same change applied locally (for the receipt), with the device time.
+class OrderPatch {
+  OrderPatch(this.set, {this.remove = const {}, this.serverTime = const {}});
+  final Map<String, dynamic> set;
+  final Set<String> remove;
+  final Set<String> serverTime;
+
+  Map<String, dynamic> toWrite() => {
+        ...set,
+        for (final k in remove) k: FieldValue.delete(),
+        for (final k in serverTime) k: FieldValue.serverTimestamp(),
+      };
+
+  Map<String, dynamic> applyTo(Map<String, dynamic> current) {
+    final now = Timestamp.now();
+    return {
+      for (final e in current.entries)
+        if (!remove.contains(e.key)) e.key: e.value,
+      ...set,
+      for (final k in serverTime) k: now,
+    };
+  }
+}
+
+/// Merges several order snapshot streams (e.g. "running" + "recent") into
+/// one list without duplicates. Emits once every source has delivered.
+Stream<List<PosOrder>> mergeOrderSnapshots(List<Stream<QuerySnapshot<Map<String, dynamic>>>> sources) {
+  late final StreamController<List<PosOrder>> out;
+  final latest = List<Map<String, PosOrder>?>.filled(sources.length, null);
+  final subs = <StreamSubscription>[];
+  void emit() {
+    if (latest.any((m) => m == null)) return;
+    final merged = <String, PosOrder>{};
+    for (final m in latest) {
+      merged.addAll(m!);
+    }
+    out.add(merged.values.toList());
+  }
+
+  out = StreamController<List<PosOrder>>(
+    onListen: () {
+      for (var i = 0; i < sources.length; i++) {
+        subs.add(sources[i].listen((snap) {
+          latest[i] = {for (final d in snap.docs) d.id: PosOrder.fromDoc(d)};
+          emit();
+        }, onError: out.addError));
+      }
+    },
+    onCancel: () async {
+      for (final s in subs) {
+        await s.cancel();
+      }
+    },
+  );
+  return out.stream;
+}
+
+/// One upstream subscription shared by many listeners; a new listener gets
+/// the latest value immediately. The upstream stays open until [close].
+class SharedLatest<T> {
+  SharedLatest(this._open);
+  final Stream<T> Function() _open;
+  StreamSubscription<T>? _sub;
+  T? _last;
+  Object? _error;
+  final Set<MultiStreamController<T>> _listeners = {};
+
+  Stream<T> get stream => Stream<T>.multi((c) {
+        _listeners.add(c);
+        if (_last != null) {
+          c.add(_last as T);
+        } else if (_error != null) {
+          c.addError(_error!);
+        }
+        c.onCancel = () => _listeners.remove(c);
+        _sub ??= _open().listen(
+          (v) {
+            _last = v;
+            _error = null;
+            for (final l in [..._listeners]) {
+              l.add(v);
+            }
+          },
+          onError: (Object e) {
+            _error = e;
+            for (final l in [..._listeners]) {
+              l.addError(e);
+            }
+          },
+        );
+      });
+
+  void close() {
+    _sub?.cancel();
+    _sub = null;
+    _last = null;
+    _error = null;
+  }
 }

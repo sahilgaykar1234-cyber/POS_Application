@@ -59,7 +59,7 @@ class CustomersScreen extends StatefulWidget {
 }
 
 class _CustomersScreenState extends State<CustomersScreen> {
-  late final _orders = widget.ordersStream ?? OrderService.instance.watchAll();
+  late final _orders = widget.ordersStream ?? OrderService.instance.watchHistory();
   String _q = '';
   String _sort = 'recent';
 

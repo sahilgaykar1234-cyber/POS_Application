@@ -21,7 +21,7 @@ void main() async {
   // used; after a hot restart it is already running, so skip quietly.
   // (Safari private mode / Lockdown mode may refuse storage: also fine.)
   try {
-    FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true, cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED);
+    FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true, cacheSizeBytes: 100 * 1024 * 1024);
   } catch (_) {}
 
   try {

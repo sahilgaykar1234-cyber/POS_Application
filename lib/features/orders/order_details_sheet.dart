@@ -206,7 +206,7 @@ class _OrderDetails extends StatelessWidget {
                     if (!ok || !context.mounted) return;
                     Navigator.pop(context);
                     try {
-                      final data = await OrderService.instance.complete(o.id, assignBillNumber: settings.autoGenBillNumber);
+                      final data = await OrderService.instance.complete(o, assignBillNumber: settings.autoGenBillNumber);
                       if (!parent.mounted) return;
                       Navigator.push(
                         parent,
@@ -233,7 +233,7 @@ class _OrderDetails extends StatelessWidget {
                         confirmLabel: 'Delete',
                       );
                       if (!ok || !context.mounted) return;
-                      await _run(context, () => OrderService.instance.delete(o.id), 'Order deleted');
+                      await _run(context, () => OrderService.instance.delete(o.id, data: o.data), 'Order deleted');
                     },
                     child: const Text('Delete order'),
                   ),

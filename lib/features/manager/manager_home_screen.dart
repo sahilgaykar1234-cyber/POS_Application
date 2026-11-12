@@ -28,7 +28,7 @@ class ManagerHomeScreen extends StatefulWidget {
 }
 
 class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
-  late final _orders = widget.ordersStream ?? OrderService.instance.watchAll();
+  late final _orders = widget.ordersStream ?? OrderService.instance.watchLive();
   late final _settings = widget.settingsStream ?? BusinessSettingsRepository.instance.watch();
 
   static const _weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -169,7 +169,7 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
     );
     if (!ok || !mounted) return;
     try {
-      await OrderService.instance.delete(o.id);
+      await OrderService.instance.delete(o.id, data: o.data);
       if (mounted) showSuccess(context, 'Bill ${o.billNo} deleted');
     } catch (_) {
       if (mounted) showError(context, 'Could not delete the bill. Please check your connection.');
