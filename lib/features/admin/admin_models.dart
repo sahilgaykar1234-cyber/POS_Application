@@ -367,6 +367,7 @@ String auditLabel(String action) => switch (action) {
       'cafe.delete' => 'Cafe deleted',
       'plan.create' => 'Plan created',
       'plan.update' => 'Plan updated',
+      'plan.delete' => 'Plan deleted',
       'subscription.set' => 'Subscription assigned',
       'subscription.renew' => 'Subscription renewed',
       'subscription.cancel' => 'Subscription cancelled',

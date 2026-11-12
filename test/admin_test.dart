@@ -329,4 +329,44 @@ void main() {
       expect(await AdminService.instance.addRecommendedPlans(first), 0);
     });
   });
+
+  testWidgets('plans: edit, hide and delete from the card', (t) async {
+    final db = FakeFirebaseFirestore();
+    FirestorePaths.overrideDb = db;
+    addTearDown(() => FirestorePaths.overrideDb = null);
+    await lt.loadInter();
+    await t.runAsync(() => db.collection('plans').doc('std').set({'name': 'Standard', 'tier': 'standard', 'monthlyPrice': 899}));
+    final data = AdminDataController.fixed(AdminData(
+      cafes: sampleCafes(),
+      plans: [SubscriptionPlan('std', const {'name': 'Standard', 'tier': 'standard', 'monthlyPrice': 899})],
+      loading: false,
+    ));
+    for (final size in [lt.sizes['phone']!, lt.sizes['desktop']!]) {
+      await lt.pumpAt(t, size, SuperAdminShell(controller: data), AppTheme.light());
+      await t.tap(find.text('Subscriptions').last);
+      await t.pumpAndSettle();
+      await t.tap(find.textContaining('Plans ('));
+      await t.pumpAndSettle();
+      expect(find.byKey(const Key('plan-edit-std')), findsOneWidget);
+      expect(find.byKey(const Key('plan-visibility-std')), findsOneWidget);
+      expect(find.byKey(const Key('plan-delete-std')), findsOneWidget);
+      expect(t.takeException(), isNull);
+    }
+    await t.tap(find.byKey(const Key('plan-edit-std')));
+    await t.pumpAndSettle();
+    expect(find.text('Edit plan'), findsOneWidget);
+    await t.tap(find.text('Cancel'));
+    await t.pumpAndSettle();
+
+    await t.tap(find.byKey(const Key('plan-delete-std')));
+    await t.pumpAndSettle();
+    expect(find.textContaining('1 cafe use this plan'), findsOneWidget, reason: 'Flammy Wood is on Standard');
+    await t.tap(find.text('Delete plan'));
+    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await t.pumpAndSettle();
+    final left = await t.runAsync(() => db.collection('plans').get());
+    expect(left!.docs, isEmpty);
+    final log = await t.runAsync(() => db.collection('auditLogs').get());
+    expect(log!.docs.single.data()['action'], 'plan.delete');
+  });
 }

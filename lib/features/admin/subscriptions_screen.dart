@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/confirm_dialog.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/ui.dart';
 import 'admin_data.dart';
@@ -186,6 +187,30 @@ class _Plans extends StatelessWidget {
                 const Spacer(),
                 const SizedBox(height: Space.sm),
                 Text('${d.cafes.where((c) => c.planId == plan.id && c.subState(now).running).length} cafes on this plan', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
+                const SizedBox(height: Space.sm),
+                Divider(height: 1, color: p.border),
+                const SizedBox(height: Space.xs),
+                Row(children: [
+                  TextButton.icon(
+                    key: Key('plan-edit-${plan.id}'),
+                    onPressed: () => showPlanForm(context, plan: plan),
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: const Text('Edit'),
+                  ),
+                  TextButton.icon(
+                    key: Key('plan-visibility-${plan.id}'),
+                    onPressed: () => _toggleVisible(context, plan),
+                    icon: Icon(plan.isActive ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 18),
+                    label: Text(plan.isActive ? 'Hide' : 'Show'),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    key: Key('plan-delete-${plan.id}'),
+                    tooltip: 'Delete plan',
+                    onPressed: () => _deletePlan(context, plan, d.cafes.where((c) => c.planId == plan.id && !c.isDeleted).length),
+                    icon: Icon(Icons.delete_outline, color: p.danger),
+                  ),
+                ]),
               ]),
             ),
           ),
@@ -200,5 +225,33 @@ Future<void> _addRecommended(BuildContext context, AdminData d) async {
     if (context.mounted) showSuccess(context, n == 0 ? 'All recommended plans already exist' : '$n plans added. Tap a plan to edit its price.');
   } catch (e) {
     if (context.mounted) showError(context, 'Could not add plans: $e');
+  }
+}
+
+Future<void> _toggleVisible(BuildContext context, SubscriptionPlan plan) async {
+  try {
+    await AdminService.instance.savePlan(plan.id, {'name': plan.name, 'isActive': !plan.isActive});
+    if (context.mounted) showSuccess(context, plan.isActive ? '${plan.name} hidden from new subscriptions' : '${plan.name} is available again');
+  } catch (e) {
+    if (context.mounted) showError(context, 'Could not update: $e');
+  }
+}
+
+Future<void> _deletePlan(BuildContext context, SubscriptionPlan plan, int usedBy) async {
+  final ok = await showDangerConfirmDialog(
+    context,
+    title: 'Delete plan "${plan.name}"?',
+    message: usedBy == 0
+        ? 'No cafe uses this plan. This cannot be undone.'
+        : '$usedBy cafe${usedBy == 1 ? '' : 's'} use this plan. Their current subscription stays as it is (name, price and end date are saved with the cafe), '
+            'but the plan can no longer be assigned. Tip: "Hide" keeps it for existing cafes instead.',
+    confirmLabel: 'Delete plan',
+  );
+  if (!ok || !context.mounted) return;
+  try {
+    await AdminService.instance.deletePlan(plan, usedBy: usedBy);
+    if (context.mounted) showSuccess(context, 'Plan ${plan.name} deleted');
+  } catch (e) {
+    if (context.mounted) showError(context, 'Could not delete: $e');
   }
 }

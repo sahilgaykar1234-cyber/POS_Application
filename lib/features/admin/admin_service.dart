@@ -223,6 +223,13 @@ class AdminService {
     }
   }
 
+  /// Deletes a plan. Cafes on it keep their subscription (name, amount and
+  /// dates are stored on the cafe); the plan just can't be assigned again.
+  Future<void> deletePlan(SubscriptionPlan plan, {int usedBy = 0}) async {
+    await FirestorePaths.plans().doc(plan.id).delete();
+    await audit('plan.delete', details: {'planId': plan.id, 'name': plan.name, 'cafesOnPlan': usedBy});
+  }
+
   /// Adds the recommended starter plans that don't exist yet (by name).
   Future<int> addRecommendedPlans(List<SubscriptionPlan> existing) async {
     final missing = missingRecommendedPlans(existing);
