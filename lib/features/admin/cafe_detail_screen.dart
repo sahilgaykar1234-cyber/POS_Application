@@ -1,358 +1,439 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import '../../core/auth/auth_service.dart';
 import '../../core/subscription/cafe_access.dart';
-import '../../core/theme/app_theme.dart';
+import '../../core/theme/tokens.dart';
+import '../../core/utils/business_day.dart';
 import '../../core/utils/formatters.dart';
-import '../../core/widgets/confirm_dialog.dart';
 import '../../core/widgets/ui.dart';
-import '../menu/menu_management_screen.dart';
-import '../staff/staff_management_screen.dart';
+import 'admin_data.dart';
+import 'admin_dialogs.dart';
 import 'admin_service.dart';
-import 'cafe_form_screen.dart';
-import 'payment_list.dart';
-import 'subscription_dialogs.dart';
+import 'admin_widgets.dart';
 
-/// Everything about one cafe for the Master Admin.
+void openCafe(BuildContext context, String cafeId, ValueListenable<AdminData> data) =>
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => CafeDetailScreen(cafeId: cafeId, data: data)));
+
+/// One cafe: everything the Super Admin needs, only this cafe's data.
 class CafeDetailScreen extends StatelessWidget {
-  const CafeDetailScreen({super.key, required this.cafeId});
+  const CafeDetailScreen({super.key, required this.cafeId, required this.data, this.settingsStream, this.auditStream, this.historyStream, this.ops});
   final String cafeId;
+  final ValueListenable<AdminData> data;
+
+  // Tests can pass fixed data.
+  final Stream<Map<String, dynamic>>? settingsStream;
+  final Stream<List<Map<String, dynamic>>>? auditStream;
+  final Stream<List<Map<String, dynamic>>>? historyStream;
+  final Future<CafeOpsSummary>? ops;
+
+  static const tabs = ['Overview', 'Information', 'Staff', 'Menu & sales', 'Subscription', 'Payments', 'Activity'];
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<CafeSummary?>(
-      stream: AdminService.instance.watchCafe(cafeId),
-      builder: (context, snap) {
-        if (snap.hasError) {
-          return Scaffold(appBar: AppBar(), body: const EmptyState(icon: Icons.error_outline, title: 'Could not load cafe'));
-        }
-        if (!snap.hasData && snap.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator(color: AppColors.primary)));
-        }
-        final cafe = snap.data;
+    return ValueListenableBuilder<AdminData>(
+      valueListenable: data,
+      builder: (context, d, _) {
+        final cafe = d.cafe(cafeId);
         if (cafe == null) {
-          return Scaffold(appBar: AppBar(), body: const EmptyState(icon: Icons.storefront_outlined, title: 'Cafe not found'));
+          return Scaffold(appBar: AppBar(), body: d.loading ? const LoadingState() : const EmptyState(icon: Icons.storefront_outlined, title: 'Cafe not found'));
         }
-
-        return DefaultTabController(
-          length: 4,
-          child: Scaffold(
-            backgroundColor: AppColors.background,
-            appBar: AppBar(
-              backgroundColor: AppColors.surface,
-              title: Row(
-                children: [
-                  Flexible(child: Text(cafe.name, overflow: TextOverflow.ellipsis)),
-                  const SizedBox(width: 10),
-                  StatusChip(cafe.status),
-                ],
+        final now = DateTime.now();
+        return StreamBuilder<Map<String, dynamic>>(
+          stream: settingsStream ?? AdminService.instance.watchCafeSettings(cafeId),
+          builder: (context, set) {
+            final settings = set.data ?? const <String, dynamic>{};
+            final dayEnds = BusinessDay.parse(settings['dayEndsAt']) ?? BusinessDay.defaultCutoffMinutes;
+            return DefaultTabController(
+              length: tabs.length,
+              child: Scaffold(
+                backgroundColor: context.palette.canvas,
+                appBar: AppBar(
+                  title: Text(cafe.name),
+                  actions: [
+                    Padding(padding: const EdgeInsets.only(right: Space.md), child: CafeStatusChip(cafe.status)),
+                  ],
+                  bottom: TabBar(isScrollable: true, tabAlignment: TabAlignment.start, tabs: [for (final t in tabs) Tab(text: t)]),
+                ),
+                body: TabBarView(children: [
+                  _Overview(cafe: cafe, d: d, dayEnds: dayEnds, now: now),
+                  _Info(cafe: cafe, settings: settings, dayEnds: dayEnds, d: d),
+                  _Staff(cafe: cafe, d: d),
+                  _MenuSales(cafeId: cafeId, dayEnds: dayEnds, ops: ops),
+                  _Subscription(cafe: cafe, d: d, now: now, history: historyStream ?? AdminService.instance.watchSubscriptionHistory(cafeId)),
+                  _Payments(cafe: cafe, d: d),
+                  _Activity(stream: auditStream ?? AdminService.instance.watchAuditLogs(cafeId: cafeId)),
+                ]),
               ),
-              actions: [
-                if (!cafe.isDeleted)
-                  IconButton(
-                    tooltip: 'Edit details',
-                    icon: const Icon(Icons.edit_outlined),
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(fullscreenDialog: true, builder: (_) => CafeFormScreen(cafe: cafe)),
-                    ),
-                  ),
-              ],
-              bottom: const TabBar(
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                indicatorColor: AppColors.primary,
-                labelColor: AppColors.accent,
-                tabs: [
-                  Tab(icon: Icon(Icons.info_outline, size: 18), text: 'Overview'),
-                  Tab(icon: Icon(Icons.group_outlined, size: 18), text: 'Staff'),
-                  Tab(icon: Icon(Icons.restaurant_menu, size: 18), text: 'Menu'),
-                  Tab(icon: Icon(Icons.workspace_premium_outlined, size: 18), text: 'Subscription'),
-                ],
-              ),
-            ),
-            body: TabBarView(
-              children: [
-                _OverviewTab(cafe: cafe),
-                StaffManagementScreen(cafeId: cafe.id, cafeName: cafe.name, embedded: true),
-                MenuManagementScreen(cafeId: cafe.id, readOnly: true),
-                _SubscriptionTab(cafe: cafe),
-              ],
-            ),
-          ),
+            );
+          },
         );
       },
     );
   }
 }
 
-class _OverviewTab extends StatelessWidget {
-  const _OverviewTab({required this.cafe});
+Widget _page(List<Widget> children) => PageBody(maxWidth: 1100, bottomPadding: Space.xxl, children: children);
+
+class _Overview extends StatelessWidget {
+  const _Overview({required this.cafe, required this.d, required this.dayEnds, required this.now});
   final CafeSummary cafe;
-
-  Future<void> _setStatus(BuildContext context, String status, String verb) async {
-    final blocking = status != CafeStatus.active;
-    final ok = blocking
-        ? await showDangerConfirmDialog(
-            context,
-            title: '$verb ${cafe.name}?',
-            message: 'Staff of this cafe will not be able to use the POS until it is activated again. '
-                'No data will be deleted.',
-            confirmLabel: verb,
-          )
-        : true;
-    if (!ok || !context.mounted) return;
-    try {
-      await AdminService.instance.setCafeStatus(cafe, status);
-      if (context.mounted) showSuccess(context, 'Cafe is now ${status.toUpperCase()}');
-    } catch (e) {
-      if (context.mounted) showError(context, AuthService.friendlyError(e));
-    }
-  }
-
-  Future<void> _delete(BuildContext context) async {
-    final ok = await showDangerConfirmDialog(
-      context,
-      title: 'Delete ${cafe.name}?',
-      message: 'The cafe will be closed and ALL its staff accounts disabled and signed out.\n\n'
-          'Orders, menu and payment history are KEPT (soft delete) and the cafe can be restored later.',
-      confirmLabel: 'Delete cafe',
-      confirmText: cafe.name,
-    );
-    if (!ok || !context.mounted) return;
-    try {
-      final n = await AdminService.instance.deleteCafe(cafe.id, cafe.name);
-      if (context.mounted) showSuccess(context, 'Cafe deleted. $n staff account(s) disabled.');
-    } catch (e) {
-      if (context.mounted) showError(context, AuthService.friendlyError(e));
-    }
-  }
+  final AdminData d;
+  final int dayEnds;
+  final DateTime now;
 
   @override
   Widget build(BuildContext context) {
-    final access = cafe.access(DateTime.now());
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        if (!cafe.isDeleted && !access.canUsePos)
-          Card(
-            color: AppColors.danger.withValues(alpha: 0.12),
-            child: ListTile(
-              leading: const Icon(Icons.block, color: AppColors.danger),
-              title: Text(access.title.isEmpty ? 'POS blocked' : access.title),
-              subtitle: Text(access.message),
+    final p = context.palette;
+    final st = cafe.subState(now);
+    final logins = d.staff.where((s) => s.cafeId == cafe.id).toList();
+    final access = cafe.access(now);
+    return _page([
+      ResponsiveGrid(minTileWidth: 200, equalHeights: true, fill: true, children: [
+        StatCard(label: 'POS access', value: access.canUsePos ? 'Allowed' : 'Blocked', icon: Icons.point_of_sale_outlined, color: access.canUsePos ? p.success : p.danger, caption: access.title.isNotEmpty ? access.title : (access.message.isEmpty ? 'Working normally' : access.message)),
+        StatCard(label: 'Subscription', value: st.label, icon: Icons.workspace_premium_outlined, color: p.info, caption: cafe.planName ?? 'No plan assigned'),
+        StatCard(label: 'Ends', value: cafe.expiryDate == null ? '—' : Fmt.date(cafe.expiryDate), icon: Icons.event_outlined, color: p.warning, caption: daysLeftLabel(cafe.daysLeft(now))),
+        StatCard(label: 'Logins', value: '${logins.where((s) => s.isActive).length}', icon: Icons.badge_outlined, color: p.violet, caption: logins.isEmpty ? 'No login yet' : '${logins.length} total'),
+      ]),
+      const SizedBox(height: Space.lg),
+      SectionCard(
+        title: 'Actions',
+        icon: Icons.bolt_outlined,
+        child: Wrap(spacing: Space.sm, runSpacing: Space.sm, children: [
+          OutlinedButton.icon(
+            key: const Key('cafe-edit'),
+            onPressed: () => showCafeForm(context, cafe: cafe, currentDayEndsAt: dayEnds, platform: d.settings, plans: d.plans),
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text('Edit details'),
+          ),
+          OutlinedButton.icon(onPressed: () => showAssignPlan(context, cafe, d.plans), icon: const Icon(Icons.workspace_premium_outlined, size: 18), label: Text(cafe.hasSubscription ? 'Change plan' : 'Assign plan')),
+          if (cafe.hasSubscription) OutlinedButton.icon(onPressed: () => showRenew(context, cafe), icon: const Icon(Icons.autorenew_rounded, size: 18), label: const Text('Renew')),
+          OutlinedButton.icon(onPressed: () => showRecordPayment(context, d.cafes, cafe: cafe), icon: const Icon(Icons.payments_outlined, size: 18), label: const Text('Record payment')),
+          OutlinedButton.icon(
+            onPressed: () => showAdminCommand(context, title: 'Add a login for ${cafe.name}', why: kLoginHelp, command: loginCommand(cafe.id)),
+            icon: const Icon(Icons.person_add_alt_outlined, size: 18),
+            label: const Text('Add login'),
+          ),
+          if (cafe.isActive) ...[
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(foregroundColor: p.warning),
+              onPressed: () => confirmCafeStatus(context, cafe, CafeStatus.inactive),
+              icon: const Icon(Icons.pause_circle_outline, size: 18),
+              label: const Text('Deactivate'),
             ),
-          ),
-        SectionCard(
-          title: 'Details',
-          icon: Icons.storefront_outlined,
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(child: InfoRow('Cafe ID', cafe.id)),
-                  IconButton(
-                    tooltip: 'Copy ID',
-                    icon: const Icon(Icons.copy, size: 18),
-                    onPressed: () {
-                      Clipboard.setData(ClipboardData(text: cafe.id));
-                      showSuccess(context, 'Cafe ID copied');
-                    },
-                  ),
-                ],
-              ),
-              InfoRow('Owner', cafe.ownerName),
-              InfoRow('Owner email', cafe.ownerEmail),
-              InfoRow('Contact', cafe.contactNumber),
-              InfoRow('Address', cafe.address),
-              InfoRow('GSTIN', cafe.gstNumber),
-              InfoRow('Created', Fmt.dateTime(cafe.data['createdAt'])),
-              if (cafe.data['migratedAt'] != null) InfoRow('Data migrated', Fmt.dateTime(cafe.data['migratedAt'])),
-              if (cafe.legacyData) const InfoRow('Data', 'Waiting for migration from the old database'),
-            ],
-          ),
-        ),
-        SectionCard(
-          title: 'Cafe status',
-          icon: Icons.toggle_on_outlined,
-          child: Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: cafe.isDeleted
-                ? [
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.restore),
-                      label: const Text('Restore cafe'),
-                      onPressed: () => _setStatus(context, CafeStatus.active, 'Restore'),
-                    ),
-                    const Text('Staff accounts stay disabled until you enable them in the Staff tab.',
-                        style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  ]
-                : [
-                    if (cafe.status != CafeStatus.active)
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.success, foregroundColor: Colors.white),
-                        icon: const Icon(Icons.play_arrow),
-                        label: const Text('Activate'),
-                        onPressed: () => _setStatus(context, CafeStatus.active, 'Activate'),
-                      ),
-                    if (cafe.status != CafeStatus.inactive)
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.pause),
-                        label: const Text('Deactivate'),
-                        onPressed: () => _setStatus(context, CafeStatus.inactive, 'Deactivate'),
-                      ),
-                    if (cafe.status != CafeStatus.suspended)
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(foregroundColor: AppColors.accent),
-                        icon: const Icon(Icons.block),
-                        label: const Text('Suspend'),
-                        onPressed: () => _setStatus(context, CafeStatus.suspended, 'Suspend'),
-                      ),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text('Delete'),
-                      onPressed: () => _delete(context),
-                    ),
-                  ],
-          ),
-        ),
-        SectionCard(
-          title: 'Recent activity',
-          icon: Icons.history,
-          child: StreamBuilder<List<Map<String, dynamic>>>(
-            stream: AdminService.instance.watchAuditLogs(cafeId: cafe.id, limit: 10),
-            builder: (context, snap) {
-              if (snap.hasError) return const Text('Activity unavailable (index may still be building).', style: TextStyle(color: Colors.white38));
-              final logs = snap.data ?? const [];
-              if (logs.isEmpty) return const Text('No activity yet.', style: TextStyle(color: Colors.white54));
-              return Column(
-                children: [
-                  for (final l in logs)
-                    ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(describeAudit(l)),
-                      subtitle: Text(Fmt.dateTime(l['at']), style: const TextStyle(color: Colors.white38, fontSize: 11)),
-                    ),
-                ],
-              );
-            },
-          ),
-        ),
-      ],
-    );
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(foregroundColor: p.danger),
+              onPressed: () => confirmCafeStatus(context, cafe, CafeStatus.suspended),
+              icon: const Icon(Icons.block_rounded, size: 18),
+              label: const Text('Suspend'),
+            ),
+          ] else
+            FilledButton.icon(onPressed: () => confirmCafeStatus(context, cafe, CafeStatus.active), icon: const Icon(Icons.play_circle_outline, size: 18), label: const Text('Activate')),
+          if (cafe.hasSubscription && st.running && st != SubState.cancelled)
+            TextButton(style: TextButton.styleFrom(foregroundColor: p.danger), onPressed: () => confirmCancelSubscription(context, cafe), child: const Text('Cancel subscription')),
+        ]),
+      ),
+      SectionCard(
+        title: 'At a glance',
+        icon: Icons.storefront_outlined,
+        child: KvList([
+          ('Cafe ID', cafe.id),
+          ('Owner', cafe.ownerName),
+          ('Phone', cafe.contactNumber),
+          ('Location', cafe.location),
+          ('Business day ends', BusinessDay.label(dayEnds)),
+          ('Created', fmtDate(cafe.createdAt)),
+        ]),
+      ),
+    ]);
   }
 }
 
-class _SubscriptionTab extends StatelessWidget {
-  const _SubscriptionTab({required this.cafe});
+class _Info extends StatelessWidget {
+  const _Info({required this.cafe, required this.settings, required this.dayEnds, required this.d});
   final CafeSummary cafe;
+  final Map<String, dynamic> settings;
+  final int dayEnds;
+  final AdminData d;
+
+  @override
+  Widget build(BuildContext context) => _page([
+        SectionCard(
+          title: 'Cafe information',
+          icon: Icons.info_outline_rounded,
+          trailing: TextButton.icon(
+            onPressed: () => showCafeForm(context, cafe: cafe, currentDayEndsAt: dayEnds, platform: d.settings, plans: d.plans),
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text('Edit'),
+          ),
+          child: KvList([
+            ('Name', cafe.name),
+            ('Owner name', cafe.ownerName),
+            ('Email', cafe.ownerEmail),
+            ('Phone', cafe.contactNumber),
+            ('Address', cafe.address),
+            ('City', cafe.city),
+            ('State', cafe.state),
+            ('Country', cafe.country),
+            ('GST number', cafe.gstNumber),
+            ('Status', cafe.status),
+            ('Business day ends', BusinessDay.label(dayEnds)),
+            ('Created', fmtDate(cafe.createdAt)),
+            ('Last updated', fmtDate(cafe.updatedAt)),
+          ]),
+        ),
+        SectionCard(
+          title: 'Receipt settings (set by the cafe)',
+          icon: Icons.receipt_long_outlined,
+          child: KvList([
+            ('Name on bills', (settings['shopName'] ?? '').toString()),
+            ('Tagline', (settings['tagline'] ?? '').toString()),
+            ('GST on bills', settings['showGst'] == true ? 'Yes · ${settings['gstPercentage'] ?? ''}%' : 'No'),
+            ('Tables', (settings['numberOfTables'] ?? '').toString()),
+          ]),
+        ),
+      ]);
+}
+
+class _Staff extends StatelessWidget {
+  const _Staff({required this.cafe, required this.d});
+  final CafeSummary cafe;
+  final AdminData d;
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final expiry = cafe.expiryDate;
-    final daysLeft = expiry?.difference(now).inDays;
+    final list = d.staff.where((s) => s.cafeId == cafe.id).toList();
+    return _page([
+      SectionCard(
+        title: 'Logins',
+        subtitle: kLoginHelp,
+        icon: Icons.badge_outlined,
+        trailing: FilledButton.icon(
+          onPressed: () => showAdminCommand(context, title: 'Add a login for ${cafe.name}', why: kLoginHelp, command: loginCommand(cafe.id)),
+          icon: const Icon(Icons.person_add_alt_outlined, size: 18),
+          label: const Text('Add login'),
+        ),
+        child: list.isEmpty
+            ? const InlineEmpty('No login for this cafe yet. Add one to let its staff sign in.', icon: Icons.person_off_outlined)
+            : Column(children: [for (final s in list) StaffTile(member: s, cafeName: cafe.name)]),
+      ),
+    ]);
+  }
+}
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        SectionCard(
-          title: 'Current subscription',
-          icon: Icons.workspace_premium_outlined,
-          trailing: TextButton.icon(
-            icon: const Icon(Icons.edit_calendar, size: 18),
-            label: const Text('Change'),
-            onPressed: cafe.isDeleted ? null : () => showSetSubscriptionDialog(context, cafe),
-          ),
-          child: Column(
-            children: [
-              InfoRow('Plan', cafe.planName ?? 'Custom'),
-              Row(children: [
-                const SizedBox(width: 140, child: Text('Status', style: TextStyle(color: Colors.white54))),
-                StatusChip(cafe.subscriptionStatus == '—' ? 'none' : cafe.subscriptionStatus),
-                const SizedBox(width: 8),
-                if (cafe.isOverdue(now)) const StatusChip('overdue'),
-              ]),
-              const SizedBox(height: 4),
-              InfoRow('Start', Fmt.date(cafe.startDate)),
-              InfoRow(
-                'Expiry',
-                expiry == null
-                    ? 'No expiry set'
-                    : '${Fmt.date(expiry)}${daysLeft != null && daysLeft >= 0 ? '  ($daysLeft days left)' : '  (ended)'}',
-              ),
-              InfoRow('Amount', Fmt.money(cafe.amount)),
-              InfoRow('Payment', cafe.paymentStatus),
-              InfoRow('Last payment', Fmt.date(cafe.subscription['lastPaymentAt'])),
-            ],
+/// A login row with its role, status and the on/off command.
+class StaffTile extends StatelessWidget {
+  const StaffTile({super.key, required this.member, required this.cafeName});
+  final StaffMember member;
+  final String cafeName;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final s = member;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(backgroundColor: p.primaryTint, child: Icon(Icons.person_outline_rounded, color: p.primary)),
+      title: Text(s.displayName, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Text('${s.isUsernameLogin ? 'Username: ${s.loginName}' : s.email} · ${s.roleLabel}'),
+      trailing: Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: Space.xs, children: [
+        StatusChip(s.isActive ? 'Active' : 'Off', color: s.isActive ? p.success : p.inkSubtle, tint: s.isActive ? p.successTint : p.surfaceAlt),
+        IconButton(
+          tooltip: s.isActive ? 'Turn access off' : 'Turn access on',
+          icon: Icon(s.isActive ? Icons.lock_outline_rounded : Icons.lock_open_rounded, size: 20),
+          onPressed: () => showAdminCommand(
+            context,
+            title: '${s.isActive ? 'Turn off' : 'Turn on'} ${s.loginName}',
+            why: s.isActive
+                ? 'The login stops working ($cafeName staff using it are signed out within an hour). No data is deleted.'
+                : 'The login works again with its old password.',
+            command: accessCommand(s.loginName, enable: !s.isActive),
           ),
         ),
-        SectionCard(
-          title: 'Payment history',
-          icon: Icons.receipt_long_outlined,
-          trailing: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Record payment'),
-            onPressed: cafe.isDeleted
-                ? null
-                : () async {
-                    final receipt = await showRecordPaymentDialog(context, cafe);
-                    if (receipt != null && context.mounted) showSuccess(context, 'Payment recorded · $receipt');
-                  },
-          ),
-          child: StreamBuilder<List<SubscriptionPayment>>(
-            stream: AdminService.instance.watchPayments(cafeId: cafe.id),
-            builder: (context, snap) {
-              if (!snap.hasData) return const LinearProgressIndicator();
-              final list = snap.data!;
-              final total = list.fold<double>(0, (s, p) => s + p.amount);
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (list.isNotEmpty)
-                    Text('Total received: ${Fmt.money(total)}',
-                        style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold)),
-                  PaymentList(payments: list, showCafe: false),
-                ],
-              );
-            },
-          ),
-        ),
-        const Text(
-          'Note: these are subscription payments from the cafe to you. Customer bills (orders) are kept separately inside each cafe.',
-          style: TextStyle(color: Colors.white38, fontSize: 12),
-        ),
-      ],
+      ]),
     );
   }
 }
 
-/// Human-readable one-liner for an audit log entry.
-String describeAudit(Map<String, dynamic> l) {
-  final a = (l['action'] ?? '').toString();
-  final d = l['details'] is Map ? Map<String, dynamic>.from(l['details']) : const <String, dynamic>{};
-  return switch (a) {
-    'cafe.create' => 'Cafe created${d['name'] != null ? ': ${d['name']}' : ''}',
-    'cafe.update' => 'Cafe details edited',
-    'cafe.status' => 'Status changed ${d['from'] ?? ''} → ${d['to'] ?? ''}',
-    'cafe.delete' => 'Cafe deleted (${d['staffDisabled'] ?? 0} staff disabled)',
-    'staff.invite' => 'Staff invited: ${d['email'] ?? ''} (${d['role'] ?? ''})',
-    'staff.enable' => 'Staff account enabled',
-    'staff.disable' => 'Staff account disabled',
-    'staff.passwordReset' => 'Password reset sent',
-    'subscription.set' => 'Subscription set: ${d['plan'] ?? 'custom'}, ${d['status'] ?? ''}, until ${d['expiry'] ?? ''}',
-    'subscription.expired' => 'Subscription expired (${d['expiry'] ?? ''})',
-    'payment.record' => 'Payment ${d['receiptNo'] ?? ''}: ${d['amount'] is num ? Fmt.money(d['amount'] as num) : ''} via ${d['method'] ?? ''}',
-    'plan.create' => 'Plan created: ${d['name'] ?? ''}',
-    'plan.update' => 'Plan updated: ${d['name'] ?? ''}',
-    'migration.full' => 'Data migrated from old database',
-    'migration.delta' => 'Late orders copied from old database (${d['ordersCopied'] ?? 0})',
-    'superAdmin.bootstrap' => 'Super Admin account set up',
-    _ => a,
-  };
+class _MenuSales extends StatelessWidget {
+  const _MenuSales({required this.cafeId, required this.dayEnds, this.ops});
+  final String cafeId;
+  final int dayEnds;
+  final Future<CafeOpsSummary>? ops;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return FutureBuilder<CafeOpsSummary>(
+      future: ops ?? AdminService.instance.cafeOps(cafeId, dayEndsAt: dayEnds),
+      builder: (context, snap) {
+        if (snap.hasError) return ErrorState(message: 'Could not load the summary: ${snap.error}');
+        if (!snap.hasData) return const LoadingState(label: 'Counting…');
+        final o = snap.data!;
+        return _page([
+          ResponsiveGrid(minTileWidth: 190, equalHeights: true, fill: true, children: [
+            StatCard(label: 'Categories', value: '${o.categories}', icon: Icons.category_outlined, color: p.info, caption: 'Menu sections'),
+            StatCard(label: 'Menu items', value: '${o.menuItems}', icon: Icons.restaurant_menu_outlined, color: p.primary, caption: '${o.availableItems} available'),
+            StatCard(label: 'Orders today', value: '${o.ordersToday}', icon: Icons.receipt_long_outlined, color: p.success, caption: 'Business day (ends ${BusinessDay.label(dayEnds)})'),
+            StatCard(label: 'Last 30 days', value: Fmt.money(o.billed30d.round()), icon: Icons.trending_up_rounded, color: p.violet, caption: '${o.orders30d} orders billed'),
+          ]),
+          const SizedBox(height: Space.lg),
+          SectionCard(
+            title: 'Activity',
+            icon: Icons.schedule_rounded,
+            child: KvList([('Last order', o.lastOrderAt == null ? 'No orders yet' : Fmt.dateTime(o.lastOrderAt))]),
+          ),
+          Text('Only counts and totals are read; the Super Admin never downloads a cafe\'s bills.', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
+        ]);
+      },
+    );
+  }
+}
+
+class _Subscription extends StatelessWidget {
+  const _Subscription({required this.cafe, required this.d, required this.now, required this.history});
+  final CafeSummary cafe;
+  final AdminData d;
+  final DateTime now;
+  final Stream<List<Map<String, dynamic>>> history;
+
+  @override
+  Widget build(BuildContext context) {
+    final st = cafe.subState(now);
+    return _page([
+      SectionCard(
+        title: 'Current subscription',
+        icon: Icons.workspace_premium_outlined,
+        trailing: SubStateChip(st),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (!cafe.hasSubscription)
+            const InlineEmpty('No plan assigned yet.')
+          else
+            KvList([
+              ('Plan', cafe.planName ?? '—'),
+              ('Billing', cafe.billingCycle.isEmpty ? '—' : cafe.billingCycle[0].toUpperCase() + cafe.billingCycle.substring(1)),
+              ('Amount', cafe.amount > 0 ? Fmt.money(cafe.amount) : '—'),
+              ('Started', fmtDate(cafe.startDate)),
+              ('Ends', '${fmtDate(cafe.expiryDate)} · ${daysLeftLabel(cafe.daysLeft(now))}'),
+              ('Payment', cafe.paymentStatus.isEmpty ? '—' : cafe.paymentStatus),
+            ]),
+          const SizedBox(height: Space.md),
+          Wrap(spacing: Space.sm, runSpacing: Space.sm, children: [
+            FilledButton.icon(onPressed: () => showAssignPlan(context, cafe, d.plans), icon: const Icon(Icons.workspace_premium_outlined, size: 18), label: Text(cafe.hasSubscription ? 'Change plan' : 'Assign plan')),
+            if (cafe.hasSubscription) OutlinedButton.icon(onPressed: () => showRenew(context, cafe), icon: const Icon(Icons.autorenew_rounded, size: 18), label: const Text('Renew')),
+            if (cafe.hasSubscription && st.running && st != SubState.cancelled)
+              TextButton(onPressed: () => confirmCancelSubscription(context, cafe), child: const Text('Cancel subscription')),
+          ]),
+        ]),
+      ),
+      SectionCard(
+        title: 'History',
+        icon: Icons.history_rounded,
+        child: StreamBuilder<List<Map<String, dynamic>>>(
+          stream: history,
+          builder: (context, snap) {
+            if (!snap.hasData) return const Padding(padding: EdgeInsets.all(Space.lg), child: Center(child: CircularProgressIndicator()));
+            if (snap.data!.isEmpty) return const InlineEmpty('No subscription changes yet');
+            return Column(children: [
+              for (final h in snap.data!)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text(_historyTitle(h), style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: Text([
+                    Fmt.dateTime(h['at']),
+                    if (h['expiryDate'] != null) 'until ${Fmt.date(h['expiryDate'])}',
+                    if (h['amount'] is num && (h['amount'] as num) > 0) Fmt.money(h['amount'] as num),
+                  ].join(' · ')),
+                ),
+            ]);
+          },
+        ),
+      ),
+    ]);
+  }
+
+  static String _historyTitle(Map<String, dynamic> h) {
+    final plan = h['planName'] == null ? '' : ' · ${h['planName']}';
+    return switch (h['action']) {
+      'trial' => 'Trial started$plan',
+      'assigned' => 'Plan assigned$plan',
+      'changed' => 'Plan changed$plan',
+      'renewed' => 'Renewed$plan',
+      'cancelled' => 'Cancelled$plan',
+      'payment' => 'Payment ${h['receiptNo'] ?? ''} · ${h['method'] ?? ''}',
+      _ => (h['action'] ?? '').toString(),
+    };
+  }
+}
+
+class _Payments extends StatelessWidget {
+  const _Payments({required this.cafe, required this.d});
+  final CafeSummary cafe;
+  final AdminData d;
+
+  @override
+  Widget build(BuildContext context) {
+    final list = d.payments.where((x) => x.cafeId == cafe.id).toList();
+    final total = list.where((x) => x.status != 'refunded').fold<double>(0, (t, x) => t + x.amount);
+    return _page([
+      SectionCard(
+        title: 'Payments',
+        subtitle: list.isEmpty ? null : '${list.length} recorded · ${Fmt.money(total)} received',
+        icon: Icons.payments_outlined,
+        trailing: FilledButton.icon(onPressed: () => showRecordPayment(context, d.cafes, cafe: cafe), icon: const Icon(Icons.add, size: 18), label: const Text('Record payment')),
+        child: list.isEmpty
+            ? const InlineEmpty('No payments recorded for this cafe')
+            : Column(children: [
+                for (final x in list)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('${x.receiptNo} · ${Fmt.money(x.amount)}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: Text([Fmt.date(x.paidAt), x.method, if (x.planName.isNotEmpty) x.planName, if (x.referenceId.isNotEmpty) 'Ref ${x.referenceId}'].join(' · ')),
+                  ),
+              ]),
+      ),
+    ]);
+  }
+}
+
+class _Activity extends StatelessWidget {
+  const _Activity({required this.stream});
+  final Stream<List<Map<String, dynamic>>> stream;
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<List<Map<String, dynamic>>>(
+        stream: stream,
+        builder: (context, snap) {
+          if (snap.hasError) return ErrorState(message: 'Could not load activity: ${snap.error}');
+          if (!snap.hasData) return const LoadingState();
+          return _page([
+            SectionCard(
+              title: 'Activity',
+              icon: Icons.history_rounded,
+              child: snap.data!.isEmpty
+                  ? const InlineEmpty('No activity recorded for this cafe')
+                  : Column(children: [for (final e in snap.data!) AuditTile(entry: e)]),
+            ),
+          ]);
+        },
+      );
+}
+
+/// One audit-log entry.
+class AuditTile extends StatelessWidget {
+  const AuditTile({super.key, required this.entry, this.cafeName});
+  final Map<String, dynamic> entry;
+  final String? cafeName;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = entry['details'] is Map ? Map<String, dynamic>.from(entry['details'] as Map) : const <String, dynamic>{};
+    final detailText = details.entries.where((e) => e.value != null && e.value.toString().isNotEmpty).map((e) => '${e.key}: ${e.value is List ? (e.value as List).join(', ') : e.value}').join(' · ');
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      title: Text([auditLabel((entry['action'] ?? '').toString()), ?cafeName].join(' · '), style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Text([Fmt.dateTime(entry['at']), (entry['actorRole'] ?? '').toString(), if (detailText.isNotEmpty) detailText].where((s) => s.isNotEmpty).join(' · ')),
+    );
+  }
 }

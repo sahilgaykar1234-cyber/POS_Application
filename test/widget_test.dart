@@ -43,12 +43,6 @@ void main() {
     expect(light.textTheme.bodyMedium?.fontFamily, 'Inter');
   });
 
-  test('Super Admin keeps its previous dark brown look', () {
-    final t = AppTheme.legacyAdmin;
-    expect(t.scaffoldBackgroundColor, const Color(0xFF141211));
-    expect(t.colorScheme.primary, const Color(0xFFE65C00));
-  });
-
   group('showDangerConfirmDialog', () {
     Future<void> openDialog(WidgetTester tester) async {
       await tester.pumpWidget(MaterialApp(

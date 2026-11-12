@@ -2,23 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'tokens.dart';
 
-/// Legacy dark colours, used only by the (on-hold) Super Admin screens, which
-/// keep their previous look via [AppTheme.legacyAdmin].
-class AppColors {
-  AppColors._();
-
-  static const Color background = Color(0xFF141211);
-  static const Color surface = Color(0xFF1E1A17);
-  static const Color surfaceAlt = Color(0xFF231E1B);
-  static const Color border = Color(0xFF2C2520);
-
-  static const Color primary = Color(0xFFE65C00);
-  static const Color accent = Color(0xFFF7B731);
-
-  static const Color success = Colors.green;
-  static const Color danger = Colors.redAccent;
-}
-
 class AppTheme {
   AppTheme._();
 
@@ -27,15 +10,6 @@ class AppTheme {
   static ThemeData light() => _build(Palette.light, Brightness.light);
   static ThemeData dark() => _build(Palette.dark, Brightness.dark);
 
-  /// The previous dark brown theme (Super Admin screens only).
-  static ThemeData get legacyAdmin => ThemeData(
-    brightness: Brightness.dark,
-    scaffoldBackgroundColor: AppColors.background,
-    colorScheme: const ColorScheme.dark(primary: AppColors.primary, secondary: AppColors.accent, surface: AppColors.surface),
-    fontFamily: fontFamily,
-    useMaterial3: true,
-    extensions: const [Palette.dark],
-  );
 
   static ThemeData _build(Palette p, Brightness b) {
     final scheme = ColorScheme(

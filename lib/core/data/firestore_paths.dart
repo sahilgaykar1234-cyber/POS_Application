@@ -98,6 +98,13 @@ class FirestorePaths {
 
   static CollectionReference<Map<String, dynamic>> plans() => _db.collection('plans');
 
+  /// Platform-wide settings of the SaaS (Super Admin only): platform/settings.
+  static DocumentReference<Map<String, dynamic>> platformSettings() => _db.collection('platform').doc('settings');
+
+  /// A cafe's subscription changes, newest first: cafes/{id}/subscriptionHistory.
+  static CollectionReference<Map<String, dynamic>> subscriptionHistory(String cafeId) =>
+      cafe(cafeId).collection('subscriptionHistory');
+
   static CollectionReference<Map<String, dynamic>> subscriptionPayments() =>
       _db.collection('subscriptionPayments');
 

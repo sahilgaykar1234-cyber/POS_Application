@@ -142,6 +142,26 @@ test('super admin reaches every cafe and platform data', async () => {
   await assertFails(setDoc(doc(db, 'orders/legacy1'), { x: 1 }), 'legacy is read-only');
 });
 
+test('super admin panel: platform settings, subscription history, new cafes', async () => {
+  await seed();
+  const sa = ctx.superAdmin();
+  await assertSucceeds(setDoc(doc(sa, 'platform/settings'), { trialDays: 14 }));
+  await assertSucceeds(getDoc(doc(sa, 'platform/settings')));
+  await assertSucceeds(setDoc(doc(sa, 'cafes/C'), { name: 'Cafe C', status: 'active' }));
+  await assertSucceeds(setDoc(doc(sa, 'cafes/C/settings/business'), { shopName: 'Cafe C', dayEndsAt: '05:00' }));
+  await assertSucceeds(addDoc(collection(sa, 'cafes/A/subscriptionHistory'), { action: 'assigned' }));
+  await assertSucceeds(getDocs(collection(sa, 'cafes/A/subscriptionHistory')));
+  await assertSucceeds(getDocs(collection(sa, 'users')), 'staff list');
+
+  const m = ctx.managerA();
+  await assertFails(getDoc(doc(m, 'platform/settings')), 'managers cannot read platform settings');
+  await assertFails(setDoc(doc(m, 'platform/settings'), { trialDays: 999 }));
+  await assertFails(getDocs(collection(m, 'cafes/A/subscriptionHistory')), 'history is Super Admin only');
+  await assertFails(setDoc(doc(m, 'cafes/D'), { name: 'Mine', status: 'active' }), 'managers cannot create cafes');
+  await assertFails(getDoc(doc(ctx.captainA(), 'platform/settings')));
+  await assertFails(getDoc(doc(ctx.anon(), 'platform/settings')));
+});
+
 test('subscription payments: manager sees only own cafe', async () => {
   await seed();
   const db = ctx.managerA();

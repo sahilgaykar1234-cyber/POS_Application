@@ -7,7 +7,6 @@ import '../../features/auth/login_screen.dart';
 import '../../features/shell/role_shells.dart';
 import '../data/firestore_paths.dart';
 import '../subscription/cafe_access.dart';
-import '../theme/theme_controller.dart';
 import '../theme/tokens.dart';
 import '../widgets/message_screen.dart';
 import 'app_user.dart';
@@ -90,11 +89,6 @@ class _SignedInGateState extends State<_SignedInGate> {
           );
         }
 
-        // Super Admin screens keep their previous dark look (redesign on hold).
-        final legacy = ThemeController.instance.legacyAdmin;
-        if (legacy.value != appUser.isSuperAdmin) {
-          WidgetsBinding.instance.addPostFrameCallback((_) => legacy.value = appUser.isSuperAdmin);
-        }
         if (appUser.isSuperAdmin) return const SuperAdminShell();
         return _CafeGate(user: appUser);
       },

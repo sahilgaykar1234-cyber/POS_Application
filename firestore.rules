@@ -110,6 +110,11 @@ service cloud.firestore {
       allow read, write: if isSuper();
     }
 
+    // Platform-wide settings (trial length, defaults, alerts): Super Admin only.
+    match /platform/{doc} {
+      allow read, write: if isSuper();
+    }
+
     // --------------------------------------------------------- audit & alerts
     match /auditLogs/{id} {
       allow read: if isSuper() || (role() == 'manager' && resource.data.cafeId == myCafe());

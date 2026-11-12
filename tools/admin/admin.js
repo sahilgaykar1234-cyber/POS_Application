@@ -27,6 +27,9 @@
  *   rename-login <old-username> <new-username>
  *       Changes a username login (password, role and cafe unchanged).
  *
+ *   set-login-active <username|email> <on|off>
+ *       Turns a cafe login off (can't sign in; open sessions end) or on again.
+ *
  *   list-cafes
  *   list-users
  */
@@ -260,6 +263,36 @@ async function renameLogin(oldName, newName) {
   console.log(`Renamed login "${from}" -> "${to}". Password is unchanged.`);
 }
 
+/**
+ * Turns a login off (can't sign in, current sessions end) or back on.
+ * <login> is a username (e.g. flammywood) or an email. Data is untouched.
+ */
+async function setLoginActive(login, onOff) {
+  const value = String(onOff || '').toLowerCase();
+  if (!login || !['on', 'off'].includes(value)) throw new Error('Usage: set-login-active <username|email> <on|off>');
+  const email = String(login).includes('@') ? String(login).trim().toLowerCase() : loginEmail(String(login).trim().toLowerCase());
+  const user = await auth.getUserByEmail(email).catch(() => null);
+  if (!user) throw new Error(`Login "${login}" not found.`);
+  if ((user.customClaims || {}).role === 'superAdmin') throw new Error('Refusing to turn off a Super Admin account here.');
+  const enable = value === 'on';
+  await auth.updateUser(user.uid, { disabled: !enable });
+  if (!enable) await auth.revokeRefreshTokens(user.uid);
+  await db.collection('users').doc(user.uid).set(
+    { status: enable ? 'active' : 'disabled', updatedAt: FieldValue.serverTimestamp() },
+    { merge: true },
+  );
+  await db.collection('auditLogs').add({
+    action: 'staff.access',
+    actorUid: 'local-admin-script',
+    actorRole: 'superAdmin',
+    cafeId: (user.customClaims || {}).cafeId || null,
+    targetUid: user.uid,
+    details: { login: String(login), access: value },
+    at: FieldValue.serverTimestamp(),
+  });
+  console.log(`Login "${login}" is now ${enable ? 'ON' : 'OFF'}.${enable ? '' : ' Open sessions end within an hour.'}`);
+}
+
 async function listCafes() {
   const snap = await db.collection('cafes').get();
   if (snap.empty) return console.log('No cafes yet.');
@@ -297,6 +330,8 @@ async function main() {
       return;
     case 'rename-login':
       return renameLogin(args[0], args[1]);
+    case 'set-login-active':
+      return setLoginActive(args[0], args[1]);
     case 'list-cafes':
       return listCafes();
     case 'list-users':
@@ -309,6 +344,7 @@ async function main() {
           '  create-staff <email> <manager|captain> <cafeId> [name]\n' +
           '  create-cafe-login <username> <password> <cafeId>\n' +
           '  rename-login <old-username> <new-username>\n' +
+          '  set-login-active <username|email> <on|off>\n' +
           '  list-cafes | list-users',
       );
   }

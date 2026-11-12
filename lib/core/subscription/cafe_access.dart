@@ -18,7 +18,10 @@ class SubscriptionStatus {
   static const pending = 'pending';
   static const expired = 'expired';
   static const suspended = 'suspended';
-  static const all = [trial, active, pending, expired, suspended];
+
+  /// Will not renew: usable until the expiry date, then blocked.
+  static const cancelled = 'cancelled';
+  static const all = [trial, active, pending, expired, suspended, cancelled];
 }
 
 enum CafeAccessState {
@@ -101,6 +104,10 @@ CafeAccess evaluateCafeAccess(Map<String, dynamic> cafe, DateTime now) {
       return CafeAccess(CafeAccessState.allowedWithWarning,
           message: 'Subscription expires ${d <= 1 ? 'within a day' : 'in $d days'} (${Fmt.date(expiry)}). Please renew to avoid interruption.');
     }
+  }
+  if (subStatus == SubscriptionStatus.cancelled) {
+    return CafeAccess(CafeAccessState.allowedWithWarning,
+        message: 'Subscription cancelled${expiry != null ? ' – the POS works until ${Fmt.date(expiry)}' : ''}. Please contact the administrator to renew.');
   }
   if (subStatus == SubscriptionStatus.pending) {
     return const CafeAccess(CafeAccessState.allowedWithWarning, message: 'Subscription payment is pending. Please contact the administrator.');

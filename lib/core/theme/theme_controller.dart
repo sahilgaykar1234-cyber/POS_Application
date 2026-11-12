@@ -8,9 +8,6 @@ class ThemeController extends ValueNotifier<ThemeMode> {
 
   static const _key = 'cafe_pos_theme_mode';
 
-  /// True while the Super Admin is signed in: their (on-hold) screens keep the
-  /// previous dark look, including every page they open.
-  final ValueNotifier<bool> legacyAdmin = ValueNotifier(false);
 
   Future<void> load() async {
     try {

@@ -103,12 +103,12 @@ class PosApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final themes = ThemeController.instance;
     return ListenableBuilder(
-      listenable: Listenable.merge([themes, themes.legacyAdmin]),
+      listenable: themes,
       builder: (context, _) => MaterialApp(
         debugShowCheckedModeBanner: false,
         title: AppConfig.appName,
-        theme: themes.legacyAdmin.value ? AppTheme.legacyAdmin : AppTheme.light(),
-        darkTheme: themes.legacyAdmin.value ? AppTheme.legacyAdmin : AppTheme.dark(),
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
         themeMode: themes.value,
         // Every role signs in here; AuthGate routes by server-assigned role.
         home: const AuthGate(),

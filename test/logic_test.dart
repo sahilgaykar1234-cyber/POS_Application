@@ -118,21 +118,20 @@ void main() {
     });
   });
 
-  group('CafeSummary dues', () {
-    test('pending vs overdue', () {
+  group('CafeSummary subscription state', () {
+    test('pending, expired, cancelled, none', () {
       final pending = CafeSummary('a', {
         'status': 'active',
-        'subscription': {'paymentStatus': 'pending', 'expiryDate': now.add(const Duration(days: 10))},
+        'subscription': {'status': 'pending', 'paymentStatus': 'pending', 'expiryDate': now.add(const Duration(days: 10))},
       });
       final overdue = CafeSummary('b', {
         'status': 'active',
-        'subscription': {'paymentStatus': 'pending', 'expiryDate': now.subtract(const Duration(days: 1))},
+        'subscription': {'status': 'active', 'paymentStatus': 'pending', 'expiryDate': now.subtract(const Duration(days: 1))},
       });
-      expect(pending.isPaymentPending(now), isTrue);
-      expect(pending.isOverdue(now), isFalse);
-      expect(overdue.isOverdue(now), isTrue);
-      expect(overdue.isPaymentPending(now), isFalse);
-      expect(CafeSummary('c', {'status': 'deleted', 'subscription': {'status': 'expired'}}).isOverdue(now), isFalse);
+      expect(pending.subState(now), SubState.pending);
+      expect(overdue.subState(now), SubState.expired);
+      expect(CafeSummary('c', {'subscription': {'status': 'cancelled', 'expiryDate': now.add(const Duration(days: 3))}}).subState(now), SubState.cancelled);
+      expect(CafeSummary('d', {'status': 'active'}).subState(now), SubState.none);
     });
   });
 }
