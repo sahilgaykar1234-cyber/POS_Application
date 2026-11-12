@@ -28,7 +28,7 @@ Future<void> printHtml(String html) async {
   w.focus();
   w.print();
   // Keep the frame while the print dialog may still read it.
-  Timer(const Duration(minutes: 1), frame.remove);
+  Timer(const Duration(minutes: 1), () => frame.remove());
 }
 
 web.File _file(Uint8List bytes, String fileName, String mimeType) =>
