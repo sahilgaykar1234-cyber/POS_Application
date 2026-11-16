@@ -5,6 +5,9 @@ import '../../core/layout/breakpoints.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/ui.dart';
+import '../../core/utils/friendly_error.dart';
+import '../../core/widgets/confirm_dialog.dart';
+import 'customer_privacy.dart';
 import '../orders/order_model.dart';
 import '../orders/order_service.dart';
 
@@ -143,6 +146,24 @@ class _CustomerTile extends StatelessWidget {
   const _CustomerTile({required this.c});
   final CustomerSummary c;
 
+  /// "Delete my data" request: clears this customer's name and number from
+  /// all their bills (the bills and amounts stay).
+  Future<void> _remove(BuildContext context) async {
+    final ok = await showDangerConfirmDialog(
+      context,
+      title: 'Remove ${c.name}\'s data?',
+      message: 'Their name and mobile number will be removed from all their bills. The bills and amounts stay. This cannot be undone.',
+      confirmLabel: 'Remove',
+    );
+    if (!ok || !context.mounted) return;
+    try {
+      final n = await CustomerPrivacy.instance.removeCustomer(phone: c.phone, name: c.lastOrder.customerName);
+      if (context.mounted) showSuccess(context, 'Removed from $n bill${n == 1 ? '' : 's'}');
+    } catch (e) {
+      if (context.mounted) showError(context, friendlyError(e, 'remove the data'));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
@@ -188,6 +209,16 @@ class _CustomerTile extends StatelessWidget {
                 const SizedBox(height: Space.sm),
                 Text('Total ${Fmt.money(c.lastOrder.totalPrice)}', style: const TextStyle(fontWeight: FontWeight.w700)),
               ],
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              key: Key('customer-remove-${c.phone.isEmpty ? c.name : c.phone}'),
+              style: TextButton.styleFrom(foregroundColor: p.danger),
+              onPressed: () => _remove(context),
+              icon: const Icon(Icons.person_remove_outlined, size: 18),
+              label: const Text('Remove customer data'),
             ),
           ),
         ],

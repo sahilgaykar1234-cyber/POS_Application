@@ -9,6 +9,12 @@ import '../../core/theme/tokens.dart';
 import '../../core/utils/business_day.dart';
 import '../../core/widgets/app_logo.dart';
 import '../../core/widgets/ui.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' show FieldValue;
+import '../../core/auth/manager_pin.dart';
+import '../../core/services/audit_service.dart';
+import '../../core/utils/friendly_error.dart';
+import '../../core/widgets/confirm_dialog.dart';
+import '../customers/customer_privacy.dart';
 import 'business_settings.dart';
 
 /// Cafe settings (same fields and keys as before) + appearance.
@@ -49,6 +55,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _autoBill = true;
   bool _autoToken = true;
   int _dayEnds = BusinessDay.defaultCutoffMinutes;
+  int _keepMonths = 24;
+  bool _pinSet = false;
   String _defaultOrderType = 'Dine-In';
   bool _loading = true;
   bool _saving = false;
@@ -85,6 +93,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _autoBill = s.autoGenBillNumber;
         _autoToken = s.autoGenTokenNumber;
         _dayEnds = s.dayEndsAtMinutes;
+        _keepMonths = s.customerDataMonths;
+        _pinSet = s.hasManagerPin;
         _defaultOrderType = s.defaultOrderType;
         _loading = false;
       });
@@ -120,6 +130,110 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _logo = base64Encode(f.bytes!);
       _dirty = true;
     });
+  }
+
+  Future<void> _setPin() async {
+    final pin = TextEditingController();
+    final again = TextEditingController();
+    String? error;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) {
+          void save() {
+            if (!ManagerPin.isValid(pin.text)) return setState(() => error = 'Use 4 to 8 digits.');
+            if (pin.text != again.text) return setState(() => error = "The two PINs don't match.");
+            Navigator.pop(ctx, true);
+          }
+
+          return AlertDialog(
+            title: Text(_pinSet ? 'Change Manager PIN' : 'Set Manager PIN'),
+            content: SizedBox(
+              width: 340,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Staff using the cafe login will need this PIN to open the Manager view. For the kitchen, a separate "Kitchen only" login is even safer.',
+                  ),
+                  const SizedBox(height: Space.md),
+                  TextField(
+                    key: const Key('pin-new'),
+                    controller: pin,
+                    autofocus: true,
+                    obscureText: true,
+                    keyboardType: TextInputType.number,
+                    maxLength: 8,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(labelText: 'New PIN (4–8 digits)'),
+                  ),
+                  TextField(
+                    key: const Key('pin-again'),
+                    controller: again,
+                    obscureText: true,
+                    keyboardType: TextInputType.number,
+                    maxLength: 8,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: InputDecoration(labelText: 'PIN again', errorText: error),
+                    onSubmitted: (_) => save(),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+              FilledButton(key: const Key('pin-save'), onPressed: save, child: const Text('Save PIN')),
+            ],
+          );
+        },
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final salt = ManagerPin.newSalt();
+    try {
+      await BusinessSettingsRepository.instance.save({'managerPinSalt': salt, 'managerPinHash': ManagerPin.hash(pin.text, salt)});
+      await AuditService.instance.log('settings.managerPin', details: {'pin': 'set'});
+      if (!mounted) return;
+      setState(() => _pinSet = true);
+      showSuccess(context, 'Manager PIN saved');
+    } catch (e) {
+      if (mounted) showError(context, friendlyError(e, 'save the PIN'));
+    }
+  }
+
+  Future<void> _removePin() async {
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Remove the Manager PIN?',
+      message: 'Anyone with the cafe login can then open the Manager view.',
+      confirmLabel: 'Remove',
+    );
+    if (!ok || !mounted) return;
+    try {
+      await BusinessSettingsRepository.instance.save({'managerPinSalt': FieldValue.delete(), 'managerPinHash': FieldValue.delete()});
+      await AuditService.instance.log('settings.managerPin', details: {'pin': 'removed'});
+      if (!mounted) return;
+      setState(() => _pinSet = false);
+      showSuccess(context, 'Manager PIN removed');
+    } catch (e) {
+      if (mounted) showError(context, friendlyError(e, 'remove the PIN'));
+    }
+  }
+
+  Future<void> _removeOldCustomerData() async {
+    final ok = await showDangerConfirmDialog(
+      context,
+      title: 'Remove old customer data?',
+      message: 'Customer names and numbers on bills older than $_keepMonths months will be cleared. Bills, amounts and reports stay. This cannot be undone.',
+      confirmLabel: 'Remove',
+    );
+    if (!ok || !mounted) return;
+    try {
+      final n = await CustomerPrivacy.instance.removeOlderThan(_keepMonths);
+      if (mounted) showSuccess(context, n == 0 ? 'Nothing to remove' : 'Customer data removed from $n old bills');
+    } catch (e) {
+      if (mounted) showError(context, friendlyError(e, 'remove the data'));
+    }
   }
 
   Future<void> _pickDayEnd() async {
@@ -167,6 +281,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'autoGenBillNumber': _autoBill,
         'autoGenTokenNumber': _autoToken,
         'dayEndsAt': BusinessDay.format(_dayEnds),
+        'customerDataMonths': _keepMonths,
         'numberOfTables': tables,
       });
       if (!mounted) return;
@@ -228,7 +343,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: Form(
         key: _form,
         child: PageBody(
-
           children: [
             const PageHeader(title: 'Settings', subtitle: 'Cafe details, billing and receipts'),
             LayoutBuilder(
@@ -249,9 +363,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               border: Border.all(color: p.border),
                             ),
                             clipBehavior: Clip.antiAlias,
-                            child: _logo == null
-                                ? const Center(child: AppLogo(size: 44))
-                                : Image.memory(base64Decode(_logo!), fit: BoxFit.contain),
+                            child: _logo == null ? const Center(child: AppLogo(size: 44)) : Image.memory(base64Decode(_logo!), fit: BoxFit.contain),
                           ),
                           const SizedBox(width: Space.lg),
                           Expanded(
@@ -369,10 +481,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: 'Receipt text',
                   icon: Icons.print_outlined,
                   child: Column(
+                    children: [_field('receiptHeader', 'Header'), _field('thankYouMessage', 'Thank-you message'), _field('receiptFooter', 'Footer')],
+                  ),
+                );
+                final security = SectionCard(
+                  title: 'Security & privacy',
+                  icon: Icons.shield_outlined,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _field('receiptHeader', 'Header'),
-                      _field('thankYouMessage', 'Thank-you message'),
-                      _field('receiptFooter', 'Footer'),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Manager PIN'),
+                        subtitle: Text(
+                          _pinSet
+                              ? 'On – the Manager view (sales, cancelling bills, settings) asks for it.'
+                              : 'Off – anyone with the cafe login can open the Manager view.',
+                        ),
+                        trailing: Wrap(
+                          spacing: Space.xs,
+                          children: [
+                            OutlinedButton(key: const Key('pin-set'), onPressed: _setPin, child: Text(_pinSet ? 'Change' : 'Set PIN')),
+                            if (_pinSet) TextButton(onPressed: _removePin, child: const Text('Remove')),
+                          ],
+                        ),
+                      ),
+                      const Divider(height: Space.xl),
+                      Text('Customer data', style: context.text.titleSmall),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Names and mobile numbers are used only for bills, WhatsApp and the customer list. '
+                        'They are removed from old bills after the time below (the bills and amounts stay).',
+                        style: TextStyle(color: p.inkSubtle, fontSize: 13),
+                      ),
+                      const SizedBox(height: Space.md),
+                      Row(
+                        children: [
+                          const Expanded(child: Text('Keep customer numbers for')),
+                          DropdownButton<int>(
+                            value: const [12, 24, 36, 0].contains(_keepMonths) ? _keepMonths : 24,
+                            items: const [
+                              DropdownMenuItem(value: 12, child: Text('12 months')),
+                              DropdownMenuItem(value: 24, child: Text('24 months')),
+                              DropdownMenuItem(value: 36, child: Text('36 months')),
+                              DropdownMenuItem(value: 0, child: Text('Always')),
+                            ],
+                            onChanged: (v) => setState(() {
+                              _keepMonths = v ?? _keepMonths;
+                              _dirty = true;
+                            }),
+                          ),
+                        ],
+                      ),
+                      if (_keepMonths > 0)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            onPressed: _removeOldCustomerData,
+                            icon: const Icon(Icons.cleaning_services_outlined, size: 18),
+                            label: Text('Remove numbers older than $_keepMonths months now'),
+                          ),
+                        ),
                     ],
                   ),
                 );
@@ -398,13 +567,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 );
                 if (c.maxWidth < 1000) {
-                  return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [profile, billing, receipt, appearance]);
+                  return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [profile, billing, security, receipt, appearance]);
                 }
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [profile, receipt]),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [profile, security, receipt]),
                     ),
                     const SizedBox(width: Space.lg),
                     Expanded(

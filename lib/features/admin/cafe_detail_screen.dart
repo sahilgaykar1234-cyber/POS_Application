@@ -165,7 +165,7 @@ class _Overview extends StatelessWidget {
               label: const Text('Record payment'),
             ),
             OutlinedButton.icon(
-              onPressed: () => showAddLogin(context, cafe),
+              onPressed: () => showAddLogin(context, cafe, plans: d.plans, staff: d.staff),
               icon: const Icon(Icons.person_add_alt_outlined, size: 18),
               label: const Text('Add login'),
             ),
@@ -275,7 +275,7 @@ class _Staff extends StatelessWidget {
         icon: Icons.badge_outlined,
         trailing: FilledButton.icon(
           key: const Key('add-login'),
-          onPressed: () => showAddLogin(context, cafe),
+          onPressed: () => showAddLogin(context, cafe, plans: d.plans, staff: d.staff),
           icon: const Icon(Icons.person_add_alt_outlined, size: 18),
           label: const Text('Add login'),
         ),

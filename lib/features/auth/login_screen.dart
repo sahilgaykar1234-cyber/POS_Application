@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth/auth_service.dart';
 import '../../core/config/app_config.dart';
@@ -207,6 +208,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
                     : const Text('Sign in', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
               ),
+            ),
+            const SizedBox(height: Space.lg),
+            Wrap(
+              alignment: WrapAlignment.center,
+              children: [
+                TextButton(
+                  onPressed: () => launchUrl(Uri.base.resolve('/privacy.html'), webOnlyWindowName: '_blank'),
+                  child: const Text('Privacy Policy'),
+                ),
+                TextButton(
+                  onPressed: () => launchUrl(Uri.base.resolve('/terms.html'), webOnlyWindowName: '_blank'),
+                  child: const Text('Terms of Service'),
+                ),
+              ],
             ),
           ],
         ),

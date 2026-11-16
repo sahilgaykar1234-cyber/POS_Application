@@ -1,3 +1,6 @@
+import '../../features/settings/business_settings.dart';
+import 'manager_pin.dart';
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -170,10 +173,7 @@ class _CafeGate extends StatelessWidget {
         final dashboard = user.isManager ? _ModeChooser(cafeName: cafeName) : const CaptainShell();
         // Always the same widget structure, so the dashboard (and any
         // half-entered order) survives the banner appearing/disappearing.
-        return _WarningBanner(
-          message: access.state == CafeAccessState.allowedWithWarning ? access.message : null,
-          child: dashboard,
-        );
+        return _WarningBanner(message: access.state == CafeAccessState.allowedWithWarning ? access.message : null, child: dashboard);
       },
     );
   }
@@ -205,7 +205,10 @@ class _WarningBanner extends StatelessWidget {
                     Icon(Icons.warning_amber_rounded, color: p.warning, size: 20),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(msg, style: TextStyle(color: p.warning, fontSize: 13, fontWeight: FontWeight.w600)),
+                      child: Text(
+                        msg,
+                        style: TextStyle(color: p.warning, fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ],
                 ),
@@ -230,13 +233,7 @@ class _SignOutMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MessageScreen(
-      icon: icon,
-      title: title,
-      message: message,
-      actionLabel: 'Sign out',
-      onAction: () => signOutToLogin(context),
-    );
+    return MessageScreen(icon: icon, title: title, message: message, actionLabel: 'Sign out', onAction: () => signOutToLogin(context));
   }
 }
 
@@ -252,49 +249,76 @@ class _ModeChooser extends StatefulWidget {
 
 class _ModeChooserState extends State<_ModeChooser> {
   String? _mode; // 'manager' | 'captain'
+  BusinessSettings _settings = BusinessSettings.empty;
+  late final StreamSubscription<BusinessSettings> _sub = BusinessSettingsRepository.instance.watch().listen((s) => _settings = s, onError: (_) {});
+
+  @override
+  void initState() {
+    super.initState();
+    _sub; // start listening for the Manager PIN
+  }
+
+  @override
+  void dispose() {
+    _sub.cancel();
+    super.dispose();
+  }
+
+  /// The Manager view (sales, cancelling bills, settings) asks for the
+  /// Manager PIN when the cafe has set one.
+  Future<void> _open(String mode) async {
+    if (mode == 'manager' && _settings.hasManagerPin) {
+      final ok = await askManagerPin(context, salt: _settings.managerPinSalt!, hash: _settings.managerPinHash!);
+      if (!ok || !mounted) return;
+    }
+    setState(() => _mode = mode);
+  }
 
   @override
   Widget build(BuildContext context) {
     if (_mode == 'manager') return ManagerShell(onSwitchMode: () => setState(() => _mode = 'captain'));
-    if (_mode == 'captain') return CaptainShell(onSwitchMode: () => setState(() => _mode = 'manager'));
+    if (_mode == 'captain') return CaptainShell(onSwitchMode: () => _open('manager'));
     final p = context.palette;
 
     Widget option(String mode, IconData icon, String title, String subtitle) => Padding(
-          padding: const EdgeInsets.only(bottom: Space.md),
-          child: Material(
-            color: p.surface,
-            shape: RoundedRectangleBorder(borderRadius: Radii.cardR, side: BorderSide(color: p.border)),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: () => setState(() => _mode = mode),
-              child: Padding(
-                padding: const EdgeInsets.all(Space.lg),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(color: p.primaryTint, borderRadius: BorderRadius.circular(14)),
-                      child: Icon(icon, color: p.primary, size: 28),
-                    ),
-                    const SizedBox(width: Space.lg),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(title, style: context.text.titleLarge),
-                          const SizedBox(height: 2),
-                          Text(subtitle, style: TextStyle(color: p.inkSubtle)),
-                        ],
-                      ),
-                    ),
-                    Icon(Icons.arrow_forward_rounded, color: p.inkSubtle),
-                  ],
+      padding: const EdgeInsets.only(bottom: Space.md),
+      child: Material(
+        color: p.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: Radii.cardR,
+          side: BorderSide(color: p.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => _open(mode),
+          child: Padding(
+            padding: const EdgeInsets.all(Space.lg),
+            child: Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(color: p.primaryTint, borderRadius: BorderRadius.circular(14)),
+                  child: Icon(icon, color: p.primary, size: 28),
                 ),
-              ),
+                const SizedBox(width: Space.lg),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: context.text.titleLarge),
+                      const SizedBox(height: 2),
+                      Text(subtitle, style: TextStyle(color: p.inkSubtle)),
+                    ],
+                  ),
+                ),
+                Icon(Icons.arrow_forward_rounded, color: p.inkSubtle),
+              ],
             ),
           ),
-        );
+        ),
+      ),
+    );
 
     return Scaffold(
       backgroundColor: p.canvas,
@@ -309,16 +333,16 @@ class _ModeChooserState extends State<_ModeChooser> {
               children: [
                 Text(widget.cafeName, textAlign: TextAlign.center, style: context.text.headlineMedium),
                 const SizedBox(height: 4),
-                Text('How are you working today?', textAlign: TextAlign.center, style: TextStyle(color: p.inkSubtle)),
+                Text(
+                  'How are you working today?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: p.inkSubtle),
+                ),
                 const SizedBox(height: Space.xl),
                 option('manager', Icons.point_of_sale_rounded, 'Manager', 'Dashboard, orders, billing, menu, reports'),
                 option('captain', Icons.room_service_outlined, 'Captain', 'Take orders, tables and kitchen'),
                 const SizedBox(height: Space.sm),
-                TextButton.icon(
-                  onPressed: () => signOutToLogin(context),
-                  icon: const Icon(Icons.logout_rounded, size: 18),
-                  label: const Text('Sign out'),
-                ),
+                TextButton.icon(onPressed: () => signOutToLogin(context), icon: const Icon(Icons.logout_rounded, size: 18), label: const Text('Sign out')),
               ],
             ),
           ),

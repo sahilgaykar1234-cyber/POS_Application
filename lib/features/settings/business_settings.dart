@@ -38,6 +38,14 @@ class BusinessSettings {
   bool get autoGenBillNumber => data['autoGenBillNumber'] ?? true;
   bool get autoGenTokenNumber => data['autoGenTokenNumber'] ?? true;
 
+  /// Months to keep customer names/numbers on bills (0 = keep).
+  int get customerDataMonths => data['customerDataMonths'] is num ? (data['customerDataMonths'] as num).toInt() : 24;
+
+  /// Manager PIN (salted hash only; see ManagerPin). null = no PIN.
+  String? get managerPinSalt => data['managerPinSalt'] is String ? data['managerPinSalt'] as String : null;
+  String? get managerPinHash => data['managerPinHash'] is String ? data['managerPinHash'] as String : null;
+  bool get hasManagerPin => managerPinSalt != null && managerPinHash != null;
+
   /// Minutes after midnight when the business day ends ("dayEndsAt": "05:00").
   int get dayEndsAtMinutes {
     final m = BusinessDay.parse(data['dayEndsAt']);

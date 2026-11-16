@@ -66,7 +66,7 @@ class _CafesScreenState extends State<CafesScreen> {
     await Future<void>.delayed(const Duration(milliseconds: 300));
     if (!mounted) return;
     final cafe = widget.data.value.cafe(id);
-    if (cafe != null) await showAddLogin(context, cafe);
+    if (cafe != null) await showAddLogin(context, cafe, plans: widget.data.value.plans, staff: widget.data.value.staff);
   }
 
   @override

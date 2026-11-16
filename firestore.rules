@@ -102,8 +102,10 @@ service cloud.firestore {
         // time never changes once set, and amounts can't be negative.
         allow create: if isManagerOf(cafeId) && cafeOperational(cafeId) && validOrder();
         allow update: if isManagerOf(cafeId) && cafeOperational(cafeId) && validOrder()
-          && resource.data.get('status', '') != 'cancelled'
-          && keeps('billNo') && keeps('billSeq') && keeps('billKey') && keeps('tokenNo') && keeps('createdAt');
+          && keeps('billNo') && keeps('billSeq') && keeps('billKey') && keeps('tokenNo') && keeps('createdAt')
+          && (resource.data.get('status', '') != 'cancelled'
+            // On a cancelled bill only the customer's personal data may be removed.
+            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['customerPhone', 'customerName', 'customerRemovedAt']));
         allow delete: if isSuper();
         // Captains (kitchen screen) may only change the cooking status.
         allow update: if role() == 'captain' && myCafe() == cafeId && loginActive() && cafeOperational(cafeId)

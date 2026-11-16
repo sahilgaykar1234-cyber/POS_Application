@@ -231,6 +231,8 @@ test('bill integrity: no delete, number and token fixed, cancelled is final, ser
   await assertFails(updateDoc(doc(m, 'cafes/A/orders/b1'), { totalPrice: -5 }), 'no negative totals');
   await assertFails(updateDoc(doc(m, 'cafes/A/orders/b1'), { status: 'deleted' }), 'unknown status');
   await assertFails(updateDoc(doc(m, 'cafes/A/orders/v1'), { status: 'completed' }), 'cancelled is final');
+  await assertSucceeds(updateDoc(doc(m, 'cafes/A/orders/v1'), { customerPhone: '', customerName: 'Guest' }), 'but personal data can be removed');
+  await assertFails(updateDoc(doc(m, 'cafes/A/orders/v1'), { customerPhone: '', totalPrice: 1 }));
   await assertFails(updateDoc(doc(m, 'cafes/A/counters/bills_2026-27'), { next: 8 }), 'series never goes back');
   await assertSucceeds(updateDoc(doc(m, 'cafes/A/counters/bills_2026-27'), { next: 10 }));
   await assertSucceeds(deleteDoc(doc(ctx.superAdmin(), 'cafes/A/orders/v1')), 'only the Super Admin can remove a bill');

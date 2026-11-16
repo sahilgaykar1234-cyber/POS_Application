@@ -517,6 +517,8 @@ class _PosScreenState extends State<PosScreen> {
                           onChanged: _lookup,
                           decoration: InputDecoration(
                             labelText: 'Mobile',
+                            // Consent: say why the number is taken.
+                            helperText: 'Ask first · for the bill & WhatsApp only',
                             prefixIcon: const Icon(Icons.phone_outlined, size: 20),
                             suffixIcon: _lookingUp
                                 ? const Padding(padding: EdgeInsets.all(14), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))

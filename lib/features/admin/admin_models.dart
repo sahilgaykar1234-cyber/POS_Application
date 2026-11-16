@@ -381,6 +381,16 @@ String auditLabel(String action) => switch (action) {
   _ => action,
 };
 
+// ------------------------------------------------------------ plan limits --
+
+/// Logins allowed by the cafe's plan vs logins in use (pure, unit-tested).
+/// `max` is null when the plan has no limit (or the cafe has no plan).
+({int? max, int used}) loginAllowance(CafeSummary cafe, List<SubscriptionPlan> plans, List<StaffMember> staff) {
+  final plan = plans.where((p) => p.id == cafe.planId).firstOrNull;
+  final used = staff.where((s) => s.cafeId == cafe.id && s.isActive).length;
+  return (max: plan?.maxStaff, used: used);
+}
+
 // ------------------------------------------------------ recommended plans --
 
 /// Starter plans for this POS (features are what the app really does today).

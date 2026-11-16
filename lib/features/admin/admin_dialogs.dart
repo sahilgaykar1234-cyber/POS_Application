@@ -768,7 +768,23 @@ String _loginError(Object e, String username) {
 }
 
 /// Creates a login for [cafe] right here (username + password).
-Future<void> showAddLogin(BuildContext context, CafeSummary cafe) {
+Future<void> showAddLogin(BuildContext context, CafeSummary cafe, {List<SubscriptionPlan> plans = const [], List<StaffMember> staff = const []}) {
+  // The plan's login limit is enforced here (the Super Admin can still
+  // change the plan or turn an older login off).
+  final allowance = loginAllowance(cafe, plans, staff);
+  if (allowance.max != null && allowance.used >= allowance.max!) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Login limit reached'),
+        content: Text(
+          '${cafe.name} is on ${cafe.planName ?? 'its plan'}, which allows ${allowance.max} login${allowance.max == 1 ? '' : 's'}, '
+          'and ${allowance.used} ${allowance.used == 1 ? 'is' : 'are'} in use.\n\nChange the plan, or turn an older login off first.',
+        ),
+        actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+      ),
+    );
+  }
   final user = TextEditingController();
   final name = TextEditingController();
   final pass = TextEditingController();

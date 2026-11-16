@@ -1,9 +1,18 @@
+import 'dart:async';
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
 
 import '../../core/layout/breakpoints.dart';
+import '../../core/services/audit_service.dart';
+import 'day_end_report.dart';
+import '../settings/business_settings.dart';
+import '../receipt/receipt_html.dart';
+import '../receipt/receipt_actions.dart';
+import '../../core/web/browser_io.dart';
+import '../../core/utils/friendly_error.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/business_day.dart';
 import '../../core/utils/formatters.dart';
@@ -71,7 +80,29 @@ class _ReportsScreenState extends State<ReportsScreen> {
       _ => (itemsCsv(all, s, e), 'Item_Sales_${fileDate(BusinessDay.dateOf(s))}_to_${fileDate(BusinessDay.dateOf(e))}.csv'),
     };
     downloadFileCrossPlatform(content, name);
+    // Exports can contain customer names and numbers: keep a record.
+    unawaited(AuditService.instance.log('export.$kind', details: {'file': name}));
     showSuccess(context, 'Downloading $name');
+  }
+
+  /// Prints the day-end (Z) summary of the selected period on the receipt
+  /// paper chosen for bills (80 mm by default).
+  Future<void> _printDayEnd(List<PosOrder> period) async {
+    if (!canPrintHtml) return showError(context, 'Printing is available in the web app.');
+    var shop = '';
+    try {
+      shop = (await BusinessSettingsRepository.instance.load()).shopName;
+    } catch (_) {}
+    final printer = await savedReceiptPrinter();
+    final paper = printer?.paper ?? PaperSize.thermal80;
+    final from = BusinessDay.dateOf(_range.start), to = BusinessDay.dateOf(_range.end);
+    final label = from == to ? 'Business day ${Fmt.date(from)}' : '${Fmt.date(from)} – ${Fmt.date(to)}';
+    try {
+      await printHtml(dayEndHtml(DayEndSummary.of(period), shopName: shop, periodLabel: label, printedAt: DateTime.now(), paper: paper));
+      unawaited(AuditService.instance.log('report.dayEnd', details: {'period': label}));
+    } catch (e) {
+      if (mounted) showError(context, friendlyPrintError(e));
+    }
   }
 
   @override
@@ -144,13 +175,28 @@ class _ReportsScreenState extends State<ReportsScreen> {
               ? Fmt.date(BusinessDay.dateOf(_range.start))
               : '${Fmt.date(BusinessDay.dateOf(_range.start))} – ${Fmt.date(BusinessDay.dateOf(_range.end))}',
           actions: [
+            OutlinedButton.icon(
+              key: const Key('day-end-report'),
+              onPressed: () => _printDayEnd(period),
+              icon: const Icon(Icons.summarize_outlined, size: 18),
+              label: const Text('Day-end report'),
+            ),
             PopupMenuButton<String>(
               tooltip: 'Export CSV',
               onSelected: (k) => _export(all, k),
               itemBuilder: (_) => const [
-                PopupMenuItem(value: 'sales', child: ListTile(leading: Icon(Icons.receipt_long_outlined), title: Text('Sales report'), subtitle: Text('Bill-wise totals, GST, discount'))),
-                PopupMenuItem(value: 'customers', child: ListTile(leading: Icon(Icons.groups_outlined), title: Text('Customer report'), subtitle: Text('Visits and spend'))),
-                PopupMenuItem(value: 'items', child: ListTile(leading: Icon(Icons.fastfood_outlined), title: Text('Item sales report'), subtitle: Text('Qty and revenue per item'))),
+                PopupMenuItem(
+                  value: 'sales',
+                  child: ListTile(leading: Icon(Icons.receipt_long_outlined), title: Text('Sales report'), subtitle: Text('Bill-wise totals, GST, discount')),
+                ),
+                PopupMenuItem(
+                  value: 'customers',
+                  child: ListTile(leading: Icon(Icons.groups_outlined), title: Text('Customer report'), subtitle: Text('Visits and spend')),
+                ),
+                PopupMenuItem(
+                  value: 'items',
+                  child: ListTile(leading: Icon(Icons.fastfood_outlined), title: Text('Item sales report'), subtitle: Text('Qty and revenue per item')),
+                ),
               ],
               child: IgnorePointer(
                 child: OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.download_outlined, size: 18), label: const Text('Export CSV')),
@@ -182,13 +228,36 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ],
         ),
         const SizedBox(height: Space.lg),
-        ResponsiveGrid(minTileWidth: 160, equalHeights: true, fill: true, children: [
-          StatCard(label: 'Collected (paid)', value: Fmt.money(stats.sales), icon: Icons.account_balance_wallet_outlined, highlight: true, caption: '${stats.orders - stats.unpaid - stats.cancelled} paid bills'),
-          StatCard(label: 'Billed (all orders)', value: Fmt.money(billed), icon: Icons.receipt_long_outlined, caption: '${period.length} orders', color: p.info),
-          StatCard(label: 'Average bill', value: Fmt.money(stats.averageBill.round()), icon: Icons.payments_outlined, color: p.violet, caption: 'Per paid bill'),
-          StatCard(label: 'Highest bill', value: Fmt.money(highest), icon: Icons.star_outline_rounded, color: p.warning, caption: 'Single bill'),
-          StatCard(label: 'Discounts given', value: Fmt.money(discounts), icon: Icons.local_offer_outlined, color: p.primary, caption: 'Total off bills'),
-        ]),
+        ResponsiveGrid(
+          minTileWidth: 160,
+          equalHeights: true,
+          fill: true,
+          children: [
+            StatCard(
+              label: 'Collected (paid)',
+              value: Fmt.money(stats.sales),
+              icon: Icons.account_balance_wallet_outlined,
+              highlight: true,
+              caption: '${stats.orders - stats.unpaid - stats.cancelled} paid bills',
+            ),
+            StatCard(
+              label: 'Billed (all orders)',
+              value: Fmt.money(billed),
+              icon: Icons.receipt_long_outlined,
+              caption: '${period.length} orders',
+              color: p.info,
+            ),
+            StatCard(
+              label: 'Average bill',
+              value: Fmt.money(stats.averageBill.round()),
+              icon: Icons.payments_outlined,
+              color: p.violet,
+              caption: 'Per paid bill',
+            ),
+            StatCard(label: 'Highest bill', value: Fmt.money(highest), icon: Icons.star_outline_rounded, color: p.warning, caption: 'Single bill'),
+            StatCard(label: 'Discounts given', value: Fmt.money(discounts), icon: Icons.local_offer_outlined, color: p.primary, caption: 'Total off bills'),
+          ],
+        ),
         const SizedBox(height: Space.lg),
         SectionCard(
           title: 'Sales trend',
@@ -201,26 +270,30 @@ class _ReportsScreenState extends State<ReportsScreen> {
           SectionCard(
             title: 'Orders',
             icon: Icons.pie_chart_outline_rounded,
-            child: Column(children: [
-              _kv(context, 'Dine-in', '$dineIn'),
-              _kv(context, 'Takeaway', '$takeaway'),
-              _kv(context, 'Completed', '${stats.completed}'),
-              _kv(context, 'Cancelled', '${stats.cancelled}'),
-              _kv(context, 'Unpaid', '${stats.unpaid}'),
-              const Divider(height: Space.xl),
-              for (final m in PaymentMethod.values) _kv(context, 'Paid by ${m.label}', Fmt.money(stats.byMethod[m]!)),
-            ]),
+            child: Column(
+              children: [
+                _kv(context, 'Dine-in', '$dineIn'),
+                _kv(context, 'Takeaway', '$takeaway'),
+                _kv(context, 'Completed', '${stats.completed}'),
+                _kv(context, 'Cancelled', '${stats.cancelled}'),
+                _kv(context, 'Unpaid', '${stats.unpaid}'),
+                const Divider(height: Space.xl),
+                for (final m in PaymentMethod.values) _kv(context, 'Paid by ${m.label}', Fmt.money(stats.byMethod[m]!)),
+              ],
+            ),
           ),
           SectionCard(
             title: 'Customers',
             icon: Icons.groups_outlined,
-            child: Column(children: [
-              _kv(context, 'Total customers (all time)', '${lifetime.keys.where((k) => k.isNotEmpty).length}'),
-              _kv(context, 'Visited in this period', '${periodKeys.length}'),
-              _kv(context, 'New', '${periodKeys.length - returning}'),
-              _kv(context, 'Returning', '$returning'),
-              if (topSpender != null) _kv(context, 'Top spender', '${names[topSpender.key]} · ${Fmt.money(topSpender.value)}'),
-            ]),
+            child: Column(
+              children: [
+                _kv(context, 'Total customers (all time)', '${lifetime.keys.where((k) => k.isNotEmpty).length}'),
+                _kv(context, 'Visited in this period', '${periodKeys.length}'),
+                _kv(context, 'New', '${periodKeys.length - returning}'),
+                _kv(context, 'Returning', '$returning'),
+                if (topSpender != null) _kv(context, 'Top spender', '${names[topSpender.key]} · ${Fmt.money(topSpender.value)}'),
+              ],
+            ),
           ),
         ),
         SectionCard(
@@ -228,48 +301,102 @@ class _ReportsScreenState extends State<ReportsScreen> {
           icon: Icons.emoji_events_outlined,
           padding: const EdgeInsets.fromLTRB(Space.lg + 4, Space.lg + 4, Space.lg + 4, Space.sm),
           child: topItems.isEmpty
-              ? Padding(padding: const EdgeInsets.symmetric(vertical: Space.lg), child: Text('No sales in this period.', style: TextStyle(color: p.inkSubtle)))
-              : Column(children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: Space.sm),
-                    child: Row(children: [
-                      Expanded(child: Text('Item', style: TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w600))),
-                      SizedBox(width: 70, child: Text('Qty', textAlign: TextAlign.right, style: TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w600))),
-                      SizedBox(width: 100, child: Text('Revenue', textAlign: TextAlign.right, style: TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w600))),
-                    ]),
-                  ),
-                  for (final n in topItems.take(15))
-                    Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(border: Border(top: BorderSide(color: p.border))),
-                      child: Row(children: [
-                        Expanded(child: Text(n, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                        SizedBox(width: 70, child: Text('${itemQty[n]}', textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w600))),
-                        SizedBox(width: 100, child: Text(Fmt.money(itemRev[n]!), textAlign: TextAlign.right, style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]))),
-                      ]),
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(vertical: Space.lg),
+                  child: Text('No sales in this period.', style: TextStyle(color: p.inkSubtle)),
+                )
+              : Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: Space.sm),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Item',
+                              style: TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 70,
+                            child: Text(
+                              'Qty',
+                              textAlign: TextAlign.right,
+                              style: TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 100,
+                            child: Text(
+                              'Revenue',
+                              textAlign: TextAlign.right,
+                              style: TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                ]),
+                    for (final n in topItems.take(15))
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          border: Border(top: BorderSide(color: p.border)),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(child: Text(n, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                            SizedBox(
+                              width: 70,
+                              child: Text(
+                                '${itemQty[n]}',
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                            SizedBox(
+                              width: 100,
+                              child: Text(
+                                Fmt.money(itemRev[n]!),
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
         ),
       ],
     );
   }
 
   Widget _kv(BuildContext context, String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(children: [
-          Expanded(child: Text(k, style: TextStyle(color: context.palette.inkMuted))),
-          Text(v, style: const TextStyle(fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
-        ]),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(k, style: TextStyle(color: context.palette.inkMuted)),
+        ),
+        Text(
+          v,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()]),
+        ),
+      ],
+    ),
+  );
 
   Widget _pair(BuildContext context, Widget a, Widget b) {
     if (!context.isDesktop) return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [a, b]);
     return IntrinsicHeight(
-      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Expanded(child: a),
-        const SizedBox(width: Space.lg),
-        Expanded(child: b),
-      ]),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: a),
+          const SizedBox(width: Space.lg),
+          Expanded(child: b),
+        ],
+      ),
     );
   }
 }
@@ -296,7 +423,8 @@ class _TrendChart extends StatelessWidget {
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 56,
-              getTitlesWidget: (v, meta) => v == meta.max ? const SizedBox.shrink() : Text(Fmt.money(v.round()), style: TextStyle(fontSize: 11, color: p.inkSubtle)),
+              getTitlesWidget: (v, meta) =>
+                  v == meta.max ? const SizedBox.shrink() : Text(Fmt.money(v.round()), style: TextStyle(fontSize: 11, color: p.inkSubtle)),
             ),
           ),
           bottomTitles: AxisTitles(
@@ -308,7 +436,10 @@ class _TrendChart extends StatelessWidget {
                 final i = v.toInt();
                 if (i < 0 || i >= points.length || i % step != 0) return const SizedBox.shrink();
                 final d = points[i].$1;
-                return Padding(padding: const EdgeInsets.only(top: 4), child: Text('${d.day}/${d.month}', style: TextStyle(fontSize: 11, color: p.inkSubtle)));
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text('${d.day}/${d.month}', style: TextStyle(fontSize: 11, color: p.inkSubtle)),
+                );
               },
             ),
           ),
