@@ -5,12 +5,12 @@ import 'package:flutter/material.dart';
 import '../../core/layout/breakpoints.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
-import '../../core/widgets/confirm_dialog.dart';
 import '../../core/widgets/day_change.dart';
 import '../../core/widgets/ui.dart';
 import '../orders/order_model.dart';
 import '../receipt/bill_view.dart';
 import '../orders/order_service.dart';
+import '../orders/void_bill_dialog.dart';
 import '../orders/orders_board_screen.dart' show TableTimer;
 import '../orders/settle_bill_sheet.dart';
 import '../orders/whatsapp_bill.dart';
@@ -495,13 +495,7 @@ class _TakeawayCard extends StatelessWidget {
                       case 'back':
                         _set(context, o.status == 'ready' ? 'preparing' : 'pending');
                       case 'delete':
-                        final ok = await showDangerConfirmDialog(
-                          context,
-                          title: 'Delete ${o.tokenLabel}?',
-                          message: '${o.takeawayName} · ${Fmt.money(o.totalPrice)}\nThis cannot be undone.',
-                          confirmLabel: 'Delete',
-                        );
-                        if (ok) await OrderService.instance.delete(o.id, data: o.data);
+                        await showVoidBillDialog(context, o);
                     }
                   },
                   itemBuilder: (_) => [
@@ -511,7 +505,7 @@ class _TakeawayCard extends StatelessWidget {
                     if (o.status != 'pending') const PopupMenuItem(value: 'back', child: Text('Move back')),
                     PopupMenuItem(
                       value: 'delete',
-                      child: Text('Delete', style: TextStyle(color: p.danger)),
+                      child: Text('Cancel bill', style: TextStyle(color: p.danger)),
                     ),
                   ],
                 ),

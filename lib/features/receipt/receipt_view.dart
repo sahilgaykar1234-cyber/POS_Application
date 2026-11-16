@@ -73,6 +73,17 @@ class ReceiptView extends StatelessWidget {
               const SizedBox(height: 6),
               Text(r.header, textAlign: TextAlign.center, style: base.copyWith(color: _muted, fontSize: 12, fontStyle: FontStyle.italic)),
             ],
+            if (r.isCancelled)
+              Container(
+                margin: const EdgeInsets.only(top: 10),
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                decoration: BoxDecoration(border: Border.all(color: const Color(0xFFB91C1C), width: 1.5), borderRadius: BorderRadius.circular(4)),
+                child: Text(
+                  r.voidReason.isEmpty ? 'CANCELLED' : 'CANCELLED · ${r.voidReason}',
+                  textAlign: TextAlign.center,
+                  style: base.copyWith(color: const Color(0xFFB91C1C), fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                ),
+              ),
             const _Rule(),
 
             // Bill details

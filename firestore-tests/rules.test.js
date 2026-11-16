@@ -72,7 +72,7 @@ test('manager runs the POS in their cafe', async () => {
   const db = ctx.managerA();
   await assertSucceeds(addDoc(collection(db, 'cafes/A/orders'), { totalPrice: 10, status: 'pending' }));
   await assertSucceeds(updateDoc(doc(db, 'cafes/A/orders/o1'), { paymentStatus: 'paid', totalPrice: 120 }));
-  await assertSucceeds(deleteDoc(doc(db, 'cafes/A/orders/o1')));
+  await assertFails(deleteDoc(doc(db, 'cafes/A/orders/o1')), 'bills are cancelled, never deleted');
   await assertSucceeds(setDoc(doc(db, 'cafes/A/menuItems/i2'), { name: 'New' }));
   await assertSucceeds(setDoc(doc(db, 'cafes/A/settings/business'), { shopName: 'X' }));
 });
@@ -211,6 +211,29 @@ test('only the Super Admin writes users, and never a Super Admin role', async ()
   await assertFails(setDoc(doc(sa, 'users/sa'), { role: 'manager', cafeId: 'A' }), 'not its own document');
   await assertFails(setDoc(doc(ctx.managerA(), 'users/n5'), { role: 'manager', cafeId: 'A' }), 'managers cannot create logins');
   await assertFails(updateDoc(doc(ctx.managerA(), 'users/mA'), { status: 'active' }), 'nobody edits their own login');
+});
+
+test('bill integrity: no delete, number and token fixed, cancelled is final, series only forward', async () => {
+  await seed();
+  await env.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    await setDoc(doc(db, 'cafes/A/orders/b1'), { status: 'completed', billNo: '26-27/0007', billSeq: 7, tokenNo: 3, totalPrice: 200, paymentStatus: 'paid_cash' });
+    await setDoc(doc(db, 'cafes/A/orders/v1'), { status: 'cancelled', billNo: '26-27/0008', totalPrice: 100, voidReason: 'Test' });
+    await setDoc(doc(db, 'cafes/A/counters/bills_2026-27'), { next: 9 });
+  });
+  const m = ctx.managerA();
+  await assertSucceeds(updateDoc(doc(m, 'cafes/A/orders/o1'), { status: 'cancelled', kitchenStatus: 'cancelled', voidReason: 'Customer left' }), 'cancel with a reason');
+  await assertFails(deleteDoc(doc(m, 'cafes/A/orders/b1')), 'no delete');
+  await assertFails(updateDoc(doc(m, 'cafes/A/orders/b1'), { billNo: '26-27/0001' }), 'bill number fixed');
+  await assertFails(updateDoc(doc(m, 'cafes/A/orders/b1'), { billSeq: 1 }));
+  await assertFails(updateDoc(doc(m, 'cafes/A/orders/b1'), { tokenNo: 1 }));
+  await assertSucceeds(updateDoc(doc(m, 'cafes/A/orders/b1'), { totalPrice: 220 }), 'correcting a bill is allowed (and audit-logged by the app)');
+  await assertFails(updateDoc(doc(m, 'cafes/A/orders/b1'), { totalPrice: -5 }), 'no negative totals');
+  await assertFails(updateDoc(doc(m, 'cafes/A/orders/b1'), { status: 'deleted' }), 'unknown status');
+  await assertFails(updateDoc(doc(m, 'cafes/A/orders/v1'), { status: 'completed' }), 'cancelled is final');
+  await assertFails(updateDoc(doc(m, 'cafes/A/counters/bills_2026-27'), { next: 8 }), 'series never goes back');
+  await assertSucceeds(updateDoc(doc(m, 'cafes/A/counters/bills_2026-27'), { next: 10 }));
+  await assertSucceeds(deleteDoc(doc(ctx.superAdmin(), 'cafes/A/orders/v1')), 'only the Super Admin can remove a bill');
 });
 
 test('subscription payments: manager sees only own cafe', async () => {

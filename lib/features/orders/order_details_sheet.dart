@@ -13,6 +13,7 @@ import 'custom_item_dialog.dart';
 import 'order_model.dart';
 import 'order_service.dart';
 import 'settle_bill_sheet.dart';
+import 'void_bill_dialog.dart';
 
 /// Everything you can do with one running order (table tap).
 Future<void> showOrderDetailsSheet(
@@ -227,16 +228,10 @@ class _OrderDetails extends StatelessWidget {
                   child: TextButton(
                     style: TextButton.styleFrom(foregroundColor: p.danger),
                     onPressed: () async {
-                      final ok = await showDangerConfirmDialog(
-                        context,
-                        title: 'Delete this order?',
-                        message: '${o.displayName} · ${Fmt.money(o.totalPrice)}\nThis cannot be undone.',
-                        confirmLabel: 'Delete',
-                      );
-                      if (!ok || !context.mounted) return;
-                      await _run(context, () => OrderService.instance.delete(o.id, data: o.data), 'Order deleted');
+                      final voided = await showVoidBillDialog(parent, o);
+                      if (voided && context.mounted) Navigator.pop(context);
                     },
-                    child: const Text('Delete order'),
+                    child: const Text('Cancel bill'),
                   ),
                 ),
             ],

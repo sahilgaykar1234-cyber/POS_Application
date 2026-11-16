@@ -134,31 +134,21 @@ void main() {
     });
   });
 
-  group('delete', () {
-    test('deleting the latest bill gives its number to the next order', () async {
+  group('cancel (void) instead of delete', () {
+    test('a cancelled bill keeps its number; the next bill never reuses it', () async {
       await place();
       final b = await place();
-      await svc.delete(b.id);
-      await pumpEventQueue();
-      expect((await place()).billNo, no(2));
-    });
-
-    test('deleting an older bill keeps the series going', () async {
-      final a = await place();
-      await place();
-      await svc.delete(a.id);
-      await pumpEventQueue();
+      await svc.voidOrder(await load(b.id), reason: 'Customer left');
+      final v = await load(b.id);
+      expect(v.isCancelled, isTrue);
+      expect(v.billNo, no(2));
+      expect(v.data['voidReason'], 'Customer left');
       expect((await place()).billNo, no(3));
     });
 
-    test('deleting every bill starts again at 0001', () async {
+    test('a reason is required', () async {
       final a = await place();
-      final b = await place();
-      await svc.delete(b.id);
-      await pumpEventQueue();
-      await svc.delete(a.id);
-      await pumpEventQueue();
-      expect((await place()).billNo, no(1));
+      expect(() => svc.voidOrder(PosOrder(a.id, const {}), reason: '  '), throwsArgumentError);
     });
   });
 

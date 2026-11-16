@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/business_day.dart';
 import '../../core/utils/formatters.dart';
-import '../../core/widgets/confirm_dialog.dart';
 import '../../core/widgets/ui.dart';
 import '../pos/pos_screen.dart';
 import '../receipt/bill_view.dart';
@@ -12,6 +11,7 @@ import '../settings/business_settings.dart';
 import 'order_model.dart';
 import 'order_service.dart';
 import 'orders_filter.dart';
+import 'void_bill_dialog.dart';
 
 /// All bills of the cafe: search, date / status / payment filters, pages,
 /// and View · Print · WhatsApp on every bill (always the saved order, by id).
@@ -170,22 +170,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         print: () => printSavedBill(context, order: o.data, orderId: o.id, settings: settings.receiptSettings),
         whatsApp: () => shareSavedBillOnWhatsApp(context, order: o.data, orderId: o.id, settings: settings.receiptSettings),
         edit: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PosScreen(editing: o, standalone: true))),
-        delete: () async {
-          final ok = await showDangerConfirmDialog(
-            context,
-            title: 'Delete bill ${o.billNo}?',
-            message: '${o.displayName} · ${Fmt.money(o.totalPrice)}${o.isPaid ? ' · already paid' : ''}\n'
-                'It will be removed from sales and reports. This cannot be undone.',
-            confirmLabel: 'Delete',
-          );
-          if (!ok || !mounted) return;
-          try {
-            await OrderService.instance.delete(o.id, data: o.data);
-            if (mounted) showSuccess(context, 'Bill ${o.billNo} deleted');
-          } catch (_) {
-            if (mounted) showError(context, 'Could not delete the bill. Please check your connection.');
-          }
-        },
+        delete: () => showVoidBillDialog(context, o),
       );
 }
 
@@ -349,7 +334,7 @@ class _TableRow extends StatelessWidget {
           cell(4, MoneyText(o.totalPrice, style: const TextStyle(fontWeight: FontWeight.w700)), right: true),
           cell(5, Padding(padding: const EdgeInsets.only(left: Space.lg), child: _PaymentChip(order: o))),
           cell(6, StatusChip(o.statusLabel)),
-          SizedBox(width: 176, child: _ActionButtons(actions: actions, id: o.id)),
+          SizedBox(width: 176, child: _ActionButtons(actions: actions, id: o.id, cancelled: o.isCancelled)),
         ]),
       ),
     );
@@ -400,7 +385,7 @@ class _OrderCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 StatusChip(o.statusLabel),
                 const Spacer(),
-                _ActionButtons(actions: actions, id: o.id),
+                _ActionButtons(actions: actions, id: o.id, cancelled: o.isCancelled),
               ]),
             ],
           ),
@@ -426,9 +411,10 @@ class _PaymentChip extends StatelessWidget {
 }
 
 class _ActionButtons extends StatelessWidget {
-  const _ActionButtons({required this.actions, required this.id});
+  const _ActionButtons({required this.actions, required this.id, this.cancelled = false});
   final _RowActions actions;
   final String id;
+  final bool cancelled;
 
   @override
   Widget build(BuildContext context) {
@@ -446,15 +432,22 @@ class _ActionButtons extends StatelessWidget {
           onPressed: actions.whatsApp,
           icon: const Icon(Icons.chat_outlined, size: 20, color: Color(0xFF128C4A)),
         ),
-        PopupMenuButton<String>(
-          tooltip: 'More',
-          icon: Icon(Icons.more_vert_rounded, size: 20, color: p.inkMuted),
-          onSelected: (v) => v == 'edit' ? actions.edit() : actions.delete(),
-          itemBuilder: (_) => [
-            const PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Edit bill'))),
-            PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete_outline, color: p.danger), title: Text('Delete bill', style: TextStyle(color: p.danger)))),
-          ],
-        ),
+        // A cancelled bill is final (no edit, no second cancel).
+        if (cancelled)
+          const SizedBox(width: 40)
+        else
+          PopupMenuButton<String>(
+            tooltip: 'More',
+            icon: Icon(Icons.more_vert_rounded, size: 20, color: p.inkMuted),
+            onSelected: (v) => v == 'edit' ? actions.edit() : actions.delete(),
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Edit bill'))),
+              PopupMenuItem(
+                value: 'delete',
+                child: ListTile(leading: Icon(Icons.cancel_outlined, color: p.danger), title: Text('Cancel bill', style: TextStyle(color: p.danger))),
+              ),
+            ],
+          ),
       ],
     );
   }

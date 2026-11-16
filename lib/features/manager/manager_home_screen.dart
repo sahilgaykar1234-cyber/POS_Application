@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import '../../core/layout/breakpoints.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
-import '../../core/widgets/confirm_dialog.dart';
 import '../../core/utils/business_day.dart';
 import '../../core/widgets/day_change.dart';
 import '../../core/widgets/ui.dart';
@@ -13,6 +12,7 @@ import '../orders/bill.dart';
 import '../orders/order_details_sheet.dart';
 import '../orders/order_model.dart';
 import '../orders/order_service.dart';
+import '../orders/void_bill_dialog.dart';
 import '../pos/pos_screen.dart';
 import '../receipt/bill_view.dart';
 import '../receipt/receipt_actions.dart';
@@ -156,8 +156,9 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
                             : () => showBill(context, order: recent[i].data, orderId: recent[i].id, settings: settings.receiptSettings),
                         onPrint: () => printSavedBill(context, order: recent[i].data, orderId: recent[i].id, settings: settings.receiptSettings),
                         onWhatsApp: () => shareSavedBillOnWhatsApp(context, order: recent[i].data, orderId: recent[i].id, settings: settings.receiptSettings),
-                        onEdit: () => _edit(recent[i]),
-                        onDelete: () => _delete(recent[i]),
+                        // A cancelled bill is final: no edit, no second cancel.
+                        onEdit: recent[i].isCancelled ? null : () => _edit(recent[i]),
+                        onDelete: recent[i].isCancelled ? null : () => _delete(recent[i]),
                       ),
                     ],
                   ],
@@ -171,22 +172,8 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => PosScreen(editing: o, standalone: true)));
   }
 
-  Future<void> _delete(PosOrder o) async {
-    final ok = await showDangerConfirmDialog(
-      context,
-      title: 'Delete bill ${o.billNo}?',
-      message: '${o.displayName} · ${Fmt.money(o.totalPrice)}${o.isPaid ? ' · already paid' : ''}\n'
-          'It will be removed from sales and reports. This cannot be undone.',
-      confirmLabel: 'Delete',
-    );
-    if (!ok || !mounted) return;
-    try {
-      await OrderService.instance.delete(o.id, data: o.data);
-      if (mounted) showSuccess(context, 'Bill ${o.billNo} deleted');
-    } catch (_) {
-      if (mounted) showError(context, 'Could not delete the bill. Please check your connection.');
-    }
-  }
+  /// Bills are cancelled with a reason, never deleted.
+  Future<void> _delete(PosOrder o) => showVoidBillDialog(context, o);
 
   Widget _twoUp(BuildContext context, Widget a, Widget b, {int flexA = 1}) {
     if (!context.isDesktop) return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [a, b]);
@@ -654,10 +641,10 @@ class _RecentBill extends StatelessWidget {
       if (onDelete != null)
         IconButton(
           key: Key('recent-delete-${o.id}'),
-          tooltip: 'Delete bill',
+          tooltip: 'Cancel bill',
           visualDensity: VisualDensity.compact,
           onPressed: onDelete,
-          icon: Icon(Icons.delete_outline, size: 19, color: p.danger),
+          icon: Icon(Icons.cancel_outlined, size: 19, color: p.danger),
         ),
     ]);
 

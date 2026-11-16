@@ -39,6 +39,7 @@ class ReceiptData {
     required this.changeReturned,
     required this.orderStatus,
     required this.takenBy,
+    required this.voidReason,
   });
 
   final String orderId;
@@ -70,6 +71,9 @@ class ReceiptData {
   final String orderStatus;
   final String takenBy;
 
+  /// Why the bill was cancelled ('' if it wasn't).
+  final String voidReason;
+
   // Money (as saved).
   final double subtotal;
   final double discount;
@@ -84,6 +88,7 @@ class ReceiptData {
   final double? changeReturned;
 
   bool get isPaid => paymentStatus.startsWith('paid');
+  bool get isCancelled => orderStatus == 'cancelled';
   bool get hasGst => gstPercent != null && gst > 0;
   double get taxable => subtotal - discount;
   double get cgst => gst / 2;
@@ -182,6 +187,7 @@ class ReceiptData {
       changeReturned: order['changeReturned'] is num ? n(order['changeReturned']) : null,
       orderStatus: s(order['status']).toLowerCase(),
       takenBy: s(order['createdByRole']),
+      voidReason: s(order['voidReason']),
     );
   }
 }

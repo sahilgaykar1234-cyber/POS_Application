@@ -46,13 +46,3 @@ int? seqInYear(int? key, DateTime d) {
 
 /// Counter document name for financial year [fy] ("2026-27").
 String billCounterNameForFy(String fy) => 'bills_$fy';
-
-/// After deleting bill number [deletedSeq]: if it was the latest bill
-/// (the counter would have given [deletedSeq] + 1 next), numbering resumes
-/// right after the latest bill that still exists. Returns the counter's new
-/// "next", or null when nothing changes (an older bill was deleted).
-int? rewindAfterDelete({required int counterNext, required int deletedSeq, required int lastSeqInOrders}) {
-  if (deletedSeq != counterNext - 1) return null;
-  final next = lastSeqInOrders + 1;
-  return next < counterNext ? next : null;
-}

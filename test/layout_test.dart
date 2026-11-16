@@ -414,8 +414,9 @@ void main() {
       expect(find.byWidgetPredicate((w) => keyStarts(w, 'recent-edit-')), findsWidgets);
       await t.tap(del);
       await t.pumpAndSettle();
-      expect(find.textContaining('Delete bill'), findsOneWidget);
-      await t.tap(find.text('Cancel'));
+      expect(find.textContaining('Cancel bill'), findsWidgets);
+      expect(find.byKey(const Key('void-confirm')), findsOneWidget);
+      await t.tap(find.text('Keep bill'));
       await t.pumpAndSettle();
       expect(t.takeException(), isNull);
     });

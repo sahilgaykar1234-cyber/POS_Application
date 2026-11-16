@@ -55,6 +55,18 @@ service cloud.firestore {
     }
 
     function canReadCafe(cafeId) { return isSuper() || isStaffOf(cafeId); }
+
+    // A field that is set can't be changed or removed afterwards.
+    function keeps(f) {
+      return !(f in resource.data) || (f in request.resource.data && request.resource.data[f] == resource.data[f]);
+    }
+    // Shape checks on a bill (the totals themselves are computed by the app).
+    function validOrder() {
+      let d = request.resource.data;
+      return d.get('status', 'pending') in ['pending', 'preparing', 'ready', 'completed', 'cancelled']
+        && (!('totalPrice' in d) || (d.totalPrice is number && d.totalPrice >= 0 && d.totalPrice < 10000000))
+        && (!('items' in d) || (d.items is list && d.items.size() <= 300));
+    }
     function canManageCafe(cafeId) { return isSuper() || (isManagerOf(cafeId) && cafeOperational(cafeId)); }
 
     // ------------------------------------------------------------------ cafes
@@ -84,18 +96,29 @@ service cloud.firestore {
 
       match /orders/{orderId} {
         allow read: if canReadCafe(cafeId);
-        // Managers run the POS: create, edit, bill, complete, delete.
-        allow create, update, delete: if isManagerOf(cafeId) && cafeOperational(cafeId);
+        // Managers run the POS: create, edit, bill, complete, cancel (void).
+        // Bills are never deleted by staff (only the Super Admin can remove
+        // one), a cancelled bill is final, a bill number / token / creation
+        // time never changes once set, and amounts can't be negative.
+        allow create: if isManagerOf(cafeId) && cafeOperational(cafeId) && validOrder();
+        allow update: if isManagerOf(cafeId) && cafeOperational(cafeId) && validOrder()
+          && resource.data.get('status', '') != 'cancelled'
+          && keeps('billNo') && keeps('billSeq') && keeps('billKey') && keeps('tokenNo') && keeps('createdAt');
+        allow delete: if isSuper();
         // Captains (kitchen screen) may only change the cooking status.
         allow update: if role() == 'captain' && myCafe() == cafeId && loginActive() && cafeOperational(cafeId)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'kitchenStatus'])
           && request.resource.data.status in ['pending', 'preparing', 'ready'];
       }
 
-      // Per-cafe counters (daily takeaway token). Managers take orders.
+      // Per-cafe counters (bill series, daily takeaway token). They only move
+      // forward, so a bill number is never handed out twice.
       match /counters/{id} {
         allow read: if canReadCafe(cafeId);
-        allow write: if isManagerOf(cafeId) && cafeOperational(cafeId);
+        allow create: if (isManagerOf(cafeId) && cafeOperational(cafeId)) || isSuper();
+        allow update: if (isManagerOf(cafeId) && cafeOperational(cafeId)
+            && request.resource.data.get('next', 0) > resource.data.get('next', 0))
+          || isSuper();
       }
 
       // Anything else under a cafe: Super Admin only.

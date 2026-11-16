@@ -265,6 +265,7 @@ class _StatusHeader extends StatelessWidget {
     final (icon, color, tint, title) = switch (mode) {
       BillMode.paymentSuccess => (Icons.check_rounded, p.success, p.successTint, 'Payment successful'),
       BillMode.closedUnpaid => (Icons.schedule_rounded, p.warning, p.warningTint, 'Bill closed · payment pending'),
+      BillMode.details when r.isCancelled => (Icons.block_rounded, p.danger, p.dangerTint, 'Cancelled bill'),
       BillMode.details => r.isPaid
           ? (Icons.receipt_long_rounded, p.success, p.successTint, 'Paid bill')
           : (Icons.receipt_long_rounded, p.warning, p.warningTint, r.orderStatus == 'completed' ? 'Closed · payment pending' : 'Running bill'),
@@ -339,6 +340,7 @@ class _Facts extends StatelessWidget {
           fact('Customer', [r.customerName, r.customerPhone].where((s) => s.isNotEmpty).join(' · ')),
         fact('Items', '${r.itemCount} item${r.itemCount == 1 ? '' : 's'} · $summary'),
         fact('Order status', r.statusLabel),
+        if (r.isCancelled && r.voidReason.isNotEmpty) fact('Cancel reason', r.voidReason),
         if (r.cashReceived != null)
           fact('Cash', '${receiptMoney(r.cashReceived!)} received${(r.changeReturned ?? 0) > 0 ? ' · ${receiptMoney(r.changeReturned!)} change' : ''}'),
         if (r.takenBy.isNotEmpty) fact('Taken by', r.takenBy[0].toUpperCase() + r.takenBy.substring(1)),

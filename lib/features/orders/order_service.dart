@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../core/auth/auth_service.dart';
 import '../../core/data/firestore_paths.dart';
+import '../../core/services/audit_service.dart';
 import '../../core/utils/business_day.dart';
 import 'bill.dart';
 import 'bill_numbers.dart';
@@ -192,6 +194,16 @@ class OrderService {
     }
 
     final hasAnyNew = cart.any((e) => (e['isDone'] ?? false) == false);
+    if (existing.isPaid || existing.isCompleted) {
+      // A paid or closed bill changed: keep a record (before → after).
+      unawaited(AuditService.instance.log('bill.edit', details: {
+        'billNo': existing.billNo,
+        'orderId': existing.id,
+        'totalBefore': existing.totalPrice,
+        'totalAfter': existing.isCompleted ? _recalc(existing, cart)['totalPrice'] : bill.total,
+        'paid': existing.isPaid,
+      }));
+    }
     if (existing.isCompleted) {
       // Correcting a closed bill: keep it closed and paid as it was, keep its
       // discount, nothing goes to the kitchen.
@@ -390,31 +402,28 @@ class OrderService {
     return patch.applyTo(order.data);
   }
 
-  /// Deletes an order. If it was the latest bill of this year's series, the
-  /// series goes back (in the background) so the next bill follows the
-  /// latest one that remains.
-  Future<void> delete(String id, {Map<String, dynamic>? data}) async {
-    final ref = _orders.doc(id);
-    final d = data ?? (await ref.get()).data();
-    await ref.delete();
-    final seq = (d?['billSeq'] as num?)?.toInt();
-    final now = DateTime.now();
-    if (seq == null || d?['billFy'] != financialYear(now)) return;
-    unawaited(() async {
-      try {
-        final last = await _lastSeqInOrders(now);
-        final billRef = FirestorePaths.cafeCounter(billCounterNameForFy(financialYear(now)));
-        await FirestorePaths.db.runTransaction<void>((tx) async {
-          final c = await tx.get(billRef);
-          final next = (c.data()?['next'] as num?)?.toInt();
-          if (next == null) return;
-          final rewound = rewindAfterDelete(counterNext: next, deletedSeq: seq, lastSeqInOrders: last);
-          if (rewound != null) tx.update(billRef, {'next': rewound, 'updatedAt': FieldValue.serverTimestamp()});
-        });
-      } catch (e) {
-        debugPrint('Bill series not rewound after delete: $e');
-      }
-    }());
+  /// Cancels (voids) a bill. Bills are never deleted: the bill number stays
+  /// used, the bill stays visible as "Cancelled" (out of sales), and the
+  /// reason + who did it are recorded – so the series never has hidden gaps.
+  Future<void> voidOrder(PosOrder order, {required String reason}) async {
+    final why = reason.trim();
+    if (why.isEmpty) throw ArgumentError('A reason is required to cancel a bill');
+    final who = AuthService.instance.currentUser;
+    await _orders.doc(order.id).update({
+      'status': 'cancelled',
+      'kitchenStatus': 'cancelled',
+      'voidReason': why,
+      'voidedAt': FieldValue.serverTimestamp(),
+      'voidedBy': who?.displayName ?? '',
+      'statusBeforeVoid': order.status,
+    });
+    await AuditService.instance.log('bill.void', details: {
+      'billNo': order.billNo,
+      'orderId': order.id,
+      'total': order.totalPrice,
+      'wasPaid': order.isPaid,
+      'reason': why,
+    });
   }
 
   /// Adds an off-menu item (with the manager's price) to an existing order.

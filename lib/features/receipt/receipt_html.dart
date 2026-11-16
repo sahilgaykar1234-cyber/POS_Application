@@ -62,6 +62,11 @@ hr { border: 0; border-top: 1px dashed #000; margin: 6px 0; }
   if (r.header.isNotEmpty) b.write('<div class="muted" style="margin-top:4px">${_esc(r.header)}</div>');
   b.write('</div><hr>');
 
+  if (r.isCancelled) {
+    b.write('<div class="c" style="border:1.5px solid #000;padding:3px;margin:4px 0;font-weight:700">'
+        'CANCELLED${r.voidReason.isEmpty ? '' : ' · ${_esc(r.voidReason)}'}</div>');
+  }
+
   // Bill details
   b.write(row('Bill No', r.billNo));
   if (r.orderRef.isNotEmpty && r.orderRef != r.billNo) b.write(row('Order', r.orderRef));
