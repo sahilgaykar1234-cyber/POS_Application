@@ -2,7 +2,7 @@ import '../../core/utils/business_day.dart';
 import 'order_model.dart';
 
 enum OrderStatusFilter {
-  all('All statuses'),
+  all('All bills'),
   running('Running'),
   completed('Completed'),
   cancelled('Cancelled');
@@ -67,7 +67,8 @@ List<PosOrder> filterOrders(
   }
 
   bool statusOk(PosOrder o) => switch (status) {
-        OrderStatusFilter.all => true,
+        // Cancelled bills only show when you ask for them.
+        OrderStatusFilter.all => !o.isCancelled,
         OrderStatusFilter.running => o.isActive,
         OrderStatusFilter.completed => o.isCompleted,
         OrderStatusFilter.cancelled => o.isCancelled,

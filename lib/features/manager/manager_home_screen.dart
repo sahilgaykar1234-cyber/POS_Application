@@ -73,7 +73,8 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
       vsLastWeek = '${pct >= 0 ? '▲' : '▼'} ${pct.abs()}% vs last ${_weekdays[today.weekday - 1]}';
     }
 
-    final recent = [...todayOrders]..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+    // Cancelled bills are hidden here (they show in Orders › Cancelled).
+    final recent = todayOrders.where((o) => !o.isCancelled).toList()..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
 
     return PageBody(
       children: [

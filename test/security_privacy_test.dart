@@ -11,7 +11,9 @@ import 'package:pos_app/features/admin/admin_dialogs.dart';
 import 'package:pos_app/features/admin/admin_models.dart';
 import 'package:pos_app/features/customers/customer_privacy.dart';
 import 'package:pos_app/features/orders/bill.dart';
+import 'package:pos_app/features/manager/manager_home_screen.dart';
 import 'package:pos_app/features/orders/order_model.dart';
+import 'package:pos_app/features/orders/orders_filter.dart';
 import 'package:pos_app/features/orders/void_bill_dialog.dart';
 import 'package:pos_app/features/receipt/receipt_data.dart';
 import 'package:pos_app/features/receipt/receipt_html.dart';
@@ -164,5 +166,24 @@ void main() {
     await t.tap(find.text('Keep bill'));
     await t.pumpAndSettle();
     expect(t.takeException(), isNull);
+  });
+
+  testWidgets('cancelled bills are hidden from Recent bills and from Orders unless asked for', (t) async {
+    final now = DateTime.now();
+    final list = [
+      bill('ok1', seq: 1, at: now.subtract(const Duration(minutes: 5))),
+      bill('gone1', seq: 2, status: 'cancelled', at: now.subtract(const Duration(minutes: 3))),
+    ];
+    await lt.pumpAt(
+      t,
+      lt.sizes['desktop']!,
+      ManagerHomeScreen(onNewOrder: () {}, onOpenTables: () {}, ordersStream: Stream.value(list), settingsStream: Stream.value(lt.settings)),
+      AppTheme.light(),
+    );
+    expect(find.byKey(const Key('recent-print-ok1'), skipOffstage: false), findsOneWidget);
+    expect(find.byKey(const Key('recent-print-gone1'), skipOffstage: false), findsNothing);
+
+    expect(filterOrders(list).map((o) => o.id), ['ok1']);
+    expect(filterOrders(list, status: OrderStatusFilter.cancelled).map((o) => o.id), ['gone1']);
   });
 }

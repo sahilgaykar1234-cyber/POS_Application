@@ -125,7 +125,7 @@ void main() {
     final all = [o('01', min: 1), o('02', status: 'pending', pay: 'pending', min: 2, table: '4'), o('03', pay: 'paid_upi', name: 'Rahul', min: 3), o('04', status: 'cancelled', min: 4)];
 
     test('newest first, search by bill / name / table', () {
-      expect(filterOrders(all).map((x) => x.id), ['04', '03', '02', '01']);
+      expect(filterOrders(all).map((x) => x.id), ['03', '02', '01'], reason: 'cancelled hidden by default');
       expect(filterOrders(all, search: '0003').single.id, '03');
       expect(filterOrders(all, search: 'rahul').single.id, '03');
       expect(filterOrders(all, search: 'table 4').single.id, '02');
@@ -136,7 +136,7 @@ void main() {
       expect(filterOrders(all, status: OrderStatusFilter.cancelled).single.id, '04');
       expect(filterOrders(all, payment: PaymentFilter.unpaid).single.id, '02');
       expect(filterOrders(all, payment: PaymentFilter.upi).single.id, '03');
-      expect(filterOrders(all, payment: PaymentFilter.paid).length, 3);
+      expect(filterOrders(all, payment: PaymentFilter.paid).length, 2);
     });
 
     test('date presets and pages', () {
