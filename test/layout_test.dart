@@ -502,12 +502,17 @@ void main() {
       expect(t.takeException(), isNull);
     });
 
-    testWidgets('Orders: every bill has View, Print and WhatsApp · ${s.key}', (t) async {
+    testWidgets('Orders: every bill opens on tap and has Print and WhatsApp · ${s.key}', (t) async {
       final list = [...orders(), ...takeawayOrders()];
       await pumpAt(t, s.value, OrdersScreen(ordersStream: Stream.value(list), settingsStream: Stream.value(settings)), AppTheme.light());
       await t.pump();
       final first = filterTodayFirstId(list);
-      expect(find.byKey(Key('order-view-$first'), skipOffstage: false), findsOneWidget);
+      // The row (table) / card (phone) itself opens the bill; no separate View icon.
+      expect(
+        find.byWidgetPredicate((w) => w.key == Key('order-row-$first') || w.key == Key('order-card-$first'), skipOffstage: false),
+        findsOneWidget,
+      );
+      expect(find.byKey(Key('order-view-$first'), skipOffstage: false), findsNothing);
       expect(find.byKey(Key('order-print-$first'), skipOffstage: false), findsOneWidget);
       expect(find.byKey(Key('order-whatsapp-$first'), skipOffstage: false), findsOneWidget);
       expect(t.takeException(), isNull);
@@ -520,7 +525,10 @@ void main() {
     final waBtn = find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key as ValueKey<String>).value.startsWith('recent-whatsapp-'), skipOffstage: false);
     expect(printBtn, findsWidgets);
     expect(waBtn.evaluate().length, printBtn.evaluate().length);
-    expect(find.text('All orders', skipOffstage: false), findsOneWidget);
+    // No duplicates of the bottom navigation on the dashboard.
+    expect(find.text('All orders', skipOffstage: false), findsNothing);
+    expect(find.text('New order', skipOffstage: false), findsNothing);
+    expect(find.widgetWithText(OutlinedButton, 'Tables', skipOffstage: false), findsNothing);
   });
 
   testWidgets('Dashboard recent bills: every order of the business day (not just 8)', (t) async {

@@ -81,10 +81,9 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
         PageHeader(
           title: settings.shopName.isEmpty ? 'Today' : settings.shopName,
           subtitle: '${_weekdays[today.weekday - 1]}, ${Fmt.date(today)}',
-          actions: [
-            OutlinedButton.icon(onPressed: widget.onOpenTables, icon: const Icon(Icons.table_restaurant_outlined, size: 18), label: const Text('Tables')),
-            FilledButton.icon(onPressed: widget.onNewOrder, icon: const Icon(Icons.add, size: 18), label: const Text('New order')),
-          ],
+          // No Tables / New order here: both are in the bottom navigation
+          // (a new order starts by tapping a free table).
+          actions: const [],
         ),
         ResponsiveGrid(
           minTileWidth: 170,
@@ -93,7 +92,7 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
           children: [
             StatCard(label: "Today's sales", value: Fmt.money(s.sales), icon: Icons.trending_up_rounded, highlight: true, caption: vsLastWeek ?? 'Paid bills'),
             StatCard(label: 'Orders', value: '${s.orders}', icon: Icons.receipt_long_outlined, caption: 'Avg bill ${Fmt.money(s.averageBill.round())}', color: p.info),
-            StatCard(label: 'Running', value: '${s.running}', icon: Icons.local_fire_department_outlined, color: p.warning, onTap: widget.onOpenTables, caption: 'Open tables →'),
+            StatCard(label: 'Running', value: '${s.running}', icon: Icons.local_fire_department_outlined, color: p.warning, caption: 'Tables & takeaway now'),
             StatCard(label: 'Completed', value: '${s.completed}', icon: Icons.check_circle_outline, color: p.success, caption: 'Bills closed'),
             StatCard(
               label: 'Unpaid',
@@ -141,7 +140,6 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
         SectionCard(
           title: 'Recent bills',
           icon: Icons.receipt_outlined,
-          trailing: TextButton(onPressed: widget.onOpenOrders ?? widget.onOpenTables, child: Text(widget.onOpenOrders != null ? 'All orders' : 'All tables')),
           padding: const EdgeInsets.fromLTRB(Space.lg + 4, Space.lg + 4, Space.lg + 4, Space.sm),
           child: recent.isEmpty
               ? Padding(padding: const EdgeInsets.symmetric(vertical: Space.lg), child: Text('No orders yet today.', style: TextStyle(color: p.inkSubtle)))

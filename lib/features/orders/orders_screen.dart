@@ -279,7 +279,7 @@ class _Table extends StatelessWidget {
               cell(4, Text('AMOUNT', style: head), right: true),
               cell(5, Padding(padding: const EdgeInsets.only(left: Space.lg), child: Text('PAYMENT', style: head))),
               cell(6, Text('STATUS', style: head)),
-              const SizedBox(width: 176),
+              const SizedBox(width: 136),
             ]),
           ),
           for (var i = 0; i < orders.length; i++) ...[
@@ -334,7 +334,7 @@ class _TableRow extends StatelessWidget {
           cell(4, MoneyText(o.totalPrice, style: const TextStyle(fontWeight: FontWeight.w700)), right: true),
           cell(5, Padding(padding: const EdgeInsets.only(left: Space.lg), child: _PaymentChip(order: o))),
           cell(6, StatusChip(o.statusLabel)),
-          SizedBox(width: 176, child: _ActionButtons(actions: actions, id: o.id, cancelled: o.isCancelled)),
+          SizedBox(width: 136, child: _ActionButtons(actions: actions, id: o.id, cancelled: o.isCancelled)),
         ]),
       ),
     );
@@ -423,7 +423,6 @@ class _ActionButtons extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        IconButton(key: Key('order-view-$id'), tooltip: 'View bill', visualDensity: VisualDensity.compact, onPressed: actions.view, icon: Icon(Icons.visibility_outlined, size: 20, color: p.inkMuted)),
         IconButton(key: Key('order-print-$id'), tooltip: 'Print receipt', visualDensity: VisualDensity.compact, onPressed: actions.print, icon: Icon(Icons.print_outlined, size: 20, color: p.inkMuted)),
         IconButton(
           key: Key('order-whatsapp-$id'),

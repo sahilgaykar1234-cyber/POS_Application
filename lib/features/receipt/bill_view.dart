@@ -221,10 +221,6 @@ class _BillViewState extends State<BillView> {
           Text('RECEIPT', style: TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
           const SizedBox(height: Space.xs),
           Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 404), child: receipt)),
-          if (widget.mode != BillMode.details) ...[
-            const SizedBox(height: Space.md),
-            OutlinedButton(onPressed: _close, child: const Text('Done · New order')),
-          ],
         ],
       ),
       bottomNavigationBar: SafeArea(
@@ -389,15 +385,10 @@ class _Actions extends StatelessWidget {
         const SizedBox(height: Space.sm),
         _WhatsAppButton(onPressed: onWhatsApp, label: 'Share on WhatsApp'),
         const SizedBox(height: Space.xs),
-        Row(children: [
-          TextButton.icon(onPressed: onShareImage, icon: const Icon(Icons.image_outlined, size: 18), label: const Text('Receipt image')),
-          const Spacer(),
-          TextButton(
-            key: const Key('bill-close'),
-            onPressed: onClose,
-            child: Text(mode == BillMode.details ? 'Close' : 'Done · New order'),
-          ),
-        ]),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(onPressed: onShareImage, icon: const Icon(Icons.image_outlined, size: 18), label: const Text('Receipt image')),
+        ),
       ],
     );
   }

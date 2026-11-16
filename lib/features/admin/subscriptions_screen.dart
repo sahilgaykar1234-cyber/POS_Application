@@ -47,7 +47,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     icon: const Icon(Icons.auto_awesome_outlined, size: 18),
                     label: const Text('Add recommended plans'),
                   ),
-                if (_tab == 1)
+                // With no plans the empty state offers its own "New plan".
+                if (_tab == 1 && d.plans.isNotEmpty)
                   FilledButton.icon(
                     key: const Key('new-plan'),
                     onPressed: () => showPlanForm(context),

@@ -39,14 +39,6 @@ class AdminDashboardScreen extends StatelessWidget {
             PageHeader(
               title: 'Platform overview',
               subtitle: '${d.settings.platformName} · ${Fmt.date(now)}',
-              actions: [
-                OutlinedButton.icon(
-                  onPressed: () => onNavigate(alertsTab),
-                  icon: const Icon(Icons.notifications_outlined, size: 18),
-                  label: Text('Alerts (${alerts.length})'),
-                ),
-                FilledButton.icon(onPressed: () => onNavigate(cafesTab), icon: const Icon(Icons.storefront_outlined, size: 18), label: const Text('Cafes')),
-              ],
             ),
             ResponsiveGrid(
               minTileWidth: 160,
@@ -60,7 +52,6 @@ class AdminDashboardScreen extends StatelessWidget {
                   icon: Icons.storefront_outlined,
                   highlight: true,
                   caption: '${s.activeCafes} active · ${s.inactiveCafes} inactive',
-                  onTap: () => onNavigate(cafesTab),
                 ),
                 StatCard(label: 'Active cafes', value: '${s.activeCafes}', icon: Icons.check_circle_outline, color: p.success, caption: 'Can use the POS'),
                 StatCard(
@@ -84,7 +75,6 @@ class AdminDashboardScreen extends StatelessWidget {
                   icon: Icons.verified_outlined,
                   color: p.success,
                   caption: 'Paid plans running',
-                  onTap: () => onNavigate(subscriptionsTab),
                 ),
                 StatCard(
                   label: 'Expired',
@@ -106,7 +96,6 @@ class AdminDashboardScreen extends StatelessWidget {
                   icon: Icons.account_balance_wallet_outlined,
                   color: p.success,
                   caption: s.paymentCount > 0 ? '${s.paymentCount} recorded payment${s.paymentCount == 1 ? '' : 's'}' : 'No payments recorded yet',
-                  onTap: () => onNavigate(paymentsTab),
                 ),
                 StatCard(
                   label: 'Need attention',
@@ -114,7 +103,6 @@ class AdminDashboardScreen extends StatelessWidget {
                   icon: Icons.priority_high_rounded,
                   color: p.danger,
                   caption: 'Expired, expiring, unpaid',
-                  onTap: () => onNavigate(alertsTab),
                 ),
               ],
             ),
@@ -157,7 +145,6 @@ class AdminDashboardScreen extends StatelessWidget {
               SectionCard(
                 title: 'Needs attention',
                 icon: Icons.notifications_active_outlined,
-                trailing: TextButton(onPressed: () => onNavigate(alertsTab), child: const Text('All alerts')),
                 child: alerts.isEmpty
                     ? const InlineEmpty('All good. Nothing needs attention.', icon: Icons.task_alt_rounded)
                     : Column(
@@ -170,7 +157,6 @@ class AdminDashboardScreen extends StatelessWidget {
               SectionCard(
                 title: 'Recent cafes',
                 icon: Icons.storefront_outlined,
-                trailing: TextButton(onPressed: () => onNavigate(cafesTab), child: const Text('All cafes')),
                 child: () {
                   final recent = [...d.cafes.where((c) => !c.isDeleted)]..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
                   if (recent.isEmpty) return const InlineEmpty('No cafes yet');
@@ -192,7 +178,6 @@ class AdminDashboardScreen extends StatelessWidget {
                 title: 'Recent activity',
                 subtitle: 'Subscriptions and payments',
                 icon: Icons.history_rounded,
-                trailing: TextButton(onPressed: () => onNavigate(activityTab), child: const Text('Activity log')),
                 child: StreamBuilder<List<Map<String, dynamic>>>(
                   stream: auditStream ?? AdminService.instance.watchAuditLogs(limit: 60),
                   builder: (context, snap) {

@@ -413,7 +413,8 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 SearchField(width: wide ? 260 : null, hint: 'Search items', onChanged: (v) => setState(() => _search = v.trim().toLowerCase())),
-                if (!widget.readOnly && !wide)
+                // With no categories the empty state offers "Add category".
+                if (!widget.readOnly && !wide && menu.categories.isNotEmpty)
                   OutlinedButton.icon(onPressed: () => _addCategory(menu), icon: const Icon(Icons.create_new_folder_outlined, size: 18), label: const Text('Category')),
                 if (!widget.readOnly && wide)
                   FilledButton.icon(
