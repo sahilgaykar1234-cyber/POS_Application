@@ -1,5 +1,6 @@
 import '../../core/utils/business_day.dart';
 import 'order_model.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 enum OrderStatusFilter {
   all('All bills'),
@@ -7,8 +8,9 @@ enum OrderStatusFilter {
   completed('Completed'),
   cancelled('Cancelled');
 
-  const OrderStatusFilter(this.label);
-  final String label;
+  const OrderStatusFilter(this.englishLabel);
+  final String englishLabel;
+  String get label => tr(englishLabel);
 }
 
 enum PaymentFilter {
@@ -19,8 +21,9 @@ enum PaymentFilter {
   upi('UPI'),
   card('Card');
 
-  const PaymentFilter(this.label);
-  final String label;
+  const PaymentFilter(this.englishLabel);
+  final String englishLabel;
+  String get label => tr(englishLabel);
 }
 
 enum DatePreset {
@@ -30,8 +33,9 @@ enum DatePreset {
   thisMonth('This month'),
   custom('Custom');
 
-  const DatePreset(this.label);
-  final String label;
+  const DatePreset(this.englishLabel);
+  final String englishLabel;
+  String get label => tr(englishLabel);
 
   /// [from, to) of business days for this preset around [now] (custom: null).
   (DateTime, DateTime)? range(DateTime now) {

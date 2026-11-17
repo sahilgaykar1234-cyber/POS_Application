@@ -19,6 +19,7 @@ import '../pos/pos_screen.dart';
 import '../pos/print_helper.dart';
 import '../settings/business_settings.dart';
 import 'takeaway_board.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Takeaway counter: token-based queue New → Preparing → Ready for pickup,
 /// promised pickup times, "order ready" WhatsApp, and picked-up history.
@@ -71,7 +72,7 @@ class _TakeawayScreenState extends State<TakeawayScreen> with DayChangeRefresh<T
           stream: _orders,
           builder: (context, snap) {
             if (snap.hasError) return const ErrorState();
-            if (!snap.hasData) return const LoadingState(label: 'Loading takeaway orders…');
+            if (!snap.hasData) return LoadingState(label: tr('Loading takeaway orders…'));
             final board = TakeawayBoard.from(todaysOrders(snap.data!));
             final now = DateTime.now();
             final late = [...board.incoming, ...board.preparing].where((o) => pickupStatus(o, now).state == PickupState.late).length;
@@ -87,7 +88,7 @@ class _TakeawayScreenState extends State<TakeawayScreen> with DayChangeRefresh<T
             return Scaffold(
               backgroundColor: Colors.transparent,
               floatingActionButton: context.isMobile && !empty
-                  ? FloatingActionButton.extended(onPressed: _newTakeaway, icon: const Icon(Icons.add), label: const Text('Takeaway'))
+                  ? FloatingActionButton.extended(onPressed: _newTakeaway, icon: const Icon(Icons.add), label: Text(tr('Takeaway')))
                   : null,
               body: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -107,10 +108,10 @@ class _TakeawayScreenState extends State<TakeawayScreen> with DayChangeRefresh<T
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text('Takeaway', style: context.isMobile ? context.text.headlineSmall : context.text.headlineMedium),
+                                Text(tr('Takeaway'), style: context.isMobile ? context.text.headlineSmall : context.text.headlineMedium),
                                 const SizedBox(height: 4),
                                 Text(
-                                  '${board.active} active · ${board.ready.length} ready for pickup · ${board.pickedUp.length} picked up today',
+                                  tr('{0} active · {1} ready for pickup · {2} picked up today', [board.active, board.ready.length, board.pickedUp.length]),
                                   style: TextStyle(color: context.palette.inkSubtle),
                                 ),
                               ],
@@ -122,7 +123,7 @@ class _TakeawayScreenState extends State<TakeawayScreen> with DayChangeRefresh<T
                               children: [
                                 SearchField(
                                   width: context.isMobile ? null : 240,
-                                  hint: 'Token, name or phone',
+                                  hint: tr('Token, name or phone'),
                                   onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),
                                 ),
                                 if (context.isTablet)
@@ -139,10 +140,10 @@ class _TakeawayScreenState extends State<TakeawayScreen> with DayChangeRefresh<T
                                       ),
                                     ),
                                     icon: const Icon(Icons.task_alt_rounded, size: 18),
-                                    label: Text('Picked up (${board.pickedUp.length})'),
+                                    label: Text(tr('Picked up ({0})', [board.pickedUp.length])),
                                   ),
                                 if (!context.isMobile && !empty)
-                                  FilledButton.icon(onPressed: _newTakeaway, icon: const Icon(Icons.add, size: 18), label: const Text('New takeaway')),
+                                  FilledButton.icon(onPressed: _newTakeaway, icon: const Icon(Icons.add, size: 18), label: Text(tr('New takeaway'))),
                               ],
                             ),
                           ],
@@ -157,9 +158,9 @@ class _TakeawayScreenState extends State<TakeawayScreen> with DayChangeRefresh<T
                     child: empty
                         ? EmptyState(
                             icon: Icons.shopping_bag_outlined,
-                            title: 'No takeaway orders yet today',
-                            message: 'Take a takeaway order — it gets a token number and appears here.',
-                            action: FilledButton.icon(onPressed: _newTakeaway, icon: const Icon(Icons.add), label: const Text('New takeaway')),
+                            title: tr('No takeaway orders yet today'),
+                            message: tr('Take a takeaway order — it gets a token number and appears here.'),
+                            action: FilledButton.icon(onPressed: _newTakeaway, icon: const Icon(Icons.add), label: Text(tr('New takeaway'))),
                           )
                         : context.isMobile
                         ? _mobile(context, cols, board, settings)
@@ -205,10 +206,10 @@ class _TakeawayScreenState extends State<TakeawayScreen> with DayChangeRefresh<T
           child: SegmentedButton<String>(
             showSelectedIcon: false,
             segments: [
-              ButtonSegment(value: 'pending', label: Text('New ${cols['pending']!.length}')),
-              ButtonSegment(value: 'preparing', label: Text('Prep ${cols['preparing']!.length}')),
-              ButtonSegment(value: 'ready', label: Text('Ready ${cols['ready']!.length}')),
-              ButtonSegment(value: 'done', label: Text('Done ${board.pickedUp.length}')),
+              ButtonSegment(value: 'pending', label: Text(tr('New {0}', [cols['pending']!.length]))),
+              ButtonSegment(value: 'preparing', label: Text(tr('Prep {0}', [cols['preparing']!.length]))),
+              ButtonSegment(value: 'ready', label: Text(tr('Ready {0}', [cols['ready']!.length]))),
+              ButtonSegment(value: 'done', label: Text(tr('Done {0}', [board.pickedUp.length]))),
             ],
             selected: {_mobileCol},
             onSelectionChanged: (s) => setState(() => _mobileCol = s.first),
@@ -256,9 +257,9 @@ class _SummaryStrip extends StatelessWidget {
       spacing: Space.sm,
       runSpacing: Space.sm,
       children: [
-        pill(Icons.campaign_outlined, tokens.isEmpty ? 'Ready: none' : 'Ready: ${tokens.map((t) => '#$t').join('  ')}', p.success, p.successTint),
-        if (late > 0) pill(Icons.alarm, '$late running late', p.danger, p.dangerTint),
-        pill(Icons.hourglass_bottom_rounded, '${board.incoming.length + board.preparing.length} in kitchen', p.info, p.infoTint),
+        pill(Icons.campaign_outlined, tokens.isEmpty ? tr('Ready: none') : tr('Ready: {0}', [tokens.map((t) => '#$t').join('  ')]), p.success, p.successTint),
+        if (late > 0) pill(Icons.alarm, tr('{0} running late', [late]), p.danger, p.dangerTint),
+        pill(Icons.hourglass_bottom_rounded, tr('{0} in kitchen', [board.incoming.length + board.preparing.length]), p.info, p.infoTint),
       ],
     );
   }
@@ -275,9 +276,9 @@ class _Column extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final (title, color) = switch (status) {
-      'pending' => ('New', p.warning),
-      'preparing' => ('Preparing', p.info),
-      _ => ('Ready for pickup', p.success),
+      'pending' => (tr('New'), p.warning),
+      'preparing' => (tr('Preparing'), p.info),
+      _ => (tr('Ready for pickup'), p.success),
     };
     return Container(
       decoration: showHeader ? BoxDecoration(color: p.surfaceAlt, borderRadius: Radii.cardR) : null,
@@ -308,7 +309,7 @@ class _Column extends StatelessWidget {
           Expanded(
             child: orders.isEmpty
                 ? Center(
-                    child: Text('Nothing here', style: TextStyle(color: p.inkSubtle)),
+                    child: Text(tr('Nothing here'), style: TextStyle(color: p.inkSubtle)),
                   )
                 : ListView.separated(
                     padding: EdgeInsets.fromLTRB(showHeader ? Space.md : Space.lg, Space.sm, showHeader ? Space.md : Space.lg, 96),
@@ -333,7 +334,7 @@ class _TakeawayCard extends StatelessWidget {
     try {
       await OrderService.instance.setStatus(order.id, status);
     } catch (_) {
-      if (context.mounted) showError(context, 'Could not update. Please check your connection.');
+      if (context.mounted) showError(context, tr('Could not update. Please check your connection.'));
     }
   }
 
@@ -346,21 +347,21 @@ class _TakeawayCard extends StatelessWidget {
     try {
       final data = await OrderService.instance.complete(order, assignBillNumber: settings.autoGenBillNumber);
       if (!context.mounted) return;
-      showSuccess(context, '${order.tokenLabel} picked up');
+      showSuccess(context, tr('{0} picked up', [order.tokenLabel]));
       await showBill(context, order: data, orderId: order.id, settings: settings.receiptSettings);
     } catch (_) {
-      if (context.mounted) showError(context, 'Could not complete. Please check your connection.');
+      if (context.mounted) showError(context, tr('Could not complete. Please check your connection.'));
     }
   }
 
   Future<void> _notifyReady(BuildContext context) async {
     final number = normalizeWhatsAppNumber(order.customerPhone);
-    if (number == null) return showError(context, 'No valid mobile number on this order.');
+    if (number == null) return showError(context, tr('No valid mobile number on this order.'));
     final ok = await openWhatsAppChat(
       number,
       buildReadyMessage(shopName: settings.shopName, customerName: order.takeawayName, token: order.tokenNo, billNo: order.billNo),
     );
-    if (!ok && context.mounted) showError(context, 'Could not open WhatsApp.');
+    if (!ok && context.mounted) showError(context, tr('Could not open WhatsApp.'));
   }
 
   @override
@@ -391,7 +392,7 @@ class _TakeawayCard extends StatelessWidget {
                   child: Column(
                     children: [
                       Text(
-                        'TOKEN',
+                        tr('TOKEN'),
                         style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: accent, letterSpacing: 0.8),
                       ),
                       Text(
@@ -435,7 +436,7 @@ class _TakeawayCard extends StatelessWidget {
                               ),
                             ),
                           if (o.createdAt != null) TableTimer(start: o.createdAt!, stoppedAt: o.isPaid ? (o.paidAt ?? o.completedAt) : null),
-                          StatusChip(o.isPaid ? 'Paid' : 'Unpaid', color: o.isPaid ? p.success : p.warning, tint: o.isPaid ? p.successTint : p.warningTint),
+                          StatusChip(o.isPaid ? tr('Paid') : tr('Unpaid'), color: o.isPaid ? p.success : p.warning, tint: o.isPaid ? p.successTint : p.warningTint),
                         ],
                       ),
                     ],
@@ -467,7 +468,7 @@ class _TakeawayCard extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                  'Note: ${o.specialRequest}',
+                  tr('Note: {0}', [o.specialRequest]),
                   style: TextStyle(color: p.warning, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
               ),
@@ -478,12 +479,12 @@ class _TakeawayCard extends StatelessWidget {
                 const Spacer(),
                 if (o.status == 'ready' && hasPhone)
                   IconButton(
-                    tooltip: 'Tell customer it\'s ready (WhatsApp)',
+                    tooltip: tr('Tell customer it\'s ready (WhatsApp)'),
                     onPressed: () => _notifyReady(context),
                     icon: const Icon(Icons.chat_rounded, color: Color(0xFF128C4A)),
                   ),
                 PopupMenuButton<String>(
-                  tooltip: 'More',
+                  tooltip: tr('More'),
                   onSelected: (v) async {
                     switch (v) {
                       case 'add':
@@ -499,13 +500,13 @@ class _TakeawayCard extends StatelessWidget {
                     }
                   },
                   itemBuilder: (_) => [
-                    const PopupMenuItem(value: 'add', child: Text('Add items')),
-                    const PopupMenuItem(value: 'print', child: Text('Print bill / token')),
-                    if (!o.isPaid) const PopupMenuItem(value: 'pay', child: Text('Take payment')),
-                    if (o.status != 'pending') const PopupMenuItem(value: 'back', child: Text('Move back')),
+                    PopupMenuItem(value: 'add', child: Text(tr('Add items'))),
+                    PopupMenuItem(value: 'print', child: Text(tr('Print bill / token'))),
+                    if (!o.isPaid) PopupMenuItem(value: 'pay', child: Text(tr('Take payment'))),
+                    if (o.status != 'pending') PopupMenuItem(value: 'back', child: Text(tr('Move back'))),
                     PopupMenuItem(
                       value: 'delete',
-                      child: Text('Cancel bill', style: TextStyle(color: p.danger)),
+                      child: Text(tr('Cancel bill'), style: TextStyle(color: p.danger)),
                     ),
                   ],
                 ),
@@ -520,20 +521,20 @@ class _TakeawayCard extends StatelessWidget {
                 ),
                 onPressed: () => _set(context, 'preparing'),
                 icon: const Icon(Icons.local_fire_department_outlined, size: 18),
-                label: const Text('Start preparing'),
+                label: Text(tr('Start preparing')),
               )
             else if (o.status == 'preparing')
               FilledButton.icon(
                 style: FilledButton.styleFrom(backgroundColor: p.success, foregroundColor: context.onStatusFill),
                 onPressed: () => _set(context, 'ready'),
                 icon: const Icon(Icons.room_service_outlined, size: 18),
-                label: const Text('Mark ready'),
+                label: Text(tr('Mark ready')),
               )
             else
               FilledButton.icon(
                 onPressed: () => _pickedUp(context),
                 icon: const Icon(Icons.shopping_bag_outlined, size: 18),
-                label: Text(o.isPaid ? 'Picked up' : 'Take payment & hand over'),
+                label: Text(o.isPaid ? tr('Picked up') : tr('Take payment & hand over')),
               ),
           ],
         ),
@@ -564,7 +565,7 @@ class _PickedUp extends StatelessWidget {
                   Icon(Icons.task_alt_rounded, size: 18, color: p.success),
                   const SizedBox(width: Space.sm),
                   Expanded(
-                    child: Text('Picked up today', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                    child: Text(tr('Picked up today'), style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
                   ),
                 ],
               ),
@@ -580,7 +581,7 @@ class _PickedUp extends StatelessWidget {
           Expanded(
             child: orders.isEmpty
                 ? Center(
-                    child: Text('None yet', style: TextStyle(color: p.inkSubtle)),
+                    child: Text(tr('None yet'), style: TextStyle(color: p.inkSubtle)),
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.only(bottom: Space.md),

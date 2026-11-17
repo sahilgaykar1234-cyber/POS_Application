@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/tokens.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Confirmation for destructive actions. When [confirmText] is set, the user
 /// must type it exactly before the confirm button is enabled, which prevents
@@ -41,7 +42,7 @@ Future<bool> showDangerConfirmDialog(
                   Text(message, style: TextStyle(color: p.inkMuted)),
                   if (confirmText != null) ...[
                     const SizedBox(height: Space.lg),
-                    Text('Type "$confirmText" to confirm:', style: TextStyle(color: p.inkSubtle, fontSize: 13)),
+                    Text(tr('Type "{0}" to confirm:', [confirmText]), style: TextStyle(color: p.inkSubtle, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(controller: controller, autofocus: true, onChanged: (_) => setDialogState(() {})),
                   ],
@@ -50,11 +51,11 @@ Future<bool> showDangerConfirmDialog(
             ),
           ),
           actions: [
-            OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Cancel'))),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: p.danger, foregroundColor: context.onStatusFill),
               onPressed: canConfirm ? () => Navigator.pop(ctx, true) : null,
-              child: Text(confirmLabel),
+              child: Text(tr(confirmLabel)),
             ),
           ],
         );
@@ -79,8 +80,8 @@ Future<bool> showConfirmDialog(BuildContext context,
         child: Text(message, style: TextStyle(color: ctx.palette.inkMuted)),
       ),
       actions: [
-        OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(confirmLabel)),
+        OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Cancel'))),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr(confirmLabel))),
       ],
     ),
   );

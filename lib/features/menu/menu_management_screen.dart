@@ -6,6 +6,7 @@ import '../../core/widgets/ui.dart';
 import '../../core/widgets/confirm_dialog.dart';
 import 'menu_models.dart';
 import 'menu_repository.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Manager's menu editor: categories → subcategories → items (with sizes,
 /// add-ons, photo, availability). Everything is stored per cafe in Firestore.
@@ -43,7 +44,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     } on MenuActionBlocked catch (e) {
       _toast(e.message, error: true);
     } catch (e) {
-      _toast('Could not save. Please check your connection and try again.', error: true);
+      _toast(tr('Could not save. Please check your connection and try again.'), error: true);
     }
   }
 
@@ -62,11 +63,11 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
             controller: ctrl,
             autofocus: true,
             textCapitalization: TextCapitalization.words,
-            decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+            decoration: InputDecoration(labelText: tr(label), border: const OutlineInputBorder()),
             validator: (v) {
               final s = (v ?? '').trim();
-              if (s.isEmpty) return 'Please enter a name';
-              if (s.length > 60) return 'Name is too long';
+              if (s.isEmpty) return tr('Please enter a name');
+              if (s.length > 60) return tr('Name is too long');
               return null;
             },
             onFieldSubmitted: (_) {
@@ -75,12 +76,12 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel'))),
           ElevatedButton(
             onPressed: () {
               if (key.currentState!.validate()) Navigator.pop(ctx, ctrl.text.trim());
             },
-            child: const Text('Save'),
+            child: Text(tr('Save')),
           ),
         ],
       ),
@@ -88,58 +89,58 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
   }
 
   Future<void> _addCategory(MenuData menu) async {
-    final name = await _askName('New category', label: 'Category name (e.g. Pizza)');
+    final name = await _askName(tr('New category'), label: tr('Category name (e.g. Pizza)'));
     if (name == null) return;
     if (menu.categories.any((c) => c.name.toLowerCase() == name.toLowerCase())) {
-      return _toast('A category with this name already exists.', error: true);
+      return _toast(tr('A category with this name already exists.'), error: true);
     }
     final maxOrder = menu.categories.fold<int>(0, (m, c) => c.sortOrder > m ? c.sortOrder : m);
-    await _guard(() => _repo.saveCategory(name: name, sortOrder: maxOrder + 1), success: 'Category added');
+    await _guard(() => _repo.saveCategory(name: name, sortOrder: maxOrder + 1), success: tr('Category added'));
   }
 
   Future<void> _renameCategory(MenuCategory c) async {
-    final name = await _askName('Rename category', initial: c.name);
+    final name = await _askName(tr('Rename category'), initial: c.name);
     if (name == null || name == c.name) return;
-    await _guard(() => _repo.saveCategory(id: c.id, name: name, isActive: c.isActive), success: 'Category renamed');
+    await _guard(() => _repo.saveCategory(id: c.id, name: name, isActive: c.isActive), success: tr('Category renamed'));
   }
 
   Future<void> _deleteCategory(MenuCategory c) async {
     final ok = await showDangerConfirmDialog(
       context,
-      title: 'Delete "${c.name}"?',
-      message: 'The category will be removed from the menu. (Only empty categories can be deleted.)',
-      confirmLabel: 'Delete',
+      title: tr('Delete "{0}"?', [c.name]),
+      message: tr('The category will be removed from the menu. (Only empty categories can be deleted.)'),
+      confirmLabel: tr('Delete'),
     );
-    if (ok) await _guard(() => _repo.deleteCategory(c.id), success: 'Category deleted');
+    if (ok) await _guard(() => _repo.deleteCategory(c.id), success: tr('Category deleted'));
   }
 
   Future<void> _addSubcategory(MenuCategory c, MenuData menu) async {
-    final name = await _askName('New subcategory in ${c.name}', label: 'Subcategory name (e.g. Classic)');
+    final name = await _askName(tr('New subcategory in {0}', [c.name]), label: tr('Subcategory name (e.g. Classic)'));
     if (name == null) return;
     final subs = menu.subcategoriesOf(c.id);
     if (subs.any((s) => s.name.toLowerCase() == name.toLowerCase())) {
-      return _toast('This subcategory already exists.', error: true);
+      return _toast(tr('This subcategory already exists.'), error: true);
     }
     final maxOrder = subs.fold<int>(0, (m, s) => s.sortOrder > m ? s.sortOrder : m);
     await _guard(() => _repo.saveSubcategory(categoryId: c.id, name: name, sortOrder: maxOrder + 1),
-        success: 'Subcategory added');
+        success: tr('Subcategory added'));
   }
 
   Future<void> _renameSubcategory(MenuSubcategory s) async {
-    final name = await _askName('Rename subcategory', initial: s.name);
+    final name = await _askName(tr('Rename subcategory'), initial: s.name);
     if (name == null || name == s.name) return;
     await _guard(() => _repo.saveSubcategory(id: s.id, categoryId: s.categoryId, name: name),
-        success: 'Subcategory renamed');
+        success: tr('Subcategory renamed'));
   }
 
   Future<void> _deleteSubcategory(MenuSubcategory s) async {
     final ok = await showDangerConfirmDialog(
       context,
-      title: 'Delete "${s.name}"?',
-      message: 'The subcategory will be removed. (Only empty subcategories can be deleted.)',
-      confirmLabel: 'Delete',
+      title: tr('Delete "{0}"?', [s.name]),
+      message: tr('The subcategory will be removed. (Only empty subcategories can be deleted.)'),
+      confirmLabel: tr('Delete'),
     );
-    if (ok) await _guard(() => _repo.deleteSubcategory(s.id), success: 'Subcategory deleted');
+    if (ok) await _guard(() => _repo.deleteSubcategory(s.id), success: tr('Subcategory deleted'));
   }
 
   Future<void> _openItemEditor(MenuData menu, {MenuItem? item, String? categoryId, String? subcategoryId}) async {
@@ -156,18 +157,17 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
         ),
       ),
     );
-    if (saved == true) _toast(item == null ? 'Item added' : 'Item updated');
+    if (saved == true) _toast(item == null ? tr('Item added') : tr('Item updated'));
   }
 
   Future<void> _deleteItem(MenuItem item) async {
     final ok = await showDangerConfirmDialog(
       context,
-      title: 'Delete "${item.name}"?',
-      message: 'This item will be removed from the menu. Past bills are not affected.\n\n'
-          'Tip: to hide it temporarily, switch it to "Unavailable" instead.',
-      confirmLabel: 'Delete',
+      title: tr('Delete "{0}"?', [item.name]),
+      message: tr('This item will be removed from the menu. Past bills are not affected.\n\nTip: to hide it temporarily, switch it to "Unavailable" instead.'),
+      confirmLabel: tr('Delete'),
     );
-    if (ok) await _guard(() => _repo.deleteItem(item), success: 'Item deleted');
+    if (ok) await _guard(() => _repo.deleteItem(item), success: tr('Item deleted'));
   }
 
   Future<void> _move<T>(List<T> list, int index, int delta, String Function(T) id, int Function(T) order,
@@ -188,8 +188,8 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     return StreamBuilder<MenuData>(
       stream: _menu,
       builder: (context, snap) {
-        if (snap.hasError) return const ErrorState(message: 'Could not load the menu. Please check your connection.');
-        if (!snap.hasData) return const LoadingState(label: 'Loading menu…');
+        if (snap.hasError) return ErrorState(message: tr('Could not load the menu. Please check your connection.'));
+        if (!snap.hasData) return LoadingState(label: tr('Loading menu…'));
         final menu = snap.data!;
         if (_selCat != null && !menu.categories.any((c) => c.id == _selCat)) _selCat = null;
         if (_selSub != null && !menu.subcategories.any((s) => s.id == _selSub)) _selSub = null;
@@ -201,8 +201,8 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
               ? null
               : FloatingActionButton(
                   heroTag: 'menu-add-item',
-                  tooltip: 'Add item',
-                  onPressed: menu.categories.isEmpty ? () => _toast('Add a category first.', error: true) : () => _openItemEditor(menu, categoryId: _selCat, subcategoryId: _selSub),
+                  tooltip: tr('Add item'),
+                  onPressed: menu.categories.isEmpty ? () => _toast(tr('Add a category first.'), error: true) : () => _openItemEditor(menu, categoryId: _selCat, subcategoryId: _selSub),
                   child: const Icon(Icons.add),
                 ),
           body: wide
@@ -270,7 +270,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     }
 
     final children = <Widget>[
-      row(label: 'All items', count: menu.items.length, selected: _selCat == null, onTap: () => setState(() {
+      row(label: tr('All items'), count: menu.items.length, selected: _selCat == null, onTap: () => setState(() {
             _selCat = null;
             _selSub = null;
           })),
@@ -313,9 +313,9 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
             padding: const EdgeInsets.fromLTRB(Space.lg, Space.lg, Space.sm, Space.sm),
             child: Row(
               children: [
-                Expanded(child: Text('Categories', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
+                Expanded(child: Text(tr('Categories'), style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
                 if (!widget.readOnly)
-                  IconButton(tooltip: 'Add category', icon: const Icon(Icons.create_new_folder_outlined), onPressed: () => _addCategory(menu)),
+                  IconButton(tooltip: tr('Add category'), icon: const Icon(Icons.create_new_folder_outlined), onPressed: () => _addCategory(menu)),
               ],
             ),
           ),
@@ -323,7 +323,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
             child: menu.categories.isEmpty
                 ? Padding(
                     padding: const EdgeInsets.all(Space.lg),
-                    child: Text('No categories yet. Add one to start building the menu.', style: TextStyle(color: p.inkSubtle)),
+                    child: Text(tr('No categories yet. Add one to start building the menu.'), style: TextStyle(color: p.inkSubtle)),
                   )
                 : ListView(padding: const EdgeInsets.fromLTRB(Space.md, 0, Space.md, Space.lg), children: children),
           ),
@@ -333,7 +333,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
   }
 
   Widget _categoryMenu(MenuData menu, MenuCategory c, int index) => PopupMenuButton<String>(
-        tooltip: 'Category actions',
+        tooltip: tr('Category actions'),
         icon: const Icon(Icons.more_vert, size: 18),
         onSelected: (v) {
           switch (v) {
@@ -352,17 +352,17 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
           }
         },
         itemBuilder: (_) => [
-          const PopupMenuItem(value: 'item', child: Text('Add item here')),
-          const PopupMenuItem(value: 'sub', child: Text('Add subcategory')),
-          const PopupMenuItem(value: 'rename', child: Text('Rename')),
-          if (index > 0) const PopupMenuItem(value: 'up', child: Text('Move up')),
-          if (index < menu.categories.length - 1) const PopupMenuItem(value: 'down', child: Text('Move down')),
-          PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: context.palette.danger))),
+          PopupMenuItem(value: 'item', child: Text(tr('Add item here'))),
+          PopupMenuItem(value: 'sub', child: Text(tr('Add subcategory'))),
+          PopupMenuItem(value: 'rename', child: Text(tr('Rename'))),
+          if (index > 0) PopupMenuItem(value: 'up', child: Text(tr('Move up'))),
+          if (index < menu.categories.length - 1) PopupMenuItem(value: 'down', child: Text(tr('Move down'))),
+          PopupMenuItem(value: 'delete', child: Text(tr('Delete'), style: TextStyle(color: context.palette.danger))),
         ],
       );
 
   Widget _subcategoryMenu(MenuData menu, MenuCategory c, MenuSubcategory s) => PopupMenuButton<String>(
-        tooltip: 'Subcategory actions',
+        tooltip: tr('Subcategory actions'),
         icon: const Icon(Icons.more_vert, size: 18),
         onSelected: (v) {
           if (v == 'item') _openItemEditor(menu, categoryId: c.id, subcategoryId: s.id);
@@ -370,9 +370,9 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
           if (v == 'delete') _deleteSubcategory(s);
         },
         itemBuilder: (_) => [
-          const PopupMenuItem(value: 'item', child: Text('Add item here')),
-          const PopupMenuItem(value: 'rename', child: Text('Rename')),
-          PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: context.palette.danger))),
+          PopupMenuItem(value: 'item', child: Text(tr('Add item here'))),
+          PopupMenuItem(value: 'rename', child: Text(tr('Rename'))),
+          PopupMenuItem(value: 'delete', child: Text(tr('Delete'), style: TextStyle(color: context.palette.danger))),
         ],
       );
 
@@ -383,7 +383,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     final items = _visibleItems(menu);
     final cat = menu.categories.where((c) => c.id == _selCat).firstOrNull;
     final sub = menu.subcategories.where((s) => s.id == _selSub).firstOrNull;
-    final title = _search.isNotEmpty ? 'Search results' : (sub?.name ?? cat?.name ?? 'All items');
+    final title = _search.isNotEmpty ? tr('Search results') : (sub?.name ?? cat?.name ?? tr('All items'));
     final pad = wide ? Space.xl : Space.lg;
 
     return ListView(
@@ -402,7 +402,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                 if (sub != null && cat != null) Text(cat.name, style: TextStyle(color: p.inkSubtle, fontSize: 13)),
                 Text(title, style: context.text.headlineSmall),
                 Text(
-                  '${menu.items.length} items · ${menu.items.where((i) => !i.isAvailable).length} sold out',
+                  tr('{0} items · {1} sold out', [menu.items.length, menu.items.where((i) => !i.isAvailable).length]),
                   style: TextStyle(color: p.inkSubtle, fontSize: 13),
                 ),
               ],
@@ -412,15 +412,15 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
               runSpacing: Space.sm,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                SearchField(width: wide ? 260 : null, hint: 'Search items', onChanged: (v) => setState(() => _search = v.trim().toLowerCase())),
+                SearchField(width: wide ? 260 : null, hint: tr('Search items'), onChanged: (v) => setState(() => _search = v.trim().toLowerCase())),
                 // With no categories the empty state offers "Add category".
                 if (!widget.readOnly && !wide && menu.categories.isNotEmpty)
-                  OutlinedButton.icon(onPressed: () => _addCategory(menu), icon: const Icon(Icons.create_new_folder_outlined, size: 18), label: const Text('Category')),
+                  OutlinedButton.icon(onPressed: () => _addCategory(menu), icon: const Icon(Icons.create_new_folder_outlined, size: 18), label: Text(tr('Category'))),
                 if (!widget.readOnly && wide)
                   FilledButton.icon(
-                    onPressed: menu.categories.isEmpty ? () => _toast('Add a category first.', error: true) : () => _openItemEditor(menu, categoryId: _selCat, subcategoryId: _selSub),
+                    onPressed: menu.categories.isEmpty ? () => _toast(tr('Add a category first.'), error: true) : () => _openItemEditor(menu, categoryId: _selCat, subcategoryId: _selSub),
                     icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Add item'),
+                    label: Text(tr('Add item')),
                   ),
               ],
             ),
@@ -429,7 +429,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
         const SizedBox(height: Space.md),
         if (!wide && menu.categories.isNotEmpty) ...[
           FilterPills<String?>(
-            options: [(null, 'All'), for (final c in menu.categories) (c.id, c.name)],
+            options: [(null, tr('All')), for (final c in menu.categories) (c.id, c.name)],
             selected: _selCat,
             onSelected: (v) => setState(() {
               _selCat = v;
@@ -439,7 +439,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
           if (_selCat != null && menu.subcategoriesOf(_selCat!).isNotEmpty) ...[
             const SizedBox(height: Space.sm),
             FilterPills<String?>(
-              options: [(null, 'All'), for (final s in menu.subcategoriesOf(_selCat!)) (s.id, s.name)],
+              options: [(null, tr('All')), for (final s in menu.subcategoriesOf(_selCat!)) (s.id, s.name)],
               selected: _selSub,
               onSelected: (v) => setState(() => _selSub = v),
             ),
@@ -450,25 +450,25 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
               TextButton.icon(
                 onPressed: () => _addSubcategory(menu.categories.firstWhere((c) => c.id == _selCat), menu),
                 icon: const Icon(Icons.add, size: 18),
-                label: const Text('Subcategory'),
+                label: Text(tr('Subcategory')),
               ),
               TextButton.icon(
                 onPressed: () => _renameCategory(menu.categories.firstWhere((c) => c.id == _selCat)),
                 icon: const Icon(Icons.edit_outlined, size: 18),
-                label: const Text('Rename'),
+                label: Text(tr('Rename')),
               ),
               TextButton.icon(
                 style: TextButton.styleFrom(foregroundColor: p.danger),
                 onPressed: () => _deleteCategory(menu.categories.firstWhere((c) => c.id == _selCat)),
                 icon: const Icon(Icons.delete_outline, size: 18),
-                label: const Text('Delete'),
+                label: Text(tr('Delete')),
               ),
             ]),
           ],
           const SizedBox(height: Space.sm),
         ],
         FilterPills<String>(
-          options: const [('all', 'All'), ('available', 'Available'), ('soldout', 'Sold out')],
+          options: [('all', tr('All')), ('available', tr('Available')), ('soldout', tr('Sold out'))],
           selected: _avail,
           onSelected: (v) => setState(() => _avail = v),
         ),
@@ -476,12 +476,12 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
         if (menu.categories.isEmpty)
           EmptyState(
             icon: Icons.restaurant_menu,
-            title: 'Your menu is empty',
-            message: 'Start by adding a category, e.g. "Pizza" or "Beverages".',
-            action: widget.readOnly ? null : FilledButton.icon(onPressed: () => _addCategory(menu), icon: const Icon(Icons.add), label: const Text('Add category')),
+            title: tr('Your menu is empty'),
+            message: tr('Start by adding a category, e.g. "Pizza" or "Beverages".'),
+            action: widget.readOnly ? null : FilledButton.icon(onPressed: () => _addCategory(menu), icon: const Icon(Icons.add), label: Text(tr('Add category'))),
           )
         else if (items.isEmpty)
-          const EmptyState(icon: Icons.search_off_rounded, title: 'No items here', message: 'Try another category or filter.')
+          EmptyState(icon: Icons.search_off_rounded, title: tr('No items here'), message: tr('Try another category or filter.'))
         else
           SurfaceCard(
             child: Column(
@@ -491,10 +491,10 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                     color: p.surfaceAlt,
                     padding: const EdgeInsets.symmetric(horizontal: Space.lg, vertical: 10),
                     child: Row(children: [
-                      Expanded(flex: 5, child: _th('Item')),
-                      Expanded(flex: 4, child: _th('Sizes & prices')),
-                      Expanded(flex: 3, child: _th('Add-ons')),
-                      SizedBox(width: 90, child: _th('Available')),
+                      Expanded(flex: 5, child: _th(tr('Item'))),
+                      Expanded(flex: 4, child: _th(tr('Sizes & prices'))),
+                      Expanded(flex: 3, child: _th(tr('Add-ons'))),
+                      SizedBox(width: 90, child: _th(tr('Available'))),
                       const SizedBox(width: 48),
                     ]),
                   ),
@@ -517,7 +517,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     final item = siblings[index];
     final reorder = _canReorder(item);
     return PopupMenuButton<String>(
-      tooltip: 'Item actions',
+      tooltip: tr('Item actions'),
       onSelected: (v) {
         switch (v) {
           case 'edit':
@@ -531,10 +531,10 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
         }
       },
       itemBuilder: (_) => [
-        const PopupMenuItem(value: 'edit', child: Text('Edit')),
-        if (reorder && index > 0) const PopupMenuItem(value: 'up', child: Text('Move up')),
-        if (reorder && index < siblings.length - 1) const PopupMenuItem(value: 'down', child: Text('Move down')),
-        PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: context.palette.danger))),
+        PopupMenuItem(value: 'edit', child: Text(tr('Edit'))),
+        if (reorder && index > 0) PopupMenuItem(value: 'up', child: Text(tr('Move up'))),
+        if (reorder && index < siblings.length - 1) PopupMenuItem(value: 'down', child: Text(tr('Move down'))),
+        PopupMenuItem(value: 'delete', child: Text(tr('Delete'), style: TextStyle(color: context.palette.danger))),
       ],
     );
   }
@@ -581,7 +581,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                 if (item.isJain) _Badge('J', p.info, p.infoTint),
                 if (item.spicyLevel > 0)
                   for (var i = 0; i < item.spicyLevel; i++) Icon(Icons.local_fire_department_rounded, size: 14, color: p.danger),
-                if (!item.isAvailable) ...[const SizedBox(width: 6), const StatusChip('Sold out')],
+                if (!item.isAvailable) ...[const SizedBox(width: 6), StatusChip(tr('Sold out'))],
               ]),
               if (item.description.isNotEmpty)
                 Text(item.description, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: p.inkSubtle)),
@@ -746,7 +746,7 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
   PlatformFile? _newImage;
   late final List<_VariantRow> _variants = (widget.item?.variants.isNotEmpty ?? false)
       ? widget.item!.variants.map(_VariantRow.new).toList()
-      : [_VariantRow(const MenuVariant(label: 'Standard', price: 0))..price.text = ''];
+      : [_VariantRow(MenuVariant(label: 'Standard', price: 0))..price.text = ''];
   late final List<_AddOnRow> _addOns = widget.item?.addOns.map(_AddOnRow.new).toList() ?? [];
   bool _saving = false;
 
@@ -772,7 +772,7 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
     if (f.size > 2 * 1024 * 1024) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please choose a photo under 2 MB.')),
+          SnackBar(content: Text(tr('Please choose a photo under 2 MB.'))),
         );
       }
       return;
@@ -792,7 +792,7 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
     final labels = _variants.map((v) => v.label.text.trim().toLowerCase()).toList();
     if (labels.toSet().length != labels.length) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Each size/variant needs a different name.')),
+        SnackBar(content: Text(tr('Each size/variant needs a different name.'))),
       );
       return;
     }
@@ -844,7 +844,7 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
     } on MenuActionBlocked catch (e) {
       _fail(e.message);
     } catch (e) {
-      _fail('Could not save the item. Please check your connection and try again.');
+      _fail(tr('Could not save the item. Please check your connection and try again.'));
     }
   }
 
@@ -856,8 +856,8 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
 
   String? _priceValidator(String? v) {
     final p = double.tryParse((v ?? '').trim());
-    if (p == null) return 'Enter a price';
-    if (p < 0 || p > 100000) return 'Invalid price';
+    if (p == null) return tr('Enter a price');
+    if (p < 0 || p > 100000) return tr('Invalid price');
     return null;
   }
 
@@ -868,7 +868,7 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
     return Scaffold(
       backgroundColor: context.palette.canvas,
       appBar: AppBar(
-        title: Text(widget.item == null ? 'Add item' : 'Edit item'),
+        title: Text(widget.item == null ? tr('Add item') : tr('Edit item')),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 10),
@@ -877,7 +877,7 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
               icon: _saving
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.save, size: 18),
-              label: const Text('Save'),
+              label: Text(tr('Save')),
             ),
           ),
         ],
@@ -901,11 +901,11 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
                           TextFormField(
                             controller: _name,
                             textCapitalization: TextCapitalization.words,
-                            decoration: const InputDecoration(labelText: 'Item name *', border: OutlineInputBorder()),
+                            decoration: InputDecoration(labelText: tr('Item name *'), border: OutlineInputBorder()),
                             validator: (v) {
                               final s = (v ?? '').trim();
-                              if (s.isEmpty) return 'Please enter the item name';
-                              if (s.length > 80) return 'Name is too long';
+                              if (s.isEmpty) return tr('Please enter the item name');
+                              if (s.length > 80) return tr('Name is too long');
                               return null;
                             },
                           ),
@@ -914,8 +914,8 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
                             controller: _desc,
                             maxLines: 2,
                             maxLength: 300,
-                            decoration: const InputDecoration(
-                              labelText: 'Description / ingredients',
+                            decoration: InputDecoration(
+                              labelText: tr('Description / ingredients'),
                               border: OutlineInputBorder(),
                             ),
                           ),
@@ -931,11 +931,11 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
                       child: DropdownButtonFormField<String>(
                         initialValue: _categoryId,
                         isExpanded: true,
-                        decoration: const InputDecoration(labelText: 'Category *', border: OutlineInputBorder()),
+                        decoration: InputDecoration(labelText: tr('Category *'), border: OutlineInputBorder()),
                         items: [
                           for (final c in widget.menu.categories) DropdownMenuItem(value: c.id, child: Text(c.name)),
                         ],
-                        validator: (v) => v == null ? 'Choose a category' : null,
+                        validator: (v) => v == null ? tr('Choose a category') : null,
                         onChanged: (v) => setState(() {
                           _categoryId = v;
                           _subcategoryId = null;
@@ -948,9 +948,9 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
                         key: ValueKey('sub-$_categoryId'),
                         initialValue: _subs.any((s) => s.id == _subcategoryId) ? _subcategoryId : null,
                         isExpanded: true,
-                        decoration: const InputDecoration(labelText: 'Subcategory', border: OutlineInputBorder()),
+                        decoration: InputDecoration(labelText: tr('Subcategory'), border: OutlineInputBorder()),
                         items: [
-                          const DropdownMenuItem<String?>(value: null, child: Text('— None —')),
+                          DropdownMenuItem<String?>(value: null, child: Text(tr('— None —'))),
                           for (final s in _subs) DropdownMenuItem<String?>(value: s.id, child: Text(s.name)),
                         ],
                         onChanged: _subs.isEmpty ? null : (v) => setState(() => _subcategoryId = v),
@@ -959,52 +959,52 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
                   ],
                 ),
                 const SizedBox(height: 20),
-                _sectionTitle('Sizes & prices',
-                    'One row = one price. Use a single "Standard" row for items with one price.'),
+                _sectionTitle(tr('Sizes & prices'),
+                    tr('One row = one price. Use a single "Standard" row for items with one price.')),
                 for (var i = 0; i < _variants.length; i++) _variantRow(i),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
                     icon: const Icon(Icons.add),
-                    label: const Text('Add size'),
+                    label: Text(tr('Add size')),
                     onPressed: _variants.length >= 6 ? null : () => setState(() => _variants.add(_VariantRow())),
                   ),
                 ),
                 const SizedBox(height: 12),
-                _sectionTitle('Add-ons (optional)', 'Extras charged on top, e.g. "Cheese burst" +₹120.'),
+                _sectionTitle(tr('Add-ons (optional)'), tr('Extras charged on top, e.g. "Cheese burst" +₹120.')),
                 for (var i = 0; i < _addOns.length; i++) _addOnRow(i, variantLabels),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
                     icon: const Icon(Icons.add),
-                    label: const Text('Add add-on'),
+                    label: Text(tr('Add add-on')),
                     onPressed: _addOns.length >= 10 ? null : () => setState(() => _addOns.add(_AddOnRow())),
                   ),
                 ),
                 const SizedBox(height: 12),
-                _sectionTitle('Details', null),
+                _sectionTitle(tr('Details'), null),
                 SwitchListTile(
                   value: _available,
                   onChanged: (v) => setState(() => _available = v),
-                  title: const Text('Available for ordering'),
-                  subtitle: const Text('Turn off when sold out — the item stays in the menu.'),
+                  title: Text(tr('Available for ordering')),
+                  subtitle: Text(tr('Turn off when sold out — the item stays in the menu.')),
                 ),
                 SwitchListTile(
                   value: _jain,
                   onChanged: (v) => setState(() => _jain = v),
-                  title: const Text('Jain option (J)'),
+                  title: Text(tr('Jain option (J)')),
                 ),
                 ListTile(
-                  title: const Text('Spicy level'),
+                  title: Text(tr('Spicy level')),
                   trailing: SegmentedButton<int>(
                     // Same flame icon as the menu list and POS (an emoji
                     // would need a font download on the web).
-                    segments: const [
-                      ButtonSegment(value: 0, label: Text('None')),
-                      ButtonSegment(value: 1, tooltip: 'Spicy', label: Icon(Icons.local_fire_department_rounded, size: 18)),
+                    segments: [
+                      ButtonSegment(value: 0, label: Text(tr('None'))),
+                      ButtonSegment(value: 1, tooltip: tr('Spicy'), label: Icon(Icons.local_fire_department_rounded, size: 18)),
                       ButtonSegment(
                         value: 2,
-                        tooltip: 'Extra spicy',
+                        tooltip: tr('Extra spicy'),
                         label: Row(mainAxisSize: MainAxisSize.min, children: [
                           Icon(Icons.local_fire_department_rounded, size: 18),
                           Icon(Icons.local_fire_department_rounded, size: 18),
@@ -1046,8 +1046,8 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
             flex: 3,
             child: TextFormField(
               controller: v.label,
-              decoration: const InputDecoration(labelText: 'Size name', hintText: 'e.g. 10 inch', border: OutlineInputBorder(), isDense: true),
-              validator: (s) => (s ?? '').trim().isEmpty ? 'Required' : null,
+              decoration: InputDecoration(labelText: tr('Size name'), hintText: tr('e.g. 10 inch'), border: OutlineInputBorder(), isDense: true),
+              validator: (s) => (s ?? '').trim().isEmpty ? tr('Required') : null,
               onChanged: (_) => setState(() {}),
             ),
           ),
@@ -1057,7 +1057,7 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
             child: TextFormField(
               controller: v.price,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Price ₹', border: OutlineInputBorder(), isDense: true),
+              decoration: InputDecoration(labelText: tr('Price ₹'), border: OutlineInputBorder(), isDense: true),
               validator: _priceValidator,
             ),
           ),
@@ -1066,11 +1066,11 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
             flex: 2,
             child: TextFormField(
               controller: v.note,
-              decoration: const InputDecoration(labelText: 'Note', hintText: '6 pcs', border: OutlineInputBorder(), isDense: true),
+              decoration: InputDecoration(labelText: tr('Note'), hintText: tr('6 pcs'), border: OutlineInputBorder(), isDense: true),
             ),
           ),
           IconButton(
-            tooltip: 'Remove size',
+            tooltip: tr('Remove size'),
             icon: Icon(Icons.remove_circle_outline, color: context.palette.danger),
             onPressed: _variants.length <= 1
                 ? null
@@ -1100,8 +1100,8 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
                   flex: 3,
                   child: TextFormField(
                     controller: a.name,
-                    decoration: const InputDecoration(labelText: 'Add-on name', border: OutlineInputBorder(), isDense: true),
-                    validator: (s) => (s ?? '').trim().isEmpty ? 'Required' : null,
+                    decoration: InputDecoration(labelText: tr('Add-on name'), border: OutlineInputBorder(), isDense: true),
+                    validator: (s) => (s ?? '').trim().isEmpty ? tr('Required') : null,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1110,12 +1110,12 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
                   child: TextFormField(
                     controller: a.price,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: 'Extra ₹', border: OutlineInputBorder(), isDense: true),
+                    decoration: InputDecoration(labelText: tr('Extra ₹'), border: OutlineInputBorder(), isDense: true),
                     validator: _priceValidator,
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Remove add-on',
+                  tooltip: tr('Remove add-on'),
                   icon: Icon(Icons.delete_outline, color: context.palette.danger),
                   onPressed: () => setState(() => _addOns.removeAt(i).dispose()),
                 ),
@@ -1123,7 +1123,7 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
             ),
             if (variantLabels.length > 1) ...[
               const SizedBox(height: 6),
-              Text('Available on (none selected = all sizes):', style: TextStyle(color: context.palette.inkSubtle, fontSize: 12)),
+              Text(tr('Available on (none selected = all sizes):'), style: TextStyle(color: context.palette.inkSubtle, fontSize: 12)),
               Wrap(
                 spacing: 6,
                 children: [
@@ -1163,7 +1163,7 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
                           children: [
                             Icon(Icons.add_a_photo_outlined, color: context.palette.inkSubtle),
                             const SizedBox(height: 4),
-                            Text('Add photo', style: TextStyle(color: context.palette.inkSubtle, fontSize: 12)),
+                            Text(tr('Add photo'), style: TextStyle(color: context.palette.inkSubtle, fontSize: 12)),
                           ],
                         ),
             ),
@@ -1175,7 +1175,7 @@ class _MenuItemEditorScreenState extends State<MenuItemEditorScreen> {
               _newImage = null;
               _imageUrl = null;
             }),
-            child: Text('Remove photo', style: TextStyle(color: context.palette.danger, fontSize: 12)),
+            child: Text(tr('Remove photo'), style: TextStyle(color: context.palette.danger, fontSize: 12)),
           ),
       ],
     );

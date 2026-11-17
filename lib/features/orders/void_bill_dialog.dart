@@ -6,6 +6,7 @@ import '../../core/utils/friendly_error.dart';
 import '../../core/widgets/ui.dart';
 import 'order_model.dart';
 import 'order_service.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 const kVoidReasons = ['Customer cancelled', 'Wrong order', 'Duplicate bill', 'Test bill'];
 
@@ -21,7 +22,7 @@ Future<bool> showVoidBillDialog(BuildContext context, PosOrder order) async {
       final p = ctx.palette;
       final reason = (picked == 'Other' ? other.text : picked ?? '').trim();
       return AlertDialog(
-        title: Text('Cancel bill ${order.billNo}?'),
+        title: Text(tr('Cancel bill {0}?', [order.billNo])),
         scrollable: true,
         content: SizedBox(
           width: 440,
@@ -31,14 +32,14 @@ Future<bool> showVoidBillDialog(BuildContext context, PosOrder order) async {
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: Space.xs),
-            Text('The bill keeps its number and shows as Cancelled; it is removed from sales. The reason is saved.',
+            Text(tr('The bill keeps its number and shows as Cancelled; it is removed from sales. The reason is saved.'),
                 style: TextStyle(color: p.inkSubtle, fontSize: 13)),
             const SizedBox(height: Space.md),
-            Text('Reason *', style: TextStyle(color: p.inkSubtle, fontSize: 13)),
+            Text(tr('Reason *'), style: TextStyle(color: p.inkSubtle, fontSize: 13)),
             const SizedBox(height: Space.xs),
             Wrap(spacing: Space.sm, runSpacing: Space.xs, children: [
               for (final r in [...kVoidReasons, 'Other'])
-                ChoiceChip(key: Key('void-$r'), label: Text(r), selected: picked == r, onSelected: (_) => setState(() => picked = r)),
+                ChoiceChip(key: Key('void-$r'), label: Text(tr(r)), selected: picked == r, onSelected: (_) => setState(() => picked = r)),
             ]),
             if (picked == 'Other') ...[
               const SizedBox(height: Space.sm),
@@ -47,14 +48,14 @@ Future<bool> showVoidBillDialog(BuildContext context, PosOrder order) async {
                 controller: other,
                 autofocus: true,
                 maxLength: 120,
-                decoration: const InputDecoration(labelText: 'Write the reason'),
+                decoration: InputDecoration(labelText: tr('Write the reason')),
                 onChanged: (_) => setState(() {}),
               ),
             ],
           ]),
         ),
         actions: [
-          OutlinedButton(onPressed: saving ? null : () => Navigator.pop(ctx, false), child: const Text('Keep bill')),
+          OutlinedButton(onPressed: saving ? null : () => Navigator.pop(ctx, false), child: Text(tr('Keep bill'))),
           FilledButton(
             key: const Key('void-confirm'),
             style: FilledButton.styleFrom(backgroundColor: p.danger, foregroundColor: ctx.onStatusFill),
@@ -67,15 +68,15 @@ Future<bool> showVoidBillDialog(BuildContext context, PosOrder order) async {
                       if (ctx.mounted) Navigator.pop(ctx, true);
                     } catch (e) {
                       setState(() => saving = false);
-                      if (ctx.mounted) showError(ctx, friendlyError(e, 'cancel the bill'));
+                      if (ctx.mounted) showError(ctx, friendlyError(e, tr('cancel the bill')));
                     }
                   },
-            child: Text(saving ? 'Cancelling…' : 'Cancel bill'),
+            child: Text(saving ? tr('Cancelling…') : tr('Cancel bill')),
           ),
         ],
       );
     }),
   );
-  if (done == true && context.mounted) showSuccess(context, 'Bill ${order.billNo} cancelled');
+  if (done == true && context.mounted) showSuccess(context, tr('Bill {0} cancelled', [order.billNo]));
   return done == true;
 }

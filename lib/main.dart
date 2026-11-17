@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -6,6 +7,7 @@ import 'core/auth/auth_gate.dart';
 import 'core/config/app_config.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,6 +29,7 @@ void main() async {
   try {
     await ThemeController.instance.load();
   } catch (_) {}
+  await LanguageController.instance.load();
 
   runApp(const PosApp());
 }
@@ -39,13 +42,13 @@ Future<void> _startFirebase() async {
   if (Firebase.apps.isNotEmpty) return;
   await Firebase.initializeApp(
     options: const FirebaseOptions(
-      apiKey: "AIzaSyDMe-TEEfwrfx7TH1bBVwqBQKuD_Zpabs0",
+      apiKey: 'AIzaSyDMe-TEEfwrfx7TH1bBVwqBQKuD_Zpabs0',
       appId: "1:696853288881:web:215140904c82a5c0a80f90",
       messagingSenderId: "696853288881",
       projectId: "suratpos",
       authDomain: "suratpos.firebaseapp.com",
       storageBucket: "suratpos.firebasestorage.app",
-      measurementId: "G-LCG416QZTD",
+      measurementId: 'G-LCG416QZTD',
     ),
   );
 }
@@ -71,18 +74,17 @@ class StartupErrorApp extends StatelessWidget {
                 children: [
                   const Icon(Icons.cloud_off_rounded, size: 48, color: Color(0xFFC2410C)),
                   const SizedBox(height: 16),
-                  const Text('Could not start Cafe POS', textAlign: TextAlign.center, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                  Text(tr('Could not start Cafe POS'), textAlign: TextAlign.center, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Please check the internet connection and try again. On iPhone, '
-                    'don\'t use Private browsing and turn off content blockers for this site.',
+                  Text(
+                    tr('Please check the internet connection and try again. On iPhone, don\'t use Private browsing and turn off content blockers for this site.'),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 20),
                   FilledButton.icon(
                     onPressed: () => main(),
                     icon: const Icon(Icons.refresh),
-                    label: const Text('Try again'),
+                    label: Text(tr('Try again')),
                   ),
                   const SizedBox(height: 16),
                   Text('$error', textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, color: Colors.black54)),
@@ -102,14 +104,19 @@ class PosApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themes = ThemeController.instance;
+    final language = LanguageController.instance;
     return ListenableBuilder(
-      listenable: themes,
+      listenable: Listenable.merge([themes, language]),
       builder: (context, _) => MaterialApp(
         debugShowCheckedModeBanner: false,
         title: AppConfig.appName,
         theme: AppTheme.light(),
         darkTheme: AppTheme.dark(),
         themeMode: themes.value,
+        // Date pickers, Copy/Paste menus etc. follow the chosen language.
+        locale: language.value.locale,
+        supportedLocales: [for (final l in AppLanguage.values) l.locale],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
         // Every role signs in here; AuthGate routes by server-assigned role.
         home: const AuthGate(),
       ),

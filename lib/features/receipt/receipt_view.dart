@@ -25,6 +25,7 @@ class ReceiptView extends StatelessWidget {
     // Bundled Inter: the receipt must not depend on a font download.
     const base = TextStyle(
       fontFamily: AppTheme.fontFamily,
+      fontFamilyFallback: AppTheme.fontFallback,
       color: _ink,
       fontSize: 13,
       height: 1.35,

@@ -16,6 +16,8 @@ import '../../core/utils/friendly_error.dart';
 import '../../core/widgets/confirm_dialog.dart';
 import '../customers/customer_privacy.dart';
 import 'business_settings.dart';
+import 'package:pos_app/core/i18n/tr.dart';
+import 'package:pos_app/core/i18n/language_picker.dart';
 
 /// Cafe settings (same fields and keys as before) + appearance.
 class SettingsScreen extends StatefulWidget {
@@ -123,7 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final f = res?.files.single;
     if (f?.bytes == null) return;
     if (f!.size > 300 * 1024) {
-      if (mounted) showError(context, 'Please choose a logo under 300 KB.');
+      if (mounted) showError(context, tr('Please choose a logo under 300 KB.'));
       return;
     }
     setState(() {
@@ -141,20 +143,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) {
           void save() {
-            if (!ManagerPin.isValid(pin.text)) return setState(() => error = 'Use 4 to 8 digits.');
-            if (pin.text != again.text) return setState(() => error = "The two PINs don't match.");
+            if (!ManagerPin.isValid(pin.text)) return setState(() => error = tr('Use 4 to 8 digits.'));
+            if (pin.text != again.text) return setState(() => error = tr('The two PINs don\'t match.'));
             Navigator.pop(ctx, true);
           }
 
           return AlertDialog(
-            title: Text(_pinSet ? 'Change Manager PIN' : 'Set Manager PIN'),
+            title: Text(_pinSet ? tr('Change Manager PIN') : tr('Set Manager PIN')),
             content: SizedBox(
               width: 340,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    'Staff using the cafe login will need this PIN to open the Manager view. For the kitchen, a separate "Kitchen only" login is even safer.',
+                  Text(
+                    tr('Staff using the cafe login will need this PIN to open the Manager view. For the kitchen, a separate "Kitchen only" login is even safer.'),
                   ),
                   const SizedBox(height: Space.md),
                   TextField(
@@ -165,7 +167,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     keyboardType: TextInputType.number,
                     maxLength: 8,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(labelText: 'New PIN (4–8 digits)'),
+                    decoration: InputDecoration(labelText: tr('New PIN (4–8 digits)')),
                   ),
                   TextField(
                     key: const Key('pin-again'),
@@ -174,15 +176,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     keyboardType: TextInputType.number,
                     maxLength: 8,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: InputDecoration(labelText: 'PIN again', errorText: error),
+                    decoration: InputDecoration(labelText: tr('PIN again'), errorText: error),
                     onSubmitted: (_) => save(),
                   ),
                 ],
               ),
             ),
             actions: [
-              OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-              FilledButton(key: const Key('pin-save'), onPressed: save, child: const Text('Save PIN')),
+              OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Cancel'))),
+              FilledButton(key: const Key('pin-save'), onPressed: save, child: Text(tr('Save PIN'))),
             ],
           );
         },
@@ -195,18 +197,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await AuditService.instance.log('settings.managerPin', details: {'pin': 'set'});
       if (!mounted) return;
       setState(() => _pinSet = true);
-      showSuccess(context, 'Manager PIN saved');
+      showSuccess(context, tr('Manager PIN saved'));
     } catch (e) {
-      if (mounted) showError(context, friendlyError(e, 'save the PIN'));
+      if (mounted) showError(context, friendlyError(e, tr('save the PIN')));
     }
   }
 
   Future<void> _removePin() async {
     final ok = await showConfirmDialog(
       context,
-      title: 'Remove the Manager PIN?',
-      message: 'Anyone with the cafe login can then open the Manager view.',
-      confirmLabel: 'Remove',
+      title: tr('Remove the Manager PIN?'),
+      message: tr('Anyone with the cafe login can then open the Manager view.'),
+      confirmLabel: tr('Remove'),
     );
     if (!ok || !mounted) return;
     try {
@@ -214,25 +216,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await AuditService.instance.log('settings.managerPin', details: {'pin': 'removed'});
       if (!mounted) return;
       setState(() => _pinSet = false);
-      showSuccess(context, 'Manager PIN removed');
+      showSuccess(context, tr('Manager PIN removed'));
     } catch (e) {
-      if (mounted) showError(context, friendlyError(e, 'remove the PIN'));
+      if (mounted) showError(context, friendlyError(e, tr('remove the PIN')));
     }
   }
 
   Future<void> _removeOldCustomerData() async {
     final ok = await showDangerConfirmDialog(
       context,
-      title: 'Remove old customer data?',
-      message: 'Customer names and numbers on bills older than $_keepMonths months will be cleared. Bills, amounts and reports stay. This cannot be undone.',
-      confirmLabel: 'Remove',
+      title: tr('Remove old customer data?'),
+      message: tr('Customer names and numbers on bills older than {0} months will be cleared. Bills, amounts and reports stay. This cannot be undone.', [_keepMonths]),
+      confirmLabel: tr('Remove'),
     );
     if (!ok || !mounted) return;
     try {
       final n = await CustomerPrivacy.instance.removeOlderThan(_keepMonths);
-      if (mounted) showSuccess(context, n == 0 ? 'Nothing to remove' : 'Customer data removed from $n old bills');
+      if (mounted) showSuccess(context, n == 0 ? tr('Nothing to remove') : tr('Customer data removed from {0} old bills', [n]));
     } catch (e) {
-      if (mounted) showError(context, friendlyError(e, 'remove the data'));
+      if (mounted) showError(context, friendlyError(e, tr('remove the data')));
     }
   }
 
@@ -240,12 +242,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final t = await showTimePicker(
       context: context,
       initialTime: TimeOfDay(hour: _dayEnds ~/ 60, minute: _dayEnds % 60),
-      helpText: 'BUSINESS DAY ENDS AT (AFTER MIDNIGHT)',
+      helpText: tr('BUSINESS DAY ENDS AT (AFTER MIDNIGHT)'),
     );
     if (t == null || !mounted) return;
     final m = t.hour * 60 + t.minute;
     if (m > BusinessDay.maxCutoffMinutes) {
-      showError(context, 'Pick a time between 12:00 AM and 12:00 PM (after midnight).');
+      showError(context, tr('Pick a time between 12:00 AM and 12:00 PM (after midnight).'));
       return;
     }
     setState(() {
@@ -290,18 +292,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _dirty = false;
         _c['numberOfTables']!.text = '$tables';
       });
-      showSuccess(context, 'Settings saved');
+      showSuccess(context, tr('Settings saved'));
     } catch (_) {
       if (mounted) {
         setState(() => _saving = false);
-        showError(context, 'Could not save settings. Please check your connection.');
+        showError(context, tr('Could not save settings. Please check your connection.'));
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const LoadingState(label: 'Loading settings…');
+    if (_loading) return LoadingState(label: tr('Loading settings…'));
     final p = context.palette;
 
     return Scaffold(
@@ -321,7 +323,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text('You have unsaved changes', style: TextStyle(color: p.inkSubtle)),
+                      child: Text(tr('You have unsaved changes'), style: TextStyle(color: p.inkSubtle)),
                     ),
                     OutlinedButton(
                       onPressed: _saving
@@ -331,10 +333,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               _dirty = false;
                               _load();
                             },
-                      child: const Text('Discard'),
+                      child: Text(tr('Discard')),
                     ),
                     const SizedBox(width: Space.sm),
-                    FilledButton(onPressed: _saving ? null : _save, child: Text(_saving ? 'Saving…' : 'Save changes')),
+                    FilledButton(onPressed: _saving ? null : _save, child: Text(_saving ? tr('Saving…') : tr('Save changes'))),
                   ],
                 ),
               ),
@@ -344,11 +346,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         key: _form,
         child: PageBody(
           children: [
-            const PageHeader(title: 'Settings', subtitle: 'Cafe details, billing and receipts'),
+            PageHeader(title: tr('Settings'), subtitle: tr('Cafe details, billing and receipts')),
             LayoutBuilder(
               builder: (context, c) {
                 final profile = SectionCard(
-                  title: 'Cafe profile',
+                  title: tr('Cafe profile'),
                   icon: Icons.storefront_outlined,
                   child: Column(
                     children: [
@@ -370,13 +372,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Logo', style: context.text.titleSmall),
-                                Text('Printed on bills. PNG/JPG under 300 KB.', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
+                                Text(tr('Logo'), style: context.text.titleSmall),
+                                Text(tr('Printed on bills. PNG/JPG under 300 KB.'), style: TextStyle(color: p.inkSubtle, fontSize: 12)),
                                 const SizedBox(height: Space.sm),
                                 Wrap(
                                   spacing: Space.sm,
                                   children: [
-                                    OutlinedButton(onPressed: _pickLogo, child: Text(_logo == null ? 'Upload' : 'Change')),
+                                    OutlinedButton(onPressed: _pickLogo, child: Text(_logo == null ? tr('Upload') : tr('Change'))),
                                     if (_logo != null)
                                       TextButton(
                                         style: TextButton.styleFrom(foregroundColor: p.danger),
@@ -384,7 +386,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                           _logo = null;
                                           _dirty = true;
                                         }),
-                                        child: const Text('Remove'),
+                                        child: Text(tr('Remove')),
                                       ),
                                   ],
                                 ),
@@ -394,15 +396,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ],
                       ),
                       const SizedBox(height: Space.lg),
-                      _row([_field('shopName', 'Cafe name', required: true), _field('tagline', 'Tagline')]),
-                      _row([_field('ownerName', 'Owner name'), _field('mobileNumber', 'Mobile number', keyboard: TextInputType.phone)]),
-                      _row([_field('email', 'Email', keyboard: TextInputType.emailAddress), _field('gstNumber', 'GST number')]),
-                      _field('address', 'Address', maxLines: 2),
+                      _row([_field('shopName', tr('Cafe name'), required: true), _field('tagline', tr('Tagline'))]),
+                      _row([_field('ownerName', tr('Owner name')), _field('mobileNumber', tr('Mobile number'), keyboard: TextInputType.phone)]),
+                      _row([_field('email', tr('Email'), keyboard: TextInputType.emailAddress), _field('gstNumber', tr('GST number'))]),
+                      _field('address', tr('Address'), maxLines: 2),
                     ],
                   ),
                 );
                 final billing = SectionCard(
-                  title: 'Billing',
+                  title: tr('Billing'),
                   icon: Icons.receipt_long_outlined,
                   child: Column(
                     children: [
@@ -413,25 +415,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _showGst = v;
                           _dirty = true;
                         }),
-                        title: const Text('Add GST to bills', style: TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: const Text('New orders include GST at the rate below.'),
+                        title: Text(tr('Add GST to bills'), style: TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: Text(tr('New orders include GST at the rate below.')),
                       ),
                       const SizedBox(height: Space.sm),
                       _row([
-                        _field('gstPercentage', 'GST %', keyboard: const TextInputType.numberWithOptions(decimal: true), number: true),
-                        _field('numberOfTables', 'Number of tables', keyboard: TextInputType.number, number: true),
+                        _field('gstPercentage', tr('GST %'), keyboard: const TextInputType.numberWithOptions(decimal: true), number: true),
+                        _field('numberOfTables', tr('Number of tables'), keyboard: TextInputType.number, number: true),
                       ]),
-                      _row([_field('currencySymbol', 'Currency symbol'), _field('currencyCode', 'Currency code')]),
+                      _row([_field('currencySymbol', tr('Currency symbol')), _field('currencyCode', tr('Currency code'))]),
                       Padding(
                         padding: const EdgeInsets.only(bottom: Space.md),
                         child: Row(
                           children: [
-                            Expanded(child: Text('Default order type', style: context.text.titleSmall)),
+                            Expanded(child: Text(tr('Default order type'), style: context.text.titleSmall)),
                             SegmentedButton<String>(
                               showSelectedIcon: false,
-                              segments: const [
-                                ButtonSegment(value: 'Dine-In', label: Text('Dine-in')),
-                                ButtonSegment(value: 'Takeaway', label: Text('Takeaway')),
+                              segments: [
+                                ButtonSegment(value: 'Dine-In', label: Text(tr('Dine-in'))),
+                                ButtonSegment(value: 'Takeaway', label: Text(tr('Takeaway'))),
                               ],
                               selected: {_defaultOrderType == 'Takeaway' ? 'Takeaway' : 'Dine-In'},
                               onSelectionChanged: (s) => setState(() {
@@ -449,7 +451,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _autoBill = v;
                           _dirty = true;
                         }),
-                        title: const Text('Auto bill number'),
+                        title: Text(tr('Auto bill number')),
                       ),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
@@ -458,15 +460,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _autoToken = v;
                           _dirty = true;
                         }),
-                        title: const Text('Auto token number'),
+                        title: Text(tr('Auto token number')),
                       ),
                       ListTile(
                         key: const Key('settings-day-ends'),
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('Business day ends at'),
-                        subtitle: const Text(
-                          'Orders after midnight until this time count in the previous day '
-                          '(e.g. open 7 PM – 2 AM = one day). Tokens restart at this time.',
+                        title: Text(tr('Business day ends at')),
+                        subtitle: Text(
+                          tr('Orders after midnight until this time count in the previous day (e.g. open 7 PM – 2 AM = one day). Tokens restart at this time.'),
                         ),
                         trailing: OutlinedButton.icon(
                           onPressed: _pickDayEnd,
@@ -478,53 +479,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 );
                 final receipt = SectionCard(
-                  title: 'Receipt text',
+                  title: tr('Receipt text'),
                   icon: Icons.print_outlined,
                   child: Column(
-                    children: [_field('receiptHeader', 'Header'), _field('thankYouMessage', 'Thank-you message'), _field('receiptFooter', 'Footer')],
+                    children: [_field('receiptHeader', tr('Header')), _field('thankYouMessage', tr('Thank-you message')), _field('receiptFooter', tr('Footer'))],
                   ),
                 );
                 final security = SectionCard(
-                  title: 'Security & privacy',
+                  title: tr('Security & privacy'),
                   icon: Icons.shield_outlined,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       ListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('Manager PIN'),
+                        title: Text(tr('Manager PIN')),
                         subtitle: Text(
                           _pinSet
-                              ? 'On – the Manager view (sales, cancelling bills, settings) asks for it.'
-                              : 'Off – anyone with the cafe login can open the Manager view.',
+                              ? tr('On – the Manager view (sales, cancelling bills, settings) asks for it.')
+                              : tr('Off – anyone with the cafe login can open the Manager view.'),
                         ),
                         trailing: Wrap(
                           spacing: Space.xs,
                           children: [
-                            OutlinedButton(key: const Key('pin-set'), onPressed: _setPin, child: Text(_pinSet ? 'Change' : 'Set PIN')),
-                            if (_pinSet) TextButton(onPressed: _removePin, child: const Text('Remove')),
+                            OutlinedButton(key: const Key('pin-set'), onPressed: _setPin, child: Text(_pinSet ? tr('Change') : tr('Set PIN'))),
+                            if (_pinSet) TextButton(onPressed: _removePin, child: Text(tr('Remove'))),
                           ],
                         ),
                       ),
                       const Divider(height: Space.xl),
-                      Text('Customer data', style: context.text.titleSmall),
+                      Text(tr('Customer data'), style: context.text.titleSmall),
                       const SizedBox(height: 4),
                       Text(
-                        'Names and mobile numbers are used only for bills, WhatsApp and the customer list. '
-                        'They are removed from old bills after the time below (the bills and amounts stay).',
+                        tr('Names and mobile numbers are used only for bills, WhatsApp and the customer list. They are removed from old bills after the time below (the bills and amounts stay).'),
                         style: TextStyle(color: p.inkSubtle, fontSize: 13),
                       ),
                       const SizedBox(height: Space.md),
                       Row(
                         children: [
-                          const Expanded(child: Text('Keep customer numbers for')),
+                          Expanded(child: Text(tr('Keep customer numbers for'))),
                           DropdownButton<int>(
                             value: const [12, 24, 36, 0].contains(_keepMonths) ? _keepMonths : 24,
-                            items: const [
-                              DropdownMenuItem(value: 12, child: Text('12 months')),
-                              DropdownMenuItem(value: 24, child: Text('24 months')),
-                              DropdownMenuItem(value: 36, child: Text('36 months')),
-                              DropdownMenuItem(value: 0, child: Text('Always')),
+                            items: [
+                              DropdownMenuItem(value: 12, child: Text(tr('12 months'))),
+                              DropdownMenuItem(value: 24, child: Text(tr('24 months'))),
+                              DropdownMenuItem(value: 36, child: Text(tr('36 months'))),
+                              DropdownMenuItem(value: 0, child: Text(tr('Always'))),
                             ],
                             onChanged: (v) => setState(() {
                               _keepMonths = v ?? _keepMonths;
@@ -539,26 +539,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: TextButton.icon(
                             onPressed: _removeOldCustomerData,
                             icon: const Icon(Icons.cleaning_services_outlined, size: 18),
-                            label: Text('Remove numbers older than $_keepMonths months now'),
+                            label: Text(tr('Remove numbers older than {0} months now', [_keepMonths])),
                           ),
                         ),
                     ],
                   ),
                 );
+                final language = SectionCard(
+                  title: tr('Language'),
+                  icon: Icons.translate_rounded,
+                  subtitle: tr('For this login on this device. Bills and WhatsApp messages stay in English.'),
+                  child: const Align(alignment: Alignment.centerLeft, child: LanguagePicker()),
+                );
                 final appearance = SectionCard(
-                  title: 'Appearance',
+                  title: tr('Appearance'),
                   icon: Icons.palette_outlined,
-                  subtitle: 'Saved on this device only',
+                  subtitle: tr('Saved on this device only'),
                   child: ValueListenableBuilder<ThemeMode>(
                     valueListenable: ThemeController.instance,
                     builder: (context, mode, _) => Align(
                       alignment: Alignment.centerLeft,
                       child: SegmentedButton<ThemeMode>(
                         showSelectedIcon: false,
-                        segments: const [
-                          ButtonSegment(value: ThemeMode.light, label: Text('Light'), icon: Icon(Icons.light_mode_outlined, size: 18)),
-                          ButtonSegment(value: ThemeMode.dark, label: Text('Dark'), icon: Icon(Icons.dark_mode_outlined, size: 18)),
-                          ButtonSegment(value: ThemeMode.system, label: Text('Auto'), icon: Icon(Icons.brightness_auto_outlined, size: 18)),
+                        segments: [
+                          ButtonSegment(value: ThemeMode.light, label: Text(tr('Light')), icon: Icon(Icons.light_mode_outlined, size: 18)),
+                          ButtonSegment(value: ThemeMode.dark, label: Text(tr('Dark')), icon: Icon(Icons.dark_mode_outlined, size: 18)),
+                          ButtonSegment(value: ThemeMode.system, label: Text(tr('Auto')), icon: Icon(Icons.brightness_auto_outlined, size: 18)),
                         ],
                         selected: {mode},
                         onSelectionChanged: (s) => ThemeController.instance.set(s.first),
@@ -567,7 +573,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 );
                 if (c.maxWidth < 1000) {
-                  return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [profile, billing, security, receipt, appearance]);
+                  return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [language, profile, billing, security, receipt, appearance]);
                 }
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -577,7 +583,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(width: Space.lg),
                     Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [billing, appearance]),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [language, billing, appearance]),
                     ),
                   ],
                 );
@@ -609,7 +615,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         maxLines: maxLines,
         inputFormatters: number ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))] : null,
         decoration: InputDecoration(labelText: required ? '$label *' : label),
-        validator: required ? (v) => (v ?? '').trim().isEmpty ? 'Required' : null : null,
+        validator: required ? (v) => (v ?? '').trim().isEmpty ? tr('Required') : null : null,
       ),
     );
   }

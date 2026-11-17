@@ -10,6 +10,7 @@ import '../../core/widgets/ui.dart';
 import 'receipt_actions.dart';
 import 'receipt_data.dart';
 import 'receipt_view.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 enum BillMode {
   /// Right after a payment was saved.
@@ -90,7 +91,7 @@ class _BillViewState extends State<BillView> {
   Future<void> _shareImage() async {
     if (_png == null) await _capture();
     if (!mounted) return;
-    if (_png == null) return showError(context, 'Could not create the receipt image.');
+    if (_png == null) return showError(context, tr('Could not create the receipt image.'));
     await shareReceiptImage(context, _png!, r);
   }
 
@@ -162,9 +163,9 @@ class _BillViewState extends State<BillView> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(Space.xl, Space.md, Space.sm, 0),
                     child: Row(children: [
-                      Text('RECEIPT', style: TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+                      Text(tr('RECEIPT'), style: TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
                       const Spacer(),
-                      IconButton(tooltip: 'Close', onPressed: _close, icon: const Icon(Icons.close_rounded)),
+                      IconButton(tooltip: tr('Close'), onPressed: _close, icon: const Icon(Icons.close_rounded)),
                     ]),
                   ),
                   Expanded(
@@ -188,15 +189,15 @@ class _BillViewState extends State<BillView> {
     return Scaffold(
       backgroundColor: p.canvas,
       appBar: AppBar(
-        leading: IconButton(tooltip: 'Close', icon: const Icon(Icons.close_rounded), onPressed: _close),
-        title: Text(widget.mode == BillMode.details ? 'Bill ${r.billNo}' : 'Bill'),
+        leading: IconButton(tooltip: tr('Close'), icon: const Icon(Icons.close_rounded), onPressed: _close),
+        title: Text(widget.mode == BillMode.details ? tr('Bill {0}', [r.billNo]) : tr('Bill')),
         actions: [
           PopupMenuButton<String>(
-            tooltip: 'More',
+            tooltip: tr('More'),
             onSelected: (v) => v == 'image' ? _shareImage() : _print(choose: true),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'image', child: ListTile(leading: Icon(Icons.image_outlined), title: Text('Share receipt image'))),
-              PopupMenuItem(value: 'printer', child: ListTile(leading: Icon(Icons.print_outlined), title: Text('Change printer'))),
+            itemBuilder: (_) => [
+              PopupMenuItem(value: 'image', child: ListTile(leading: Icon(Icons.image_outlined), title: Text(tr('Share receipt image')))),
+              PopupMenuItem(value: 'printer', child: ListTile(leading: Icon(Icons.print_outlined), title: Text(tr('Change printer')))),
             ],
           ),
         ],
@@ -218,7 +219,7 @@ class _BillViewState extends State<BillView> {
             ),
           ),
           const SizedBox(height: Space.lg),
-          Text('RECEIPT', style: TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+          Text(tr('RECEIPT'), style: TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
           const SizedBox(height: Space.xs),
           Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 404), child: receipt)),
         ],
@@ -238,7 +239,7 @@ class _BillViewState extends State<BillView> {
                     key: const Key('bill-print'),
                     onPressed: _print,
                     icon: const Icon(Icons.print_rounded, size: 20),
-                    label: const Text('Print'),
+                    label: Text(tr('Print')),
                   ),
                 ),
               ),
@@ -259,12 +260,12 @@ class _StatusHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final (icon, color, tint, title) = switch (mode) {
-      BillMode.paymentSuccess => (Icons.check_rounded, p.success, p.successTint, 'Payment successful'),
-      BillMode.closedUnpaid => (Icons.schedule_rounded, p.warning, p.warningTint, 'Bill closed · payment pending'),
-      BillMode.details when r.isCancelled => (Icons.block_rounded, p.danger, p.dangerTint, 'Cancelled bill'),
+      BillMode.paymentSuccess => (Icons.check_rounded, p.success, p.successTint, tr('Payment successful')),
+      BillMode.closedUnpaid => (Icons.schedule_rounded, p.warning, p.warningTint, tr('Bill closed · payment pending')),
+      BillMode.details when r.isCancelled => (Icons.block_rounded, p.danger, p.dangerTint, tr('Cancelled bill')),
       BillMode.details => r.isPaid
-          ? (Icons.receipt_long_rounded, p.success, p.successTint, 'Paid bill')
-          : (Icons.receipt_long_rounded, p.warning, p.warningTint, r.orderStatus == 'completed' ? 'Closed · payment pending' : 'Running bill'),
+          ? (Icons.receipt_long_rounded, p.success, p.successTint, tr('Paid bill'))
+          : (Icons.receipt_long_rounded, p.warning, p.warningTint, r.orderStatus == 'completed' ? tr('Closed · payment pending') : tr('Running bill')),
     };
     final animate = mode == BillMode.paymentSuccess;
     return Column(
@@ -290,11 +291,11 @@ class _StatusHeader extends StatelessWidget {
         Text(title, key: const Key('bill-status'), style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
         const SizedBox(height: 2),
         Text(
-          [if (r.shopName.isNotEmpty) r.shopName, 'Bill ${r.billNo}'].join(' · '),
+          [if (r.shopName.isNotEmpty) r.shopName, tr('Bill {0}', [r.billNo])].join(' · '),
           style: TextStyle(color: p.inkSubtle),
         ),
         const SizedBox(height: Space.lg),
-        Text(r.isPaid ? 'Amount paid' : 'Bill amount', style: TextStyle(color: p.inkSubtle, fontSize: 13)),
+        Text(r.isPaid ? tr('Amount paid') : tr('Bill amount'), style: TextStyle(color: p.inkSubtle, fontSize: 13)),
         Text(
           receiptMoney(r.total),
           style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, letterSpacing: -0.8, color: p.ink, fontFeatures: const [FontFeature.tabularFigures()]),
@@ -325,22 +326,22 @@ class _Facts extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        fact('Payment', '', trailing: Align(alignment: Alignment.centerLeft, child: StatusChip(
+        fact(tr('Payment'), '', trailing: Align(alignment: Alignment.centerLeft, child: StatusChip(
           r.paymentLabel,
           color: r.isPaid ? p.success : p.warning,
           tint: r.isPaid ? p.successTint : p.warningTint,
         ))),
-        fact('Date & time', receiptDate(r.billTime)),
-        fact(r.isTakeaway && r.tableNo.isEmpty ? 'Order' : 'Table', r.whereLabel),
+        fact(tr('Date & time'), receiptDate(r.billTime)),
+        fact(r.isTakeaway && r.tableNo.isEmpty ? tr('Order') : tr('Table'), r.whereLabel),
         if (r.customerName.isNotEmpty || r.customerPhone.isNotEmpty)
-          fact('Customer', [r.customerName, r.customerPhone].where((s) => s.isNotEmpty).join(' · ')),
-        fact('Items', '${r.itemCount} item${r.itemCount == 1 ? '' : 's'} · $summary'),
-        fact('Order status', r.statusLabel),
-        if (r.isCancelled && r.voidReason.isNotEmpty) fact('Cancel reason', r.voidReason),
+          fact(tr('Customer'), [r.customerName, r.customerPhone].where((s) => s.isNotEmpty).join(' · ')),
+        fact(tr('Items'), tr('{0} item{1} · {2}', [r.itemCount, r.itemCount == 1 ? '' : 's', summary])),
+        fact(tr('Order status'), r.statusLabel),
+        if (r.isCancelled && r.voidReason.isNotEmpty) fact(tr('Cancel reason'), r.voidReason),
         if (r.cashReceived != null)
-          fact('Cash', '${receiptMoney(r.cashReceived!)} received${(r.changeReturned ?? 0) > 0 ? ' · ${receiptMoney(r.changeReturned!)} change' : ''}'),
-        if (r.takenBy.isNotEmpty) fact('Taken by', r.takenBy[0].toUpperCase() + r.takenBy.substring(1)),
-        fact('Order ID', r.orderRef),
+          fact(tr('Cash'), '${receiptMoney(r.cashReceived!)} received${(r.changeReturned ?? 0) > 0 ? ' · ${receiptMoney(r.changeReturned!)} change' : ''}'),
+        if (r.takenBy.isNotEmpty) fact(tr('Taken by'), r.takenBy[0].toUpperCase() + r.takenBy.substring(1)),
+        fact(tr('Order ID'), r.orderRef),
       ],
     );
   }
@@ -375,19 +376,19 @@ class _Actions extends StatelessWidget {
                 key: const Key('bill-print'),
                 onPressed: onPrint,
                 icon: const Icon(Icons.print_rounded, size: 20),
-                label: const Text('Print receipt'),
+                label: Text(tr('Print receipt')),
               ),
             ),
           ),
           const SizedBox(width: Space.xs),
-          IconButton.outlined(tooltip: 'Change printer / paper', onPressed: onChoosePrinter, icon: const Icon(Icons.tune_rounded, size: 20)),
+          IconButton.outlined(tooltip: tr('Change printer / paper'), onPressed: onChoosePrinter, icon: const Icon(Icons.tune_rounded, size: 20)),
         ]),
         const SizedBox(height: Space.sm),
-        _WhatsAppButton(onPressed: onWhatsApp, label: 'Share on WhatsApp'),
+        _WhatsAppButton(onPressed: onWhatsApp, label: tr('Share on WhatsApp')),
         const SizedBox(height: Space.xs),
         Align(
           alignment: Alignment.centerLeft,
-          child: TextButton.icon(onPressed: onShareImage, icon: const Icon(Icons.image_outlined, size: 18), label: const Text('Receipt image')),
+          child: TextButton.icon(onPressed: onShareImage, icon: const Icon(Icons.image_outlined, size: 18), label: Text(tr('Receipt image'))),
         ),
       ],
     );
@@ -407,7 +408,7 @@ class _WhatsAppButton extends StatelessWidget {
           style: FilledButton.styleFrom(backgroundColor: const Color(0xFF128C4A), foregroundColor: Colors.white),
           onPressed: onPressed,
           icon: const Icon(Icons.chat_rounded, size: 20),
-          label: Text(label),
+          label: Text(tr(label)),
         ),
       );
 }

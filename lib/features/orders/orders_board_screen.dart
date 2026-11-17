@@ -13,6 +13,7 @@ import 'order_details_sheet.dart';
 import '../receipt/bill_view.dart';
 import 'order_model.dart';
 import 'order_service.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Live floor view: numbered tables, virtual tables and today's completed bills.
 class OrdersBoardScreen extends StatefulWidget {
@@ -41,7 +42,7 @@ class _OrdersBoardScreenState extends State<OrdersBoardScreen> with DayChangeRef
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Virtual table'),
+        title: Text(tr('Virtual table')),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 400),
           child: Column(
@@ -49,22 +50,22 @@ class _OrdersBoardScreenState extends State<OrdersBoardScreen> with DayChangeRef
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'For customers sitting at another shop or spot. Give it a name you will recognise.',
+                tr('For customers sitting at another shop or spot. Give it a name you will recognise.'),
                 style: TextStyle(color: ctx.palette.inkSubtle),
               ),
               const SizedBox(height: Space.md),
               TextField(
                 controller: ctrl,
                 autofocus: true,
-                decoration: const InputDecoration(labelText: 'Spot name', hintText: 'e.g. Sharma Tea, Shop 4, V-1'),
+                decoration: InputDecoration(labelText: tr('Spot name'), hintText: tr('e.g. Sharma Tea, Shop 4, V-1')),
                 onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
               ),
             ],
           ),
         ),
         actions: [
-          OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Take order')),
+          OutlinedButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: Text(tr('Take order'))),
         ],
       ),
     );
@@ -82,7 +83,7 @@ class _OrdersBoardScreenState extends State<OrdersBoardScreen> with DayChangeRef
           stream: _orders,
           builder: (context, snap) {
             if (snap.hasError) return const ErrorState();
-            if (!snap.hasData) return const LoadingState(label: 'Loading tables…');
+            if (!snap.hasData) return LoadingState(label: tr('Loading tables…'));
             final today = todaysOrders(snap.data!);
             final board = TableBoard.build(today, settings.numberOfTables);
             final completed = today.where((o) => o.isCompleted).toList()
@@ -94,34 +95,26 @@ class _OrdersBoardScreenState extends State<OrdersBoardScreen> with DayChangeRef
 
             return Scaffold(
               backgroundColor: Colors.transparent,
-              floatingActionButton: context.isMobile
-                  ? FloatingActionButton(onPressed: () => _newOrder(), tooltip: 'New order', child: const Icon(Icons.add))
-                  : null,
               body: PageBody(
                 children: [
                   PageHeader(
-                    title: 'Tables',
-                    subtitle: '$running running · $preparing preparing · $ready ready to pay',
+                    title: tr('Tables'),
+                    subtitle: tr('{0} running · {1} preparing · {2} ready to pay', [running, preparing, ready]),
+                    // New orders start by tapping a free table (or a virtual one).
                     actions: [
                       OutlinedButton.icon(
                         onPressed: _addVirtual,
                         icon: const Icon(Icons.add_location_alt_outlined, size: 18),
-                        label: const Text('Virtual table'),
+                        label: Text(tr('Virtual table')),
                       ),
-                      if (!context.isMobile)
-                        FilledButton.icon(
-                          onPressed: () => _newOrder(),
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('New order'),
-                        ),
                     ],
                   ),
                   FilterPills<_Filter>(
                     options: [
-                      (_Filter.all, 'All tables'),
-                      (_Filter.preparing, 'Preparing ($preparing)'),
-                      (_Filter.ready, 'Payment pending ($ready)'),
-                      (_Filter.completed, 'Completed (${completed.length})'),
+                      (_Filter.all, tr('All tables')),
+                      (_Filter.preparing, tr('Preparing ({0})', [preparing])),
+                      (_Filter.ready, tr('Payment pending ({0})', [ready])),
+                      (_Filter.completed, tr('Completed ({0})', [completed.length])),
                     ],
                     selected: _filter,
                     onSelected: (f) => setState(() => _filter = f),
@@ -174,11 +167,11 @@ class _Legend extends StatelessWidget {
       spacing: Space.lg,
       runSpacing: Space.sm,
       children: [
-        dot(p.success, 'Free'),
-        dot(p.warning, 'Ordered'),
-        dot(p.info, 'Preparing'),
-        dot(p.primary, 'Ready / pay'),
-        dot(p.violet, 'Virtual'),
+        dot(p.success, tr('Free')),
+        dot(p.warning, tr('Ordered')),
+        dot(p.info, tr('Preparing')),
+        dot(p.primary, tr('Ready / pay')),
+        dot(p.violet, tr('Virtual')),
       ],
     );
   }
@@ -186,11 +179,11 @@ class _Legend extends StatelessWidget {
 
 (Color, Color, String) _statusLook(BuildContext context, PosOrder? o, {bool virtual = false}) {
   final p = context.palette;
-  if (o == null) return (p.success, p.surface, 'Free');
+  if (o == null) return (p.success, p.surface, tr('Free'));
   return switch (o.status) {
-    'preparing' => (p.info, p.infoTint, 'Preparing'),
-    'ready' => (p.primary, p.primaryTint, 'Ready · pay'),
-    _ => virtual ? (p.violet, p.violetTint, 'Ordered') : (p.warning, p.warningTint, 'Ordered'),
+    'preparing' => (p.info, p.infoTint, tr('Preparing')),
+    'ready' => (p.primary, p.primaryTint, tr('Ready · pay')),
+    _ => virtual ? (p.violet, p.violetTint, tr('Ordered')) : (p.warning, p.warningTint, tr('Ordered')),
   };
 }
 
@@ -222,10 +215,10 @@ class _TablesGrid extends StatelessWidget {
       tiles.add(_TableTile(label: v.tableNo, order: v, virtual: true, onTap: () => onOrder(v)));
     }
     if (tiles.isEmpty) {
-      return const EmptyState(
+      return EmptyState(
         icon: Icons.table_restaurant_outlined,
-        title: 'No tables here',
-        message: 'Nothing matches this filter right now.',
+        title: tr('No tables here'),
+        message: tr('Nothing matches this filter right now.'),
       );
     }
     return ResponsiveGrid(minTileWidth: context.isMobile ? 104 : 150, spacing: Space.md, maxColumns: 10, children: tiles);
@@ -281,7 +274,7 @@ class _TableTile extends StatelessWidget {
                 ),
                 const Spacer(),
                 Text(
-                  virtual ? label : 'T$label',
+                  virtual ? label : tr('T{0}', [label]),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: virtual ? 18 : 26, fontWeight: FontWeight.w800, color: p.ink, letterSpacing: -0.5),
@@ -298,7 +291,7 @@ class _TableTile extends StatelessWidget {
                       if (o.createdAt != null) TableTimer(start: o.createdAt!, stoppedAt: o.isPaid ? (o.paidAt ?? o.completedAt) : null),
                       Flexible(
                         child: Text(
-                          ' · ${o.itemCount} items',
+                          tr(' · {0} items', [o.itemCount]),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(fontSize: 12, color: p.inkSubtle),
@@ -308,7 +301,7 @@ class _TableTile extends StatelessWidget {
                   ),
                 ] else
                   Text(
-                    'Tap to order',
+                    tr('Tap to order'),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 12, color: p.inkSubtle),
@@ -330,7 +323,7 @@ class _CompletedList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    if (orders.isEmpty) return const EmptyState(icon: Icons.receipt_long_outlined, title: 'No completed bills yet today');
+    if (orders.isEmpty) return EmptyState(icon: Icons.receipt_long_outlined, title: tr('No completed bills yet today'));
     return SurfaceCard(
       child: Column(
         children: [

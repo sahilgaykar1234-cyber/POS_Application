@@ -7,6 +7,7 @@ import '../../core/data/firestore_paths.dart';
 import '../../core/services/audit_service.dart';
 import '../admin/admin_models.dart';
 import 'upi_payment.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Thrown when a claim can't be sent; [message] is ready to show.
 class ClaimException implements Exception {
@@ -50,9 +51,9 @@ class RenewalService {
     required String cycle,
   }) async {
     final ref = normalizeUtr(utr);
-    if (ref == null) throw const ClaimException('Enter the 12-digit UPI reference number (UTR) from your UPI app.');
+    if (ref == null) throw ClaimException(tr('Enter the 12-digit UPI reference number (UTR) from your UPI app.'));
     final user = AuthService.instance.currentUser;
-    if (user == null) throw const ClaimException('Please sign in again.');
+    if (user == null) throw ClaimException(tr('Please sign in again.'));
 
     final batch = FirestorePaths.db.batch();
     batch.set(FirestorePaths.paymentClaim(cafeId), {
@@ -71,12 +72,12 @@ class RenewalService {
     try {
       await batch.commit().timeout(const Duration(seconds: 20));
     } on TimeoutException {
-      throw const ClaimException('No internet connection. It will be sent automatically when you are back online.');
+      throw ClaimException(tr('No internet connection. It will be sent automatically when you are back online.'));
     } on FirebaseException catch (e) {
       if (e.code == 'permission-denied') {
-        throw const ClaimException('This UPI reference number has already been used. Please check it in your UPI app.');
+        throw ClaimException(tr('This UPI reference number has already been used. Please check it in your UPI app.'));
       }
-      throw ClaimException('Could not send it (${e.code}). Please try again.');
+      throw ClaimException(tr('Could not send it ({0}). Please try again.', [e.code]));
     }
     unawaited(AuditService.instance.log('payment.claim', cafeId: cafeId, details: {'utr': ref, 'amount': amount, 'plan': plan.name, 'cycle': cycle}));
   }

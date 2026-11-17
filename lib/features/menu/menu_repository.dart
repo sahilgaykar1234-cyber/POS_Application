@@ -1,3 +1,4 @@
+import 'package:pos_app/core/i18n/tr.dart';
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -87,7 +88,7 @@ class MenuRepository {
     final items = await _items.where('categoryId', isEqualTo: id).limit(1).get();
     final subs = await _subs.where('categoryId', isEqualTo: id).limit(1).get();
     if (items.docs.isNotEmpty || subs.docs.isNotEmpty) {
-      throw MenuActionBlocked('This category still has items or subcategories. Move or delete them first.');
+      throw MenuActionBlocked(tr('This category still has items or subcategories. Move or delete them first.'));
     }
     await _cats.doc(id).delete();
   }
@@ -113,7 +114,7 @@ class MenuRepository {
   Future<void> deleteSubcategory(String id) async {
     final items = await _items.where('subcategoryId', isEqualTo: id).limit(1).get();
     if (items.docs.isNotEmpty) {
-      throw MenuActionBlocked('This subcategory still has items. Move or delete them first.');
+      throw MenuActionBlocked(tr('This subcategory still has items. Move or delete them first.'));
     }
     await _subs.doc(id).delete();
   }
@@ -165,7 +166,7 @@ class MenuRepository {
   /// returns its download URL.
   Future<String> uploadItemImage(String itemId, Uint8List bytes, String contentType) async {
     if (bytes.lengthInBytes > 2 * 1024 * 1024) {
-      throw MenuActionBlocked('Image is too large. Please use a photo under 2 MB.');
+      throw MenuActionBlocked(tr('Image is too large. Please use a photo under 2 MB.'));
     }
     final ext = contentType.contains('png') ? 'png' : (contentType.contains('webp') ? 'webp' : 'jpg');
     final ref = FirebaseStorage.instance

@@ -12,6 +12,7 @@ import '../orders/whatsapp_launch.dart';
 import 'receipt_data.dart';
 import 'receipt_html.dart';
 import '../../core/utils/friendly_error.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Print / WhatsApp / share actions for a SAVED bill. They only read the
 /// order they are given (by its id) – they never change the order, its
@@ -24,14 +25,15 @@ enum ReceiptPrinter {
   a4('A4 / normal printer', Icons.description_outlined),
   usb('USB thermal printer (direct)', Icons.usb_rounded);
 
-  const ReceiptPrinter(this.label, this.icon);
-  final String label;
+  const ReceiptPrinter(this.englishLabel, this.icon);
+  final String englishLabel;
+  String get label => tr(englishLabel);
   final IconData icon;
 
   String get hint => switch (this) {
-    ReceiptPrinter.usb => 'Prints straight to a USB ESC/POS printer (Chrome / Edge)',
-    ReceiptPrinter.a4 => 'Opens the print dialog with an A4 page',
-    _ => 'Opens the print dialog sized for receipt paper',
+    ReceiptPrinter.usb => tr('Prints straight to a USB ESC/POS printer (Chrome / Edge)'),
+    ReceiptPrinter.a4 => tr('Opens the print dialog with an A4 page'),
+    _ => tr('Opens the print dialog sized for receipt paper'),
   };
 
   PaperSize? get paper => switch (this) {
@@ -77,7 +79,7 @@ Future<void> printSavedBill(
 }) async {
   final options = ReceiptPrinter.available;
   if (options.isEmpty) {
-    showError(context, 'Printing is available in the web app.');
+    showError(context, tr('Printing is available in the web app.'));
     return;
   }
   var printer = choose ? null : await savedReceiptPrinter();
@@ -113,9 +115,9 @@ Future<ReceiptPrinter?> chooseReceiptPrinter(BuildContext context) async {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Print receipt on', style: ctx.text.titleLarge),
+          Text(tr('Print receipt on'), style: ctx.text.titleLarge),
           const SizedBox(height: 4),
-          Text('Your choice is remembered on this device.', style: TextStyle(color: ctx.palette.inkSubtle, fontSize: 13)),
+          Text(tr('Your choice is remembered on this device.'), style: TextStyle(color: ctx.palette.inkSubtle, fontSize: 13)),
           const SizedBox(height: Space.md),
           for (final p in ReceiptPrinter.available)
             ListTile(
@@ -149,17 +151,17 @@ Future<void> shareSavedBillOnWhatsApp(
     if (entered.isEmpty) {
       // "Choose chat in WhatsApp": no number, the user picks the chat there.
       final ok = await launchUrl(Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}'), mode: LaunchMode.externalApplication);
-      if (!ok && context.mounted) showError(context, 'Could not open WhatsApp.');
+      if (!ok && context.mounted) showError(context, tr('Could not open WhatsApp.'));
       return;
     }
     number = normalizeWhatsAppNumber(entered);
     if (number == null) {
-      if (context.mounted) showError(context, 'Please enter a valid 10-digit mobile number.');
+      if (context.mounted) showError(context, tr('Please enter a valid 10-digit mobile number.'));
       return;
     }
   }
   final ok = await openWhatsAppChat(number, text);
-  if (!ok && context.mounted) showError(context, 'Could not open WhatsApp.');
+  if (!ok && context.mounted) showError(context, tr('Could not open WhatsApp.'));
 }
 
 /// Returns the typed number, '' for "choose the chat in WhatsApp", or null.
@@ -168,14 +170,14 @@ Future<String?> _askNumber(BuildContext context, String initial) {
   return showDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Share bill on WhatsApp'),
+      title: Text(tr('Share bill on WhatsApp')),
       content: SizedBox(
         width: 380,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('This bill has no customer mobile number.', style: TextStyle(color: ctx.palette.inkSubtle)),
+            Text(tr('This bill has no customer mobile number.'), style: TextStyle(color: ctx.palette.inkSubtle)),
             const SizedBox(height: Space.md),
             TextField(
               key: const Key('wa-number'),
@@ -183,7 +185,7 @@ Future<String?> _askNumber(BuildContext context, String initial) {
               autofocus: true,
               keyboardType: TextInputType.phone,
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]'))],
-              decoration: const InputDecoration(labelText: 'Customer mobile number', prefixIcon: Icon(Icons.phone_outlined), hintText: '10-digit mobile'),
+              decoration: InputDecoration(labelText: tr('Customer mobile number'), prefixIcon: Icon(Icons.phone_outlined), hintText: tr('10-digit mobile')),
               onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
             ),
           ],
@@ -191,8 +193,8 @@ Future<String?> _askNumber(BuildContext context, String initial) {
       ),
       actionsOverflowButtonSpacing: Space.sm,
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, ''), child: const Text('Choose chat in WhatsApp')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Open WhatsApp')),
+        TextButton(onPressed: () => Navigator.pop(ctx, ''), child: Text(tr('Choose chat in WhatsApp'))),
+        FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: Text(tr('Open WhatsApp'))),
       ],
     ),
   );
@@ -203,11 +205,11 @@ Future<String?> _askNumber(BuildContext context, String initial) {
 /// it can be attached in WhatsApp Web.
 Future<void> shareReceiptImage(BuildContext context, Uint8List png, ReceiptData r) async {
   final name = 'Bill-${r.billNo.replaceAll(RegExp(r'[^A-Za-z0-9-]'), '-')}.png';
-  final caption = [if (r.shopName.isNotEmpty) r.shopName, 'Bill ${r.billNo}', receiptMoney(r.total)].join(' · ');
+  final caption = [if (r.shopName.isNotEmpty) r.shopName, tr('Bill {0}', [r.billNo]), receiptMoney(r.total)].join(' · ');
   if (canShareFile(name, 'image/png')) {
     final result = await shareFile(png, name, 'image/png', text: caption);
     if (result != ShareFileResult.unsupported) return;
   }
   downloadFile(png, name, 'image/png');
-  if (context.mounted) showSuccess(context, 'Receipt image saved – attach it in WhatsApp.');
+  if (context.mounted) showSuccess(context, tr('Receipt image saved – attach it in WhatsApp.'));
 }

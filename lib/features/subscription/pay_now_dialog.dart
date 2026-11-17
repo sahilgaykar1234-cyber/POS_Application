@@ -9,6 +9,7 @@ import '../../core/widgets/ui.dart';
 import '../admin/admin_models.dart';
 import 'renewal_service.dart';
 import 'upi_payment.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// "Pay now" for a cafe's Manager: pay the platform owner by UPI (QR or the
 /// UPI app), then send the UPI reference number. The subscription is renewed
@@ -81,11 +82,11 @@ class _PayNowDialogState extends State<_PayNowDialog> {
         plan: plan,
         cycle: cycle,
       );
-      if (mounted) showSuccess(context, 'Payment details sent. We\'ll confirm it shortly.');
+      if (mounted) showSuccess(context, tr('Payment details sent. We\'ll confirm it shortly.'));
     } on ClaimException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (_) {
-      if (mounted) setState(() => _error = 'Could not send it. Please try again.');
+      if (mounted) setState(() => _error = tr('Could not send it. Please try again.'));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -94,7 +95,7 @@ class _PayNowDialogState extends State<_PayNowDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Renew your subscription'),
+      title: Text(tr('Renew your subscription')),
       scrollable: true,
       content: SizedBox(
         width: 520,
@@ -109,7 +110,7 @@ class _PayNowDialogState extends State<_PayNowDialog> {
                 stream: _plans,
                 builder: (context, plansSnap) {
                   if (payeeSnap.hasError || plansSnap.hasError) {
-                    return const Text('Could not load the payment details. Please check your internet connection.');
+                    return Text(tr('Could not load the payment details. Please check your internet connection.'));
                   }
                   if (!payeeSnap.hasData || !plansSnap.hasData) {
                     return const Padding(padding: EdgeInsets.all(Space.xl), child: Center(child: CircularProgressIndicator()));
@@ -117,7 +118,7 @@ class _PayNowDialogState extends State<_PayNowDialog> {
                   final payee = payeeSnap.data!;
                   final plans = plansSnap.data!;
                   if (!payee.isSet || plans.isEmpty) {
-                    return const Text('Online payment is not set up yet. Please contact support to renew.');
+                    return Text(tr('Online payment is not set up yet. Please contact support to renew.'));
                   }
                   return _payForm(context, payee, plans, claim);
                 },
@@ -126,7 +127,7 @@ class _PayNowDialogState extends State<_PayNowDialog> {
           },
         ),
       ),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Close')))],
     );
   }
 
@@ -138,11 +139,11 @@ class _PayNowDialogState extends State<_PayNowDialog> {
       children: [
         Icon(Icons.hourglass_top_rounded, size: 40, color: p.info),
         const SizedBox(height: Space.md),
-        Text('Payment received – being verified', textAlign: TextAlign.center, style: context.text.titleMedium),
+        Text(tr('Payment received – being verified'), textAlign: TextAlign.center, style: context.text.titleMedium),
         const SizedBox(height: Space.sm),
         Text(
           '${Fmt.money(claim.amount)} · ${claim.planName} ${claim.cycleLabel.toLowerCase()} · UTR ${claim.utr}\n'
-          'Sent ${Fmt.dateTime(claim.submittedAt)}. Your subscription is renewed as soon as we confirm the payment.',
+          '${tr('Sent {0}. Your subscription is renewed as soon as we confirm the payment.', [Fmt.dateTime(claim.submittedAt)])}',
           textAlign: TextAlign.center,
           style: TextStyle(color: p.inkMuted, height: 1.4),
         ),
@@ -167,8 +168,8 @@ class _PayNowDialogState extends State<_PayNowDialog> {
             padding: const EdgeInsets.all(Space.md),
             decoration: BoxDecoration(color: p.dangerTint, borderRadius: BorderRadius.circular(10)),
             child: Text(
-              'Your last payment (UTR ${last.utr}) could not be verified'
-              '${last.rejectReason.isEmpty ? '' : ': ${last.rejectReason}'}. Please check and try again.',
+              tr('Your last payment (UTR {0}) could not be verified{1}. Please check and try again.',
+                  [last.utr, last.rejectReason.isEmpty ? '' : ': ${last.rejectReason}']),
               style: TextStyle(color: p.danger, fontWeight: FontWeight.w600),
             ),
           ),
@@ -178,7 +179,7 @@ class _PayNowDialogState extends State<_PayNowDialog> {
           DropdownButtonFormField<String>(
             initialValue: plan.id,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Plan'),
+            decoration: InputDecoration(labelText: tr('Plan')),
             items: [for (final x in plans) DropdownMenuItem(value: x.id, child: Text('${x.name} · ${x.priceLabel}', overflow: TextOverflow.ellipsis))],
             onChanged: (v) => setState(() => _planId = v),
           ),
@@ -186,9 +187,9 @@ class _PayNowDialogState extends State<_PayNowDialog> {
         ],
         if (plan.monthlyPrice > 0 && plan.yearlyPrice > 0) ...[
           SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'monthly', label: Text('Monthly')),
-              ButtonSegment(value: 'yearly', label: Text('Yearly')),
+            segments: [
+              ButtonSegment(value: 'monthly', label: Text(tr('Monthly'))),
+              ButtonSegment(value: 'yearly', label: Text(tr('Yearly'))),
             ],
             selected: {cycle},
             onSelectionChanged: (s) => setState(() => _cycle = s.first),
@@ -196,10 +197,10 @@ class _PayNowDialogState extends State<_PayNowDialog> {
           const SizedBox(height: Space.md),
         ],
         Text(Fmt.money(amount), textAlign: TextAlign.center, style: context.text.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
-        Text('${plan.name} · ${cycle == 'yearly' ? '1 year' : '1 month'} · until ${Fmt.date(until)}',
+        Text('${plan.name} · ${cycle == 'yearly' ? tr('1 year') : tr('1 month')} · ${tr('until {0}', [Fmt.date(until)])}',
             textAlign: TextAlign.center, style: TextStyle(color: p.inkSubtle)),
         const SizedBox(height: Space.lg),
-        Text('1. Pay by UPI', style: context.text.titleSmall),
+        Text(tr('1. Pay by UPI'), style: context.text.titleSmall),
         const SizedBox(height: Space.sm),
         Center(
           child: Container(
@@ -223,7 +224,7 @@ class _PayNowDialogState extends State<_PayNowDialog> {
           ),
         ),
         const SizedBox(height: Space.xs),
-        Text('Scan with GPay, PhonePe, Paytm or any UPI app', textAlign: TextAlign.center, style: TextStyle(color: p.inkSubtle, fontSize: 12.5)),
+        Text(tr('Scan with GPay, PhonePe, Paytm or any UPI app'), textAlign: TextAlign.center, style: TextStyle(color: p.inkSubtle, fontSize: 12.5)),
         const SizedBox(height: Space.sm),
         Wrap(
           alignment: WrapAlignment.center,
@@ -233,12 +234,12 @@ class _PayNowDialogState extends State<_PayNowDialog> {
             FilledButton.tonalIcon(
               onPressed: () => launchUrl(Uri.parse(link), webOnlyWindowName: '_self'),
               icon: const Icon(Icons.open_in_new_rounded, size: 18),
-              label: const Text('Open UPI app'),
+              label: Text(tr('Open UPI app')),
             ),
             OutlinedButton.icon(
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: payee.upiId));
-                showSuccess(context, 'UPI ID copied');
+                showSuccess(context, tr('UPI ID copied'));
               },
               icon: const Icon(Icons.copy_rounded, size: 18),
               label: Text(payee.upiId),
@@ -246,7 +247,7 @@ class _PayNowDialogState extends State<_PayNowDialog> {
           ],
         ),
         const SizedBox(height: Space.lg),
-        Text('2. Send the UPI reference number', style: context.text.titleSmall),
+        Text(tr('2. Send the UPI reference number'), style: context.text.titleSmall),
         const SizedBox(height: Space.sm),
         TextField(
           key: const Key('claim-utr'),
@@ -255,8 +256,8 @@ class _PayNowDialogState extends State<_PayNowDialog> {
           maxLength: 14,
           inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9 ]'))],
           decoration: InputDecoration(
-            labelText: 'UPI reference no. (UTR, 12 digits)',
-            helperText: 'In your UPI app: open the payment → "UPI Ref No." / "UTR"',
+            labelText: tr('UPI reference no. (UTR, 12 digits)'),
+            helperText: tr('In your UPI app: open the payment → "UPI Ref No." / "UTR"'),
             errorText: _error,
           ),
         ),
@@ -264,12 +265,11 @@ class _PayNowDialogState extends State<_PayNowDialog> {
         FilledButton(
           key: const Key('claim-send'),
           onPressed: _sending ? null : () => _send(plan, cycle),
-          child: Text(_sending ? 'Sending…' : 'I\'ve paid'),
+          child: Text(_sending ? tr('Sending…') : tr('I\'ve paid')),
         ),
         const SizedBox(height: Space.sm),
         Text(
-          'We renew your subscription as soon as we see the payment in our account (usually within a few hours). '
-          'Sending a reference number alone does not renew it.',
+          tr('We renew your subscription as soon as we see the payment in our account (usually within a few hours). Sending a reference number alone does not renew it.'),
           style: TextStyle(color: p.inkSubtle, fontSize: 12),
         ),
       ],

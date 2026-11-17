@@ -9,6 +9,7 @@ import '../../core/widgets/ui.dart';
 import '../orders/order_model.dart';
 import '../orders/order_service.dart';
 import 'order_alerts.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Wraps the Captain (kitchen) screen: when the Manager places an order or
 /// adds items, a pop-up card slides in with a chime, and – if the browser
@@ -94,7 +95,7 @@ class _OrderAlertsHostState extends State<OrderAlertsHost> {
     try {
       await OrderService.instance.setStatus(a.order.id, 'preparing');
     } catch (_) {
-      if (mounted) showError(context, 'Could not update. Please check your connection.');
+      if (mounted) showError(context, tr('Could not update. Please check your connection.'));
     }
   }
 
@@ -131,7 +132,7 @@ class _OrderAlertsHostState extends State<OrderAlertsHost> {
                     if (more > 0)
                       Align(
                         alignment: Alignment.centerRight,
-                        child: Chip(label: Text('+$more more new')),
+                        child: Chip(label: Text(tr('+{0} more new', [more]))),
                       ),
                   ],
                 ),
@@ -201,7 +202,7 @@ class _AlertCard extends StatelessWidget {
                     ),
                   ),
                   IconButton(
-                    tooltip: 'Dismiss',
+                    tooltip: tr('Dismiss'),
                     visualDensity: VisualDensity.compact,
                     onPressed: onDismiss,
                     icon: Icon(Icons.close_rounded, color: p.inkSubtle, size: 20),
@@ -224,11 +225,11 @@ class _AlertCard extends StatelessWidget {
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                       ),
-                    if (items.length > 4) Text('+${items.length - 4} more items', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
+                    if (items.length > 4) Text(tr('+{0} more items', [items.length - 4]), style: TextStyle(color: p.inkSubtle, fontSize: 12)),
                     if (note.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
-                        child: Text('Note: $note',
+                        child: Text(tr('Note: {0}', [note]),
                             maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: p.warning, fontWeight: FontWeight.w600, fontSize: 13)),
                       ),
                     const SizedBox(height: Space.md),
@@ -237,11 +238,11 @@ class _AlertCard extends StatelessWidget {
                         child: FilledButton.icon(
                           onPressed: onStart,
                           icon: const Icon(Icons.local_fire_department_outlined, size: 18),
-                          label: const Text('Start cooking'),
+                          label: Text(tr('Start cooking')),
                         ),
                       ),
                       const SizedBox(width: Space.sm),
-                      OutlinedButton(onPressed: onDismiss, child: const Text('OK')),
+                      OutlinedButton(onPressed: onDismiss, child: Text(tr('OK'))),
                     ]),
                   ],
                 ),
@@ -272,23 +273,23 @@ class _SystemAlertsButtonState extends State<SystemAlertsButton> {
     final on = _perm == 'granted';
     return IconButton(
       tooltip: on
-          ? 'Order alerts are on'
+          ? tr('Order alerts are on')
           : _perm == 'denied'
-              ? 'Notifications are blocked in the browser settings'
-              : 'Turn on order alerts',
+              ? tr('Notifications are blocked in the browser settings')
+              : tr('Turn on order alerts'),
       onPressed: () async {
         playOrderChime(); // also unlocks sound in the browser
         if (on) {
-          showSuccess(context, 'Order alerts are on. You will hear a chime for new orders.');
+          showSuccess(context, tr('Order alerts are on. You will hear a chime for new orders.'));
           return;
         }
         final r = await requestSystemAlerts();
         if (!mounted) return;
         setState(() => _perm = r);
         if (r == 'granted') {
-          showSuccess(this.context, 'Order alerts turned on');
+          showSuccess(this.context, tr('Order alerts turned on'));
         } else {
-          showError(this.context, 'Notifications are blocked. Allow them from the lock icon in the address bar.');
+          showError(this.context, tr('Notifications are blocked. Allow them from the lock icon in the address bar.'));
         }
       },
       icon: Icon(on ? Icons.notifications_active_outlined : Icons.notifications_off_outlined, color: on ? null : context.palette.warning),

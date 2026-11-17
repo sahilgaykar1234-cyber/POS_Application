@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'bill_numbers.dart';
 
 import 'bill.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Read-only view of an order document (fields exactly as stored).
 class PosOrder {
@@ -55,7 +56,7 @@ class PosOrder {
   DateTime? get pickupAt => (data['pickupAt'] as Timestamp?)?.toDate();
 
   /// "Token #12" or, without a token, the bill number.
-  String get tokenLabel => tokenNo != null ? 'Token #$tokenNo' : billNo;
+  String get tokenLabel => tokenNo != null ? tr('Token #{0}', [tokenNo]) : billNo;
 
   /// Takeaway customer name ("Walk-in" when none was given).
   String get takeawayName {
@@ -69,22 +70,22 @@ class PosOrder {
 
   String get paymentLabel {
     final m = methodFromStatus(paymentStatus);
-    if (m != null) return m.label;
-    return isPaid ? 'Paid' : 'Unpaid';
+    if (m != null) return tr(m.label);
+    return isPaid ? tr('Paid') : tr('Unpaid');
   }
 
   /// "Rahul (Table 4)" style label used across the app (unchanged logic).
   String get displayName => isTakeaway && tableNo.isEmpty && tokenNo != null
-      ? '$takeawayName (Token #$tokenNo)'
+      ? tr('{0} (Token #{1})', [takeawayName, tokenNo])
       : formatCustomerDisplayName(customerName, tableNo.isEmpty ? null : tableNo);
 
   /// Kitchen-facing status label.
   String get statusLabel => switch (status) {
-        'preparing' => 'Preparing',
-        'ready' => 'Ready',
-        'completed' => 'Completed',
-        'cancelled' => 'Cancelled',
-        _ => 'Ordered',
+        'preparing' => tr('Preparing'),
+        'ready' => tr('Ready'),
+        'completed' => tr('Completed'),
+        'cancelled' => tr('Cancelled'),
+        _ => tr('Ordered'),
       };
 }
 

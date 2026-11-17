@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens.dart';
 import '../../core/web/html_video.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// The product overview film (1:44, music only), served with the web app
 /// from web/videos/. Nothing is downloaded until someone opens it.
@@ -45,13 +46,13 @@ class _ProductVideoDialog extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      'Cafe POS in $kProductVideoLength',
+                      tr('Cafe POS in {0}', [kProductVideoLength]),
                       style: TextStyle(color: p.surface, fontWeight: FontWeight.w700, fontSize: 15),
                     ),
                   ),
                   IconButton(
                     key: const Key('product-video-close'),
-                    tooltip: 'Close',
+                    tooltip: tr('Close'),
                     onPressed: () => Navigator.pop(context),
                     icon: Icon(Icons.close_rounded, color: p.surface),
                   ),
@@ -69,7 +70,7 @@ class _ProductVideoDialog extends StatelessWidget {
                       color: Colors.black,
                       child: Center(
                         child: Text(
-                          'Open the web app to watch the video.',
+                          tr('Open the web app to watch the video.'),
                           textAlign: TextAlign.center,
                           style: TextStyle(color: p.surface),
                         ),
@@ -91,7 +92,7 @@ class ProductVideoButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    const label = Text('See how it works ($kProductVideoLength)');
+    final label = Text(tr('See how it works ({0})', [kProductVideoLength]));
     const icon = Icon(Icons.play_circle_fill_rounded, size: 22);
     if (onDark) {
       return FilledButton.icon(

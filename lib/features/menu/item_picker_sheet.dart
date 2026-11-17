@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens.dart';
 import 'menu_models.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Asks which size/add-ons to use for [item]. Returns null if cancelled.
 /// Items with a single size and no add-ons don't need this sheet.
@@ -50,7 +51,7 @@ class _ItemPickerState extends State<_ItemPicker> {
               ),
             const SizedBox(height: Space.lg),
             if (item.variants.length > 1) ...[
-              Text('Size', style: context.text.titleSmall),
+              Text(tr('Size'), style: context.text.titleSmall),
               const SizedBox(height: Space.sm),
               for (final v in item.variants)
                 Padding(
@@ -93,7 +94,7 @@ class _ItemPickerState extends State<_ItemPicker> {
             ],
             if (_available.isNotEmpty) ...[
               const SizedBox(height: Space.sm),
-              Text('Add-ons', style: context.text.titleSmall),
+              Text(tr('Add-ons'), style: context.text.titleSmall),
               for (final a in _available)
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
@@ -109,7 +110,7 @@ class _ItemPickerState extends State<_ItemPicker> {
               height: 52,
               child: FilledButton(
                 onPressed: () => Navigator.pop(context, _line),
-                child: Text('Add to order  ·  ₹${formatPrice(_line.unitPrice)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                child: Text(tr('Add to order  ·  ₹{0}', [formatPrice(_line.unitPrice)]), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
               ),
             ),
           ],

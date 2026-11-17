@@ -6,6 +6,7 @@ import '../config/app_config.dart';
 import '../data/firestore_paths.dart';
 import '../web/favicon.dart';
 import 'app_user.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// All authentication goes through here. Passwords are handled entirely by
 /// Firebase Authentication — the app never stores or sees them.
@@ -70,6 +71,7 @@ class AuthService {
     currentUser = null;
     FirestorePaths.setActiveCafe(null);
     applyFavicon(null); // back to the default icon on the login screen
+    LanguageController.instance.useFor(null);
     await _auth.signOut();
   }
 
@@ -82,28 +84,27 @@ class AuthService {
         case 'wrong-password':
         case 'user-not-found':
         case 'invalid-login-credentials':
-          return 'Incorrect username or password.';
+          return tr('Incorrect username or password.');
         case 'invalid-email':
-          return 'Please enter a valid username or email.';
+          return tr('Please enter a valid username or email.');
         case 'user-disabled':
-          return 'This account has been disabled. Please contact your manager.';
+          return tr('This account has been disabled. Please contact your manager.');
         case 'too-many-requests':
-          return 'Too many attempts. Please wait a few minutes and try again.';
+          return tr('Too many attempts. Please wait a few minutes and try again.');
         case 'network-request-failed':
-          return 'No internet connection. Please check your network.';
+          return tr('No internet connection. Please check your network.');
       }
-      return error.message ?? 'Sign-in failed. Please try again.';
+      return error.message ?? tr('Sign-in failed. Please try again.');
     }
     if (error is FirebaseFunctionsException) {
       // These codes mean the server functions are not reachable/deployed
       // (e.g. Cloud Functions not set up yet), not a problem with the input.
       const serverDown = ['internal', 'not-found', 'unavailable', 'unimplemented', 'deadline-exceeded'];
       if (serverDown.contains(error.code)) {
-        return 'This needs the server setup, which is not active yet. '
-            'Please ask the owner to add staff for now.';
+        return tr('This needs the server setup, which is not active yet. Please ask the owner to add staff for now.');
       }
-      return error.message ?? 'Request failed. Please try again.';
+      return error.message ?? tr('Request failed. Please try again.');
     }
-    return 'Something went wrong. Please try again.';
+    return tr('Something went wrong. Please try again.');
   }
 }

@@ -18,6 +18,7 @@ import '../utils/formatters.dart';
 import '../widgets/message_screen.dart';
 import 'app_user.dart';
 import 'auth_service.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Signs out from anywhere: closes any open sub-screens first, then signs out
 /// so [AuthGate] (the root route) shows the login screen.
@@ -63,6 +64,7 @@ class _SignedInGateState extends State<_SignedInGate> {
   void initState() {
     super.initState();
     _appUser = AuthService.instance.loadAppUser(widget.user);
+    LanguageController.instance.useFor(widget.user.uid);
   }
 
   void _retry() => setState(() => _appUser = AuthService.instance.loadAppUser(widget.user));
@@ -73,33 +75,32 @@ class _SignedInGateState extends State<_SignedInGate> {
       future: _appUser,
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
-          return MessageScreen.loading('Checking your account…');
+          return MessageScreen.loading(tr('Checking your account…'));
         }
         if (snap.hasError) {
           return MessageScreen(
             icon: Icons.wifi_off_rounded,
-            title: 'Could not load your account',
-            message: 'Please check your internet connection and try again.',
-            actionLabel: 'Retry',
+            title: tr('Could not load your account'),
+            message: tr('Please check your internet connection and try again.'),
+            actionLabel: tr('Retry'),
             onAction: _retry,
           );
         }
 
         final appUser = snap.data!;
         if (appUser.loginDisabled) {
-          return const _SignOutMessage(
+          return _SignOutMessage(
             icon: Icons.lock_outline_rounded,
-            title: 'This login is turned off',
-            message: 'Please contact the administrator to turn it on again. Your cafe\'s data is safe.',
+            title: tr('This login is turned off'),
+            message: tr('Please contact the administrator to turn it on again. Your cafe\'s data is safe.'),
           );
         }
         if (!appUser.hasValidAssignment) {
           return _SignOutMessage(
             icon: Icons.manage_accounts_outlined,
-            title: 'Account not set up',
+            title: tr('Account not set up'),
             message:
-                'Your account (${appUser.email}) has no role assigned yet. '
-                'Please ask your manager or the administrator to set it up.',
+                tr('Your account ({0}) has no role assigned yet. Please ask your manager or the administrator to set it up.', [appUser.email]),
           );
         }
 
@@ -123,10 +124,10 @@ class _CafeGate extends StatelessWidget {
       stream: FirestorePaths.users().doc(user.uid).snapshots(),
       builder: (context, me) {
         if (me.data?.data()?['status'] == 'disabled') {
-          return const _SignOutMessage(
+          return _SignOutMessage(
             icon: Icons.lock_outline_rounded,
-            title: 'This login is turned off',
-            message: 'Please contact the administrator to turn it on again. Your cafe\'s data is safe.',
+            title: tr('This login is turned off'),
+            message: tr('Please contact the administrator to turn it on again. Your cafe\'s data is safe.'),
           );
         }
         return _cafe(context);
@@ -147,25 +148,25 @@ class _CafeGate extends StatelessWidget {
       stream: FirestorePaths.cafe(user.cafeId!).snapshots(),
       builder: (context, snap) {
         if (snap.hasError) {
-          return const _SignOutMessage(
+          return _SignOutMessage(
             icon: Icons.error_outline,
-            title: 'Could not load your cafe',
-            message: 'Please check your internet connection, then sign in again.',
+            title: tr('Could not load your cafe'),
+            message: tr('Please check your internet connection, then sign in again.'),
           );
         }
-        if (!snap.hasData) return MessageScreen.loading('Opening your cafe…');
+        if (!snap.hasData) return MessageScreen.loading(tr('Opening your cafe…'));
 
         final cafe = snap.data!;
         if (!cafe.exists) {
-          return const _SignOutMessage(
+          return _SignOutMessage(
             icon: Icons.store_mall_directory_outlined,
-            title: 'Cafe not found',
-            message: 'The cafe linked to your account does not exist. Please contact the administrator.',
+            title: tr('Cafe not found'),
+            message: tr('The cafe linked to your account does not exist. Please contact the administrator.'),
           );
         }
 
         final data = cafe.data() ?? const <String, dynamic>{};
-        final cafeName = (data['name'] ?? 'Your cafe').toString();
+        final cafeName = (data['name'] ?? tr('Your cafe')).toString();
         final subscription = data['subscription'] is Map ? Map<String, dynamic>.from(data['subscription'] as Map) : const <String, dynamic>{};
         // Only a Manager can pay (the rules allow claims from managers only).
         Future<void> pay() => showPayNowDialog(context, cafeId: user.cafeId!, cafeName: cafeName, subscription: subscription);
@@ -176,10 +177,10 @@ class _CafeGate extends StatelessWidget {
             return MessageScreen(
               icon: Icons.block_rounded,
               title: access.title,
-              message: access.canRenew && !user.isManager ? '${access.message} Ask your manager to renew.' : access.message,
-              actionLabel: access.canRenew && user.isManager ? 'Pay now' : 'Sign out',
+              message: access.canRenew && !user.isManager ? '${access.message} ${tr('Ask your manager to renew.')}' : access.message,
+              actionLabel: access.canRenew && user.isManager ? tr('Pay now') : tr('Sign out'),
               onAction: access.canRenew && user.isManager ? pay : () => signOutToLogin(context),
-              secondaryLabel: access.canRenew && user.isManager ? 'Sign out' : null,
+              secondaryLabel: access.canRenew && user.isManager ? tr('Sign out') : null,
               onSecondary: () => signOutToLogin(context),
             );
           case CafeAccessState.migrating:
@@ -247,19 +248,19 @@ class _WarningBanner extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  askManager ? '$text Ask your manager to renew.' : text,
+                  askManager ? '$text ${tr('Ask your manager to renew.')}' : text,
                   style: TextStyle(color: sent ? p.info : fg, fontSize: 13, fontWeight: FontWeight.w600),
                 ),
               ),
               if (onPay != null) ...[
                 const SizedBox(width: 8),
                 sent
-                    ? TextButton(onPressed: onPay, child: const Text('Details'))
+                    ? TextButton(onPressed: onPay, child: Text(tr('Details')))
                     : FilledButton(
                         key: const Key('banner-pay-now'),
                         style: FilledButton.styleFrom(backgroundColor: fg, foregroundColor: Colors.white, visualDensity: VisualDensity.compact),
                         onPressed: onPay,
-                        child: const Text('Pay now'),
+                        child: Text(tr('Pay now')),
                       ),
               ],
             ],
@@ -280,7 +281,7 @@ class _WarningBanner extends StatelessWidget {
                       builder: (context, snap) {
                         final c = snap.data;
                         if (c != null && c.isPending) {
-                          return bar('Payment of ${Fmt.money(c.amount)} sent – being verified. $msg', sent: true);
+                          return bar('${tr('Payment of {0} sent – being verified.', [Fmt.money(c.amount)])} $msg', sent: true);
                         }
                         return bar(msg);
                       },
@@ -305,7 +306,7 @@ class _SignOutMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MessageScreen(icon: icon, title: title, message: message, actionLabel: 'Sign out', onAction: () => signOutToLogin(context));
+    return MessageScreen(icon: icon, title: title, message: message, actionLabel: tr('Sign out'), onAction: () => signOutToLogin(context));
   }
 }
 
@@ -406,15 +407,15 @@ class _ModeChooserState extends State<_ModeChooser> {
                 Text(widget.cafeName, textAlign: TextAlign.center, style: context.text.headlineMedium),
                 const SizedBox(height: 4),
                 Text(
-                  'How are you working today?',
+                  tr('How are you working today?'),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: p.inkSubtle),
                 ),
                 const SizedBox(height: Space.xl),
-                option('manager', Icons.point_of_sale_rounded, 'Manager', 'Dashboard, orders, billing, menu, reports'),
-                option('captain', Icons.room_service_outlined, 'Captain', 'Take orders, tables and kitchen'),
+                option('manager', Icons.point_of_sale_rounded, tr('Manager'), tr('Dashboard, orders, billing, menu, reports')),
+                option('captain', Icons.room_service_outlined, tr('Captain'), tr('Take orders, tables and kitchen')),
                 const SizedBox(height: Space.sm),
-                TextButton.icon(onPressed: () => signOutToLogin(context), icon: const Icon(Icons.logout_rounded, size: 18), label: const Text('Sign out')),
+                TextButton.icon(onPressed: () => signOutToLogin(context), icon: const Icon(Icons.logout_rounded, size: 18), label: Text(tr('Sign out'))),
               ],
             ),
           ),

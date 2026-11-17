@@ -1,4 +1,5 @@
 import '../orders/order_model.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 enum OrderAlertKind { newOrder, itemsAdded }
 
@@ -7,13 +8,13 @@ class OrderAlert {
   final OrderAlertKind kind;
   final PosOrder order;
 
-  String get title => kind == OrderAlertKind.newOrder ? 'New order' : 'Items added';
+  String get title => kind == OrderAlertKind.newOrder ? tr('New order') : tr('Items added');
 
   /// "Table 4" / "Takeaway · Token #12" / customer name.
   String get where {
     final o = order;
-    if (o.tableNo.trim().isNotEmpty) return 'Table ${o.tableNo.trim()}';
-    if (o.isTakeaway) return o.tokenNo != null ? 'Takeaway · Token #${o.tokenNo}' : 'Takeaway';
+    if (o.tableNo.trim().isNotEmpty) return tr('Table {0}', [o.tableNo.trim()]);
+    if (o.isTakeaway) return o.tokenNo != null ? tr('Takeaway · Token #{0}', [o.tokenNo]) : tr('Takeaway');
     return o.displayName;
   }
 

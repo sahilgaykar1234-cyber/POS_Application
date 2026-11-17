@@ -1,4 +1,5 @@
 import '../../core/utils/formatters.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Pure helpers for paying the POS subscription by UPI (unit-tested).
 ///
@@ -88,5 +89,5 @@ class PaymentClaim {
   bool get isRejected => status == ClaimStatus.rejected;
   bool get isApproved => status == ClaimStatus.approved;
 
-  String get cycleLabel => cycle == 'yearly' ? 'Yearly' : 'Monthly';
+  String get cycleLabel => cycle == 'yearly' ? tr('Yearly') : tr('Monthly');
 }

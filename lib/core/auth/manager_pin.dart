@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/tokens.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Optional Manager PIN of a cafe (Settings › Security). With a shared cafe
 /// login, the PIN keeps kitchen/counter staff out of the Manager view (sales,
@@ -56,11 +57,11 @@ Future<bool> askManagerPin(BuildContext context, {required String salt, required
       }
 
       return AlertDialog(
-        title: const Text('Manager PIN'),
+        title: Text(tr('Manager PIN')),
         content: SizedBox(
           width: 320,
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            const Text('Enter the Manager PIN to open the Manager view.'),
+            Text(tr('Enter the Manager PIN to open the Manager view.')),
             const SizedBox(height: Space.md),
             TextField(
               key: const Key('manager-pin'),
@@ -70,14 +71,14 @@ Future<bool> askManagerPin(BuildContext context, {required String salt, required
               keyboardType: TextInputType.number,
               maxLength: 8,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: InputDecoration(labelText: 'PIN', errorText: wrong == 0 ? null : 'Wrong PIN${wrong >= 3 ? ' – ask the manager' : ''}'),
+              decoration: InputDecoration(labelText: tr('PIN'), errorText: wrong == 0 ? null : tr('Wrong PIN{0}', [wrong >= 3 ? tr(' – ask the manager') : ''])),
               onSubmitted: (_) => check(),
             ),
           ]),
         ),
         actions: [
-          OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(key: const Key('manager-pin-ok'), onPressed: check, child: const Text('Open')),
+          OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Cancel'))),
+          FilledButton(key: const Key('manager-pin-ok'), onPressed: check, child: Text(tr('Open'))),
         ],
       );
     }),
