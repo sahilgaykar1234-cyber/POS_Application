@@ -53,6 +53,8 @@ class _PosScreenState extends State<PosScreen> {
   final cart = PosCart();
   final _table = TextEditingController();
   final _name = TextEditingController();
+  final _nameFocus = FocusNode();
+  bool _nameMissing = false;
   final _phone = TextEditingController();
   final _note = TextEditingController();
   final _search = TextEditingController();
@@ -107,6 +109,7 @@ class _PosScreenState extends State<PosScreen> {
     for (final c in [_table, _name, _phone, _note, _search]) {
       c.dispose();
     }
+    _nameFocus.dispose();
     super.dispose();
   }
 
@@ -133,6 +136,7 @@ class _PosScreenState extends State<PosScreen> {
     if (!_nameIsAuto) return; // never overwrite a name the user typed
     _name.text = name ?? '';
     _autoName = name;
+    if (name != null && name.isNotEmpty) _nameMissing = false;
   }
 
   Future<void> _lookup(String v) async {
@@ -196,6 +200,12 @@ class _PosScreenState extends State<PosScreen> {
   Future<void> _save() async {
     if (_saving) return;
     if (cart.isEmpty) return showError(context, 'Add at least one item.');
+    if (_name.text.trim().isEmpty) {
+      setState(() => _nameMissing = true);
+      cart.touch(); // the phone cart sheet rebuilds from the cart
+      _nameFocus.requestFocus();
+      return showError(context, 'Enter the customer name.');
+    }
     setState(() => _saving = true);
     cart.touch();
     try {
@@ -529,12 +539,21 @@ class _PosScreenState extends State<PosScreen> {
                       const SizedBox(width: Space.sm),
                       Expanded(
                         child: TextField(
+                          key: const Key('pos-customer-name'),
                           controller: _name,
+                          focusNode: _nameFocus,
                           textCapitalization: TextCapitalization.words,
                           onChanged: (v) {
                             if (v.trim() != _autoName) _autoName = null;
+                            if (_nameMissing && v.trim().isNotEmpty) {
+                              setState(() => _nameMissing = false);
+                              cart.touch();
+                            }
                           },
-                          decoration: const InputDecoration(labelText: 'Customer name'),
+                          decoration: InputDecoration(
+                            labelText: 'Customer name *',
+                            errorText: _nameMissing ? 'Name is required' : null,
+                          ),
                         ),
                       ),
                     ],

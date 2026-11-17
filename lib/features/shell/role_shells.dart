@@ -150,7 +150,7 @@ class _ManagerShellState extends State<ManagerShell> {
 
   void _go(int i) => setState(() => _i = i);
 
-  /// New orders open from Tables (tap a free table) or the dashboard button.
+  /// Opens a new order screen (kept for the dashboard API; tables are the usual way in).
   void _newOrder() => Navigator.push(context, MaterialPageRoute(builder: (_) => const PosScreen(standalone: true)));
 
   @override

@@ -314,6 +314,30 @@ void main() {
     expect(t.takeException(), isNull);
   });
 
+  testWidgets('POS: customer name is required before Send to kitchen', (t) async {
+    await pumpAt(t, sizes['phone']!, PosScreen(menuStream: Stream.value(menu()), settingsStream: Stream.value(settings)), AppTheme.light());
+    await t.tap(find.text('Add').last);
+    await t.pumpAndSettle();
+    await t.tap(find.text('View order'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Send to kitchen'));
+    await t.pumpAndSettle();
+    expect(find.text('Name is required'), findsOneWidget);
+    await t.enterText(find.byKey(const Key('pos-customer-name')), 'Ravi');
+    await t.pump();
+    expect(find.text('Name is required'), findsNothing);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('Tables has no New order button (tap a free table instead)', (t) async {
+    for (final size in [sizes['desktop']!, sizes['phone']!]) {
+      await pumpAt(t, size, OrdersBoardScreen(canDelete: true, ordersStream: Stream.value(orders()), settingsStream: Stream.value(settings)), AppTheme.light());
+      expect(find.text('New order'), findsNothing);
+      expect(find.byType(FloatingActionButton), findsNothing);
+      expect(find.text('Virtual table'), findsOneWidget);
+    }
+  });
+
   testWidgets('POS: phone lookup fills, replaces and clears the customer name', (t) async {
     final known = {
       '6353268656': KnownCustomer('Sahil', const [], DateTime(2026, 11, 1)),
@@ -330,7 +354,7 @@ void main() {
       AppTheme.light(),
     );
     final phone = find.widgetWithText(TextField, 'Mobile');
-    final name = find.widgetWithText(TextField, 'Customer name');
+    final name = find.byKey(const Key('pos-customer-name'));
     String nameText() => (t.widget<TextField>(name)).controller!.text;
 
     await t.enterText(phone, '6353268656');

@@ -94,26 +94,18 @@ class _OrdersBoardScreenState extends State<OrdersBoardScreen> with DayChangeRef
 
             return Scaffold(
               backgroundColor: Colors.transparent,
-              floatingActionButton: context.isMobile
-                  ? FloatingActionButton(onPressed: () => _newOrder(), tooltip: 'New order', child: const Icon(Icons.add))
-                  : null,
               body: PageBody(
                 children: [
                   PageHeader(
                     title: 'Tables',
                     subtitle: '$running running · $preparing preparing · $ready ready to pay',
+                    // New orders start by tapping a free table (or a virtual one).
                     actions: [
                       OutlinedButton.icon(
                         onPressed: _addVirtual,
                         icon: const Icon(Icons.add_location_alt_outlined, size: 18),
                         label: const Text('Virtual table'),
                       ),
-                      if (!context.isMobile)
-                        FilledButton.icon(
-                          onPressed: () => _newOrder(),
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('New order'),
-                        ),
                     ],
                   ),
                   FilterPills<_Filter>(
