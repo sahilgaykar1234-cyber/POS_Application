@@ -5,6 +5,8 @@ import '../../core/auth/auth_service.dart';
 import '../../core/config/app_config.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_logo.dart';
+import 'package:pos_app/core/i18n/tr.dart';
+import 'package:pos_app/core/i18n/language_picker.dart';
 
 /// Form validators, kept public so they can be unit-tested.
 class LoginValidators {
@@ -14,8 +16,8 @@ class LoginValidators {
 
   static String? email(String? v) {
     final s = (v ?? '').trim();
-    if (s.isEmpty) return 'Please enter your email';
-    if (!_email.hasMatch(s)) return 'Please enter a valid email';
+    if (s.isEmpty) return tr('Please enter your email');
+    if (!_email.hasMatch(s)) return tr('Please enter a valid email');
     return null;
   }
 
@@ -24,14 +26,14 @@ class LoginValidators {
   /// Username (e.g. "flammywood") or email.
   static String? usernameOrEmail(String? v) {
     final s = (v ?? '').trim();
-    if (s.isEmpty) return 'Please enter your username';
+    if (s.isEmpty) return tr('Please enter your username');
     if (s.contains('@')) return email(s);
-    if (!_username.hasMatch(s)) return 'Username: 3–30 letters/numbers';
+    if (!_username.hasMatch(s)) return tr('Username: 3–30 letters/numbers');
     return null;
   }
 
   static String? password(String? v) {
-    if ((v ?? '').isEmpty) return 'Please enter your password';
+    if ((v ?? '').isEmpty) return tr('Please enter your password');
     return null;
   }
 }
@@ -83,7 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final email = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Reset password'),
+        title: Text(tr('Reset password')),
         content: Form(
           key: formKey,
           child: Column(
@@ -91,8 +93,7 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Enter your account email. We will send you a link to set a new password.\n\n'
-                'If you sign in with a username (not an email), please ask the owner to reset your password.',
+                tr('Enter your account email. We will send you a link to set a new password.\n\nIf you sign in with a username (not an email), please ask the owner to reset your password.'),
                 style: TextStyle(color: ctx.palette.inkMuted),
               ),
               const SizedBox(height: 14),
@@ -101,18 +102,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 autofocus: true,
                 keyboardType: TextInputType.emailAddress,
                 validator: LoginValidators.email,
-                decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
+                decoration: InputDecoration(labelText: tr('Email'), border: OutlineInputBorder()),
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel'))),
           ElevatedButton(
             onPressed: () {
               if (formKey.currentState!.validate()) Navigator.pop(ctx, ctrl.text.trim());
             },
-            child: const Text('Send link'),
+            child: Text(tr('Send link')),
           ),
         ],
       ),
@@ -127,8 +128,8 @@ class _LoginScreenState extends State<LoginScreen> {
     }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('If an account exists for that email, a reset link has been sent. Check your inbox and spam folder.'),
+      SnackBar(
+        content: Text(tr('If an account exists for that email, a reset link has been sent. Check your inbox and spam folder.')),
         duration: Duration(seconds: 5),
       ),
     );
@@ -147,12 +148,13 @@ class _LoginScreenState extends State<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (!wide) ...[
-              const Align(alignment: Alignment.centerLeft, child: AppLogo(size: 48)),
+              const Row(children: [AppLogo(size: 48), Spacer(), LanguageMenuButton()]),
               const SizedBox(height: Space.xl),
-            ],
-            Text('Welcome back', style: context.text.headlineMedium),
+            ] else
+              const Align(alignment: Alignment.centerRight, child: LanguageMenuButton()),
+            Text(tr('Welcome back'), style: context.text.headlineMedium),
             const SizedBox(height: 4),
-            Text('Sign in with your cafe username or email.', style: TextStyle(color: p.inkSubtle)),
+            Text(tr('Sign in with your cafe username or email.'), style: TextStyle(color: p.inkSubtle)),
             const SizedBox(height: Space.xl),
             TextFormField(
               controller: _emailCtrl,
@@ -161,7 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
               textInputAction: TextInputAction.next,
               enabled: !_loading,
               validator: LoginValidators.usernameOrEmail,
-              decoration: const InputDecoration(labelText: 'Username', hintText: 'Enter your username', prefixIcon: Icon(Icons.person_outline)),
+              decoration: InputDecoration(labelText: tr('Username'), hintText: tr('Enter your username'), prefixIcon: Icon(Icons.person_outline)),
             ),
             const SizedBox(height: Space.md),
             TextFormField(
@@ -173,10 +175,10 @@ class _LoginScreenState extends State<LoginScreen> {
               validator: LoginValidators.password,
               onFieldSubmitted: (_) => _submit(),
               decoration: InputDecoration(
-                labelText: 'Password',
+                labelText: tr('Password'),
                 prefixIcon: const Icon(Icons.lock_outline),
                 suffixIcon: IconButton(
-                  tooltip: _obscure ? 'Show password' : 'Hide password',
+                  tooltip: _obscure ? tr('Show password') : tr('Hide password'),
                   icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
                   onPressed: () => setState(() => _obscure = !_obscure),
                 ),
@@ -184,7 +186,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(onPressed: _loading ? null : _forgotPassword, child: const Text('Forgot password?')),
+              child: TextButton(onPressed: _loading ? null : _forgotPassword, child: Text(tr('Forgot password?'))),
             ),
             if (_error != null) ...[
               Container(
@@ -206,7 +208,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 onPressed: _loading ? null : _submit,
                 child: _loading
                     ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                    : const Text('Sign in', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                    : Text(tr('Sign in'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
               ),
             ),
             const SizedBox(height: Space.lg),
@@ -215,11 +217,11 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 TextButton(
                   onPressed: () => launchUrl(Uri.base.resolve('/privacy.html'), webOnlyWindowName: '_blank'),
-                  child: const Text('Privacy Policy'),
+                  child: Text(tr('Privacy Policy')),
                 ),
                 TextButton(
                   onPressed: () => launchUrl(Uri.base.resolve('/terms.html'), webOnlyWindowName: '_blank'),
-                  child: const Text('Terms of Service'),
+                  child: Text(tr('Terms of Service')),
                 ),
               ],
             ),
@@ -254,13 +256,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     Text(AppConfig.appName, style: TextStyle(color: p.surface, fontSize: 20, fontWeight: FontWeight.w800)),
                   ]),
                   const Spacer(),
-                  Text('Run your cafe from one screen.',
+                  Text(tr('Run your cafe from one screen.'),
                       style: TextStyle(color: p.surface, fontSize: 40, height: 1.15, fontWeight: FontWeight.w800, letterSpacing: -1)),
                   const SizedBox(height: Space.lg),
-                  for (final f in const [
-                    'Take orders and bill in seconds',
-                    'Live table and kitchen status',
-                    'Menu, staff and sales reports in one place',
+                  for (final f in [
+                    tr('Take orders and bill in seconds'),
+                    tr('Live table and kitchen status'),
+                    tr('Menu, staff and sales reports in one place'),
                   ])
                     Padding(
                       padding: const EdgeInsets.only(bottom: Space.sm),
@@ -271,7 +273,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ]),
                     ),
                   const Spacer(),
-                  Text(AppConfig.appTagline, style: TextStyle(color: p.inkSubtle, fontSize: 13)),
+                  Text(tr(AppConfig.appTagline), style: TextStyle(color: p.inkSubtle, fontSize: 13)),
                 ],
               ),
             ),

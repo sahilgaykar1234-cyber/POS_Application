@@ -12,6 +12,7 @@ import 'order_model.dart';
 import 'order_service.dart';
 import 'orders_filter.dart';
 import 'void_bill_dialog.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// All bills of the cafe: search, date / status / payment filters, pages,
 /// and View · Print · WhatsApp on every bill (always the saved order, by id).
@@ -100,8 +101,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
             return PageBody(
               children: [
                 PageHeader(
-                  title: 'Orders',
-                  subtitle: '$_rangeLabel · ${list.length} bill${list.length == 1 ? '' : 's'} · ${Fmt.money(total)} billed · ${Fmt.money(paid)} paid',
+                  title: tr('Orders'),
+                  subtitle: tr('{0} · {1} bill{2} · {3} billed · {4} paid', [_rangeLabel, list.length, list.length == 1 ? '' : 's', Fmt.money(total), Fmt.money(paid)]),
                 ),
                 _Filters(
                   preset: _preset,
@@ -126,13 +127,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 if (snap.hasError)
                   const ErrorState()
                 else if (loading)
-                  const Padding(padding: EdgeInsets.all(Space.xxl), child: LoadingState(label: 'Loading bills…'))
+                  Padding(padding: EdgeInsets.all(Space.xxl), child: LoadingState(label: tr('Loading bills…')))
                 else if (list.isEmpty)
                   SurfaceCard(
                     child: EmptyState(
                       icon: Icons.receipt_long_outlined,
-                      title: _q.isEmpty && _status == OrderStatusFilter.all && _payment == PaymentFilter.all ? 'No bills in this period' : 'No bills match',
-                      message: 'Try another date or clear the filters.',
+                      title: _q.isEmpty && _status == OrderStatusFilter.all && _payment == PaymentFilter.all ? tr('No bills in this period') : tr('No bills match'),
+                      message: tr('Try another date or clear the filters.'),
                     ),
                   )
                 else
@@ -209,7 +210,7 @@ class _Filters extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, c) {
       final narrow = c.maxWidth < 700;
-      final search = SearchField(width: narrow ? double.infinity : 300, hint: 'Bill no, name, mobile or table', onChanged: onSearch);
+      final search = SearchField(width: narrow ? double.infinity : 300, hint: tr('Bill no, name, mobile or table'), onChanged: onSearch);
       Widget drop<T>(T value, List<T> values, String Function(T) label, ValueChanged<T> on, Key key) => SizedBox(
             width: narrow ? (c.maxWidth - Space.sm) / 2 : 170,
             child: DropdownButtonFormField<T>(
@@ -272,13 +273,13 @@ class _Table extends StatelessWidget {
             color: p.surfaceAlt,
             padding: const EdgeInsets.symmetric(horizontal: Space.lg, vertical: Space.md),
             child: Row(children: [
-              cell(0, Text('BILL NO', style: head)),
-              cell(1, Text('DATE & TIME', style: head)),
-              cell(2, Text('CUSTOMER · TABLE', style: head)),
-              cell(3, Text('ITEMS', style: head)),
-              cell(4, Text('AMOUNT', style: head), right: true),
-              cell(5, Padding(padding: const EdgeInsets.only(left: Space.lg), child: Text('PAYMENT', style: head))),
-              cell(6, Text('STATUS', style: head)),
+              cell(0, Text(tr('BILL NO'), style: head)),
+              cell(1, Text(tr('DATE & TIME'), style: head)),
+              cell(2, Text(tr('CUSTOMER · TABLE'), style: head)),
+              cell(3, Text(tr('ITEMS'), style: head)),
+              cell(4, Text(tr('AMOUNT'), style: head), right: true),
+              cell(5, Padding(padding: const EdgeInsets.only(left: Space.lg), child: Text(tr('PAYMENT'), style: head))),
+              cell(6, Text(tr('STATUS'), style: head)),
               const SizedBox(width: 136),
             ]),
           ),
@@ -306,11 +307,11 @@ class _TableRow extends StatelessWidget {
     final who = [
       if (o.takeawayName.isNotEmpty && o.takeawayName != 'Walk-in') o.takeawayName,
       if (o.tableNo.isNotEmpty)
-        (o.tableNo.toLowerCase().startsWith('table') ? o.tableNo : 'Table ${o.tableNo}')
+        (o.tableNo.toLowerCase().startsWith('table') ? o.tableNo : tr('Table {0}', [o.tableNo]))
       else if (o.tokenNo != null)
-        'Token #${o.tokenNo}'
+        tr('Token #{0}', [o.tokenNo])
       else if (o.isTakeaway)
-        'Takeaway',
+        tr('Takeaway'),
     ].join(' · ');
     return InkWell(
       key: Key('order-row-${o.id}'),
@@ -403,7 +404,7 @@ class _PaymentChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     return StatusChip(
-      order.isPaid ? order.paymentLabel : 'Unpaid',
+      order.isPaid ? order.paymentLabel : tr('Unpaid'),
       color: order.isPaid ? p.success : p.warning,
       tint: order.isPaid ? p.successTint : p.warningTint,
     );
@@ -423,10 +424,10 @@ class _ActionButtons extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        IconButton(key: Key('order-print-$id'), tooltip: 'Print receipt', visualDensity: VisualDensity.compact, onPressed: actions.print, icon: Icon(Icons.print_outlined, size: 20, color: p.inkMuted)),
+        IconButton(key: Key('order-print-$id'), tooltip: tr('Print receipt'), visualDensity: VisualDensity.compact, onPressed: actions.print, icon: Icon(Icons.print_outlined, size: 20, color: p.inkMuted)),
         IconButton(
           key: Key('order-whatsapp-$id'),
-          tooltip: 'Share on WhatsApp',
+          tooltip: tr('Share on WhatsApp'),
           visualDensity: VisualDensity.compact,
           onPressed: actions.whatsApp,
           icon: const Icon(Icons.chat_outlined, size: 20, color: Color(0xFF128C4A)),
@@ -436,14 +437,14 @@ class _ActionButtons extends StatelessWidget {
           const SizedBox(width: 40)
         else
           PopupMenuButton<String>(
-            tooltip: 'More',
+            tooltip: tr('More'),
             icon: Icon(Icons.more_vert_rounded, size: 20, color: p.inkMuted),
             onSelected: (v) => v == 'edit' ? actions.edit() : actions.delete(),
             itemBuilder: (_) => [
-              const PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Edit bill'))),
+              PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text(tr('Edit bill')))),
               PopupMenuItem(
                 value: 'delete',
-                child: ListTile(leading: Icon(Icons.cancel_outlined, color: p.danger), title: Text('Cancel bill', style: TextStyle(color: p.danger))),
+                child: ListTile(leading: Icon(Icons.cancel_outlined, color: p.danger), title: Text(tr('Cancel bill'), style: TextStyle(color: p.danger))),
               ),
             ],
           ),
@@ -459,10 +460,10 @@ class _Pager extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(children: [
-        Expanded(child: Text('Showing $from–$to of $total', style: TextStyle(color: context.palette.inkSubtle))),
-        IconButton.outlined(tooltip: 'Previous page', onPressed: page > 0 ? () => onPage(page - 1) : null, icon: const Icon(Icons.chevron_left_rounded)),
+        Expanded(child: Text(tr('Showing {0}–{1} of {2}', [from, to, total]), style: TextStyle(color: context.palette.inkSubtle))),
+        IconButton.outlined(tooltip: tr('Previous page'), onPressed: page > 0 ? () => onPage(page - 1) : null, icon: const Icon(Icons.chevron_left_rounded)),
         Padding(padding: const EdgeInsets.symmetric(horizontal: Space.sm), child: Text('${page + 1} / $pages')),
-        IconButton.outlined(tooltip: 'Next page', onPressed: page < pages - 1 ? () => onPage(page + 1) : null, icon: const Icon(Icons.chevron_right_rounded)),
+        IconButton.outlined(tooltip: tr('Next page'), onPressed: page < pages - 1 ? () => onPage(page + 1) : null, icon: const Icon(Icons.chevron_right_rounded)),
       ]);
 }
 

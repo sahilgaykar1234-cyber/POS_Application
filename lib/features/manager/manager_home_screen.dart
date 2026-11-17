@@ -18,6 +18,7 @@ import '../receipt/bill_view.dart';
 import '../receipt/receipt_actions.dart';
 import '../settings/business_settings.dart';
 import 'sales_stats.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Manager's "Today" dashboard. Everything is for the signed-in cafe only.
 class ManagerHomeScreen extends StatefulWidget {
@@ -36,7 +37,7 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
   late final _orders = widget.ordersStream ?? OrderService.instance.watchLive();
   late final _settings = widget.settingsStream ?? BusinessSettingsRepository.instance.watch();
 
-  static const _weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  static List<String> get _weekdays => [tr('Monday'), tr('Tuesday'), tr('Wednesday'), tr('Thursday'), tr('Friday'), tr('Saturday'), tr('Sunday')];
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +47,7 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
         stream: _orders,
         builder: (context, snap) {
           if (snap.hasError) return const ErrorState();
-          if (!snap.hasData) return const LoadingState(label: 'Loading today…');
+          if (!snap.hasData) return LoadingState(label: tr('Loading today…'));
           // "Today" moves on at the business-day end even with no new order.
           return DayChangeRebuilder(builder: (context) => _build(context, snap.data!, setSnap.data ?? BusinessSettings.empty));
         },
@@ -70,7 +71,7 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
     String? vsLastWeek;
     if (lw.sales > 0) {
       final pct = ((s.sales - lw.sales) / lw.sales * 100).round();
-      vsLastWeek = '${pct >= 0 ? '▲' : '▼'} ${pct.abs()}% vs last ${_weekdays[today.weekday - 1]}';
+      vsLastWeek = tr('{0} {1}% vs last {2}', [pct >= 0 ? '▲' : '▼', pct.abs(), _weekdays[today.weekday - 1]]);
     }
 
     // Cancelled bills are hidden here (they show in Orders › Cancelled).
@@ -79,7 +80,7 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
     return PageBody(
       children: [
         PageHeader(
-          title: settings.shopName.isEmpty ? 'Today' : settings.shopName,
+          title: settings.shopName.isEmpty ? tr('Today') : settings.shopName,
           subtitle: '${_weekdays[today.weekday - 1]}, ${Fmt.date(today)}',
           // No Tables / New order here: both are in the bottom navigation
           // (a new order starts by tapping a free table).
@@ -90,31 +91,31 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
           equalHeights: true,
           fill: true,
           children: [
-            StatCard(label: "Today's sales", value: Fmt.money(s.sales), icon: Icons.trending_up_rounded, highlight: true, caption: vsLastWeek ?? 'Paid bills'),
-            StatCard(label: 'Orders', value: '${s.orders}', icon: Icons.receipt_long_outlined, caption: 'Avg bill ${Fmt.money(s.averageBill.round())}', color: p.info),
-            StatCard(label: 'Running', value: '${s.running}', icon: Icons.local_fire_department_outlined, color: p.warning, caption: 'Tables & takeaway now'),
-            StatCard(label: 'Completed', value: '${s.completed}', icon: Icons.check_circle_outline, color: p.success, caption: 'Bills closed'),
+            StatCard(label: tr('Today\'s sales'), value: Fmt.money(s.sales), icon: Icons.trending_up_rounded, highlight: true, caption: vsLastWeek ?? tr('Paid bills')),
+            StatCard(label: tr('Orders'), value: '${s.orders}', icon: Icons.receipt_long_outlined, caption: tr('Avg bill {0}', [Fmt.money(s.averageBill.round())]), color: p.info),
+            StatCard(label: tr('Running'), value: '${s.running}', icon: Icons.local_fire_department_outlined, color: p.warning, caption: tr('Tables & takeaway now')),
+            StatCard(label: tr('Completed'), value: '${s.completed}', icon: Icons.check_circle_outline, color: p.success, caption: tr('Bills closed')),
             StatCard(
-              label: 'Unpaid',
+              label: tr('Unpaid'),
               value: '${s.unpaid}',
               icon: Icons.hourglass_bottom_rounded,
               color: s.unpaid > 0 ? p.danger : p.success,
-              caption: s.unpaid > 0 ? 'Payment due' : 'All settled',
+              caption: s.unpaid > 0 ? tr('Payment due') : tr('All settled'),
             ),
-            StatCard(label: 'Cancelled', value: '${s.cancelled}', icon: Icons.cancel_outlined, color: p.inkSubtle, caption: 'Today'),
+            StatCard(label: tr('Cancelled'), value: '${s.cancelled}', icon: Icons.cancel_outlined, color: p.inkSubtle, caption: tr('Today')),
           ],
         ),
         const SizedBox(height: Space.lg),
         _twoUp(
           context,
           SectionCard(
-            title: 'Sales by hour',
-            subtitle: 'Paid bills today',
+            title: tr('Sales by hour'),
+            subtitle: tr('Paid bills today'),
             icon: Icons.bar_chart_rounded,
             child: SizedBox(height: 220, child: _HourlyChart(values: s.byHour, now: now)),
           ),
           SectionCard(
-            title: 'Payment split',
+            title: tr('Payment split'),
             icon: Icons.donut_large_rounded,
             child: _PaymentSplit(byMethod: s.byMethod),
           ),
@@ -124,25 +125,25 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
         _twoUp(
           context,
           SectionCard(
-            title: 'Best sellers today',
+            title: tr('Best sellers today'),
             icon: Icons.emoji_events_outlined,
             child: s.topItems.isEmpty
-                ? Padding(padding: const EdgeInsets.symmetric(vertical: Space.lg), child: Text('No items sold yet.', style: TextStyle(color: p.inkSubtle)))
+                ? Padding(padding: const EdgeInsets.symmetric(vertical: Space.lg), child: Text(tr('No items sold yet.'), style: TextStyle(color: p.inkSubtle)))
                 : Column(children: [for (var i = 0; i < s.topItems.length; i++) _BestSeller(rank: i + 1, name: s.topItems[i].$1, qty: s.topItems[i].$2, max: s.topItems.first.$2)]),
           ),
           SectionCard(
-            title: 'Last 7 days',
-            subtitle: 'Paid sales per day',
+            title: tr('Last 7 days'),
+            subtitle: tr('Paid sales per day'),
             icon: Icons.show_chart_rounded,
             child: SizedBox(height: 200, child: _WeekChart(points: SalesStats.dailySales(all, now: now))),
           ),
         ),
         SectionCard(
-          title: 'Recent bills',
+          title: tr('Recent bills'),
           icon: Icons.receipt_outlined,
           padding: const EdgeInsets.fromLTRB(Space.lg + 4, Space.lg + 4, Space.lg + 4, Space.sm),
           child: recent.isEmpty
-              ? Padding(padding: const EdgeInsets.symmetric(vertical: Space.lg), child: Text('No orders yet today.', style: TextStyle(color: p.inkSubtle)))
+              ? Padding(padding: const EdgeInsets.symmetric(vertical: Space.lg), child: Text(tr('No orders yet today.'), style: TextStyle(color: p.inkSubtle)))
               : Column(
                   children: [
                     // Every order of the current business day.
@@ -194,7 +195,7 @@ class _MonthCard extends StatelessWidget {
   final MonthSummary m;
   final DateTime now;
 
-  static const _months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  static List<String> get _months => [tr('January'), tr('February'), tr('March'), tr('April'), tr('May'), tr('June'), tr('July'), tr('August'), tr('September'), tr('October'), tr('November'), tr('December')];
 
   @override
   Widget build(BuildContext context) {
@@ -208,14 +209,14 @@ class _MonthCard extends StatelessWidget {
       maxColumns: 2,
       equalHeights: true,
       children: [
-        _Kpi(label: 'Sales (paid)', value: Fmt.money(m.sales), color: p.success, change: m.salesChangePct),
-        _Kpi(label: 'Orders', value: '${m.orders}', color: p.info, change: m.ordersChangePct),
-        _Kpi(label: 'Average bill', value: Fmt.money(m.averageBill.round()), color: p.ink, note: '${m.paidBills} paid bill${m.paidBills == 1 ? '' : 's'}'),
+        _Kpi(label: tr('Sales (paid)'), value: Fmt.money(m.sales), color: p.success, change: m.salesChangePct),
+        _Kpi(label: tr('Orders'), value: '${m.orders}', color: p.info, change: m.ordersChangePct),
+        _Kpi(label: tr('Average bill'), value: Fmt.money(m.averageBill.round()), color: p.ink, note: tr('{0} paid bill{1}', [m.paidBills, m.paidBills == 1 ? '' : 's'])),
         _Kpi(
-          label: 'Best day',
+          label: tr('Best day'),
           value: m.bestDay == null ? '—' : Fmt.money(m.bestDaySales.round()),
           color: p.primary,
-          note: m.bestDay == null ? 'No paid bills yet' : '${m.bestDay!.day} ${_months[m.bestDay!.month - 1].substring(0, 3)}',
+          note: m.bestDay == null ? tr('No paid bills yet') : '${m.bestDay!.day} ${_months[m.bestDay!.month - 1].substring(0, 3)}',
         ),
       ],
     );
@@ -228,15 +229,15 @@ class _MonthCard extends StatelessWidget {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.insights_outlined, size: 32, color: p.inkSubtle),
               const SizedBox(height: Space.sm),
-              Text('No sales this month yet', style: TextStyle(fontWeight: FontWeight.w600, color: p.inkMuted)),
-              Text('Daily sales will appear here as bills are paid.', style: TextStyle(fontSize: 12, color: p.inkSubtle)),
+              Text(tr('No sales this month yet'), style: TextStyle(fontWeight: FontWeight.w600, color: p.inkMuted)),
+              Text(tr('Daily sales will appear here as bills are paid.'), style: TextStyle(fontSize: 12, color: p.inkSubtle)),
             ]),
           )
         : SizedBox(height: 200, child: _MonthChart(daily: m.daily, today: BusinessDay.dateOf(now).day));
 
     return SectionCard(
-      title: 'This month',
-      subtitle: '${_months[now.month - 1]} 1–${now.day} · compared with the same days of $prevMonth',
+      title: tr('This month'),
+      subtitle: tr('{0} 1–{1} · compared with the same days of {2}', [_months[now.month - 1], now.day, prevMonth]),
       icon: Icons.calendar_month_outlined,
       child: LayoutBuilder(builder: (context, c) {
         if (c.maxWidth < 760) {
@@ -278,10 +279,10 @@ class _Kpi extends StatelessWidget {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: color, fontFeatures: const [FontFeature.tabularFigures()])),
           const SizedBox(height: 2),
           if (change != null)
-            Text('${up ? '▲' : '▼'} ${change!.abs()}% vs last month',
+            Text(tr('{0} {1}% vs last month', [up ? '▲' : '▼', change!.abs()]),
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: up ? p.success : p.danger))
           else
-            Text(note ?? 'No data last month', style: TextStyle(fontSize: 12, color: p.inkSubtle)),
+            Text(note ?? tr('No data last month'), style: TextStyle(fontSize: 12, color: p.inkSubtle)),
         ],
       ),
     );
@@ -335,7 +336,7 @@ class _MonthChart extends StatelessWidget {
           touchTooltipData: BarTouchTooltipData(
             getTooltipColor: (_) => p.ink,
             getTooltipItem: (g, _, r, _) =>
-                BarTooltipItem('Day ${g.x}\n${Fmt.money(r.toY.round())}', TextStyle(color: p.surface, fontWeight: FontWeight.w700)),
+                BarTooltipItem(tr('Day {0}\n{1}', [g.x, Fmt.money(r.toY.round())]), TextStyle(color: p.surface, fontWeight: FontWeight.w700)),
           ),
         ),
         barGroups: [
@@ -465,7 +466,7 @@ class _WeekChart extends StatelessWidget {
   const _WeekChart({required this.points});
   final List<(DateTime, double)> points;
 
-  static const _d = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  static List<String> get _d => [tr('Mon'), tr('Tue'), tr('Wed'), tr('Thu'), tr('Fri'), tr('Sat'), tr('Sun')];
 
   @override
   Widget build(BuildContext context) {
@@ -541,8 +542,8 @@ class _PaymentSplit extends StatelessWidget {
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
                     Icon(Icons.payments_outlined, size: 30, color: p.inkSubtle),
                     const SizedBox(height: Space.sm),
-                    Text('No payments yet today', style: TextStyle(color: p.inkMuted, fontWeight: FontWeight.w600)),
-                    Text('Cash, UPI and card split shows here.', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
+                    Text(tr('No payments yet today'), style: TextStyle(color: p.inkMuted, fontWeight: FontWeight.w600)),
+                    Text(tr('Cash, UPI and card split shows here.'), style: TextStyle(color: p.inkSubtle, fontSize: 12)),
                   ]),
                 )
               : PieChart(PieChartData(
@@ -562,7 +563,7 @@ class _PaymentSplit extends StatelessWidget {
               children: [
                 Container(width: 10, height: 10, decoration: BoxDecoration(color: colors[m], shape: BoxShape.circle)),
                 const SizedBox(width: Space.sm),
-                Text(m.label),
+                Text(tr(m.label)),
                 const Spacer(),
                 Text(Fmt.money(byMethod[m]!), style: const TextStyle(fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
               ],
@@ -599,7 +600,7 @@ class _RecentBill extends StatelessWidget {
       ]),
       style: TextStyle(color: p.inkMuted, fontSize: 13, height: 1.35),
     );
-    final chip = StatusChip(o.isActive ? o.statusLabel : (o.isPaid ? 'Paid' : o.statusLabel));
+    final chip = StatusChip(o.isActive ? o.statusLabel : (o.isPaid ? tr('Paid') : o.statusLabel));
     final total = Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       mainAxisSize: MainAxisSize.min,
@@ -607,7 +608,7 @@ class _RecentBill extends StatelessWidget {
         MoneyText(o.totalPrice, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
         if (o.discount > 0 || o.gstAmount > 0)
           Text(
-            [if (o.discount > 0) '−₹${formatPrice(o.discount)} off', if (o.gstAmount > 0) 'incl. GST'].join(' · '),
+            [if (o.discount > 0) tr('−₹{0} off', [formatPrice(o.discount)]), if (o.gstAmount > 0) tr('incl. GST')].join(' · '),
             style: TextStyle(color: p.inkSubtle, fontSize: 11),
           ),
       ],
@@ -616,7 +617,7 @@ class _RecentBill extends StatelessWidget {
       if (onPrint != null)
         IconButton(
           key: Key('recent-print-${o.id}'),
-          tooltip: 'Print receipt',
+          tooltip: tr('Print receipt'),
           visualDensity: VisualDensity.compact,
           onPressed: onPrint,
           icon: Icon(Icons.print_outlined, size: 19, color: p.inkMuted),
@@ -624,7 +625,7 @@ class _RecentBill extends StatelessWidget {
       if (onWhatsApp != null)
         IconButton(
           key: Key('recent-whatsapp-${o.id}'),
-          tooltip: 'Share on WhatsApp',
+          tooltip: tr('Share on WhatsApp'),
           visualDensity: VisualDensity.compact,
           onPressed: onWhatsApp,
           icon: const Icon(Icons.chat_outlined, size: 19, color: Color(0xFF128C4A)),
@@ -632,7 +633,7 @@ class _RecentBill extends StatelessWidget {
       if (onEdit != null)
         IconButton(
           key: Key('recent-edit-${o.id}'),
-          tooltip: 'Edit bill',
+          tooltip: tr('Edit bill'),
           visualDensity: VisualDensity.compact,
           onPressed: onEdit,
           icon: Icon(Icons.edit_outlined, size: 19, color: p.inkMuted),
@@ -640,7 +641,7 @@ class _RecentBill extends StatelessWidget {
       if (onDelete != null)
         IconButton(
           key: Key('recent-delete-${o.id}'),
-          tooltip: 'Cancel bill',
+          tooltip: tr('Cancel bill'),
           visualDensity: VisualDensity.compact,
           onPressed: onDelete,
           icon: Icon(Icons.cancel_outlined, size: 19, color: p.danger),

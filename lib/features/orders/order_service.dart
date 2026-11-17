@@ -10,6 +10,7 @@ import '../../core/utils/business_day.dart';
 import 'bill.dart';
 import 'bill_numbers.dart';
 import 'order_model.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Customer details as entered at the POS, normalised exactly like the
 /// original form did (handles name/phone typed in the wrong box).
@@ -273,7 +274,7 @@ class OrderService {
     if (first != null) return first;
     final seed = await _lastSeqInOrders(DateTime.now()) + 1;
     final second = await FirestorePaths.db.runTransaction<T?>((tx) => body(tx, seed));
-    if (second == null) throw StateError('Bill series could not be started');
+    if (second == null) throw StateError(tr('Bill series could not be started'));
     return second;
   }
 
@@ -407,7 +408,7 @@ class OrderService {
   /// reason + who did it are recorded – so the series never has hidden gaps.
   Future<void> voidOrder(PosOrder order, {required String reason}) async {
     final why = reason.trim();
-    if (why.isEmpty) throw ArgumentError('A reason is required to cancel a bill');
+    if (why.isEmpty) throw ArgumentError(tr('A reason is required to cancel a bill'));
     final who = AuthService.instance.currentUser;
     await _orders.doc(order.id).update({
       'status': 'cancelled',

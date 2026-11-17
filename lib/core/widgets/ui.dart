@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../layout/breakpoints.dart';
 import '../theme/tokens.dart';
 import '../utils/formatters.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Shared building blocks so every screen looks the same. All colours come
 /// from the active theme's [Palette] (light or dark).
@@ -312,9 +313,9 @@ class ErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) => EmptyState(
     icon: Icons.cloud_off_rounded,
-    title: 'Something went wrong',
+    title: tr('Something went wrong'),
     message: message,
-    action: onRetry == null ? null : OutlinedButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('Retry')),
+    action: onRetry == null ? null : OutlinedButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: Text(tr('Retry'))),
   );
 }
 
@@ -473,7 +474,7 @@ class QuantityStepper extends StatelessWidget {
             height: kTouch,
             child: IconButton(
               padding: EdgeInsets.zero,
-              tooltip: 'Decrease',
+              tooltip: tr('Decrease'),
               onPressed: () => onChanged(qty - 1),
               icon: Icon(qty <= 1 ? Icons.delete_outline_rounded : Icons.remove_rounded, size: 20, color: fg),
             ),
@@ -491,7 +492,7 @@ class QuantityStepper extends StatelessWidget {
             height: kTouch,
             child: IconButton(
               padding: EdgeInsets.zero,
-              tooltip: 'Increase',
+              tooltip: tr('Increase'),
               onPressed: () => onChanged(qty + 1),
               icon: Icon(Icons.add_rounded, size: 20, color: filled ? fg : p.primary),
             ),
@@ -515,7 +516,7 @@ class SearchField extends StatelessWidget {
     final field = TextField(
       controller: controller,
       onChanged: onChanged,
-      decoration: InputDecoration(hintText: hint, prefixIcon: const Icon(Icons.search_rounded, size: 20)),
+      decoration: InputDecoration(hintText: tr(hint), prefixIcon: const Icon(Icons.search_rounded, size: 20)),
     );
     return width == null ? field : SizedBox(width: width, child: field);
   }
@@ -542,6 +543,7 @@ class FilterPills<T> extends StatelessWidget {
             onSelected: (_) => onSelected(o.$1),
             labelStyle: TextStyle(
               fontFamily: AppTheme.fontFamily,
+              fontFamilyFallback: AppTheme.fontFallback,
               color: o.$1 == selected ? p.surface : p.inkMuted,
               fontWeight: o.$1 == selected ? FontWeight.w600 : FontWeight.w500,
             ),
@@ -611,7 +613,7 @@ class PickerField extends StatelessWidget {
             prefixIcon: icon == null ? null : Icon(icon, size: 18),
             suffixIcon: onClear == null
                 ? const Icon(Icons.arrow_drop_down_rounded)
-                : IconButton(tooltip: 'Clear', icon: const Icon(Icons.close_rounded, size: 18), onPressed: onClear),
+                : IconButton(tooltip: tr('Clear'), icon: const Icon(Icons.close_rounded, size: 18), onPressed: onClear),
           ),
           // Same text style as a dropdown field, so both are the same height.
           child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),

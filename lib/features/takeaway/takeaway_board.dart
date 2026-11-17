@@ -1,4 +1,5 @@
 import '../orders/order_model.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Pure grouping/timing logic for the Takeaway screen (unit-tested).
 class TakeawayBoard {
@@ -31,13 +32,13 @@ enum PickupState { asap, onTime, dueSoon, late }
 /// Promised-pickup status: "in 12 min", "due in 3 min", "late by 4 min".
 ({PickupState state, String label}) pickupStatus(PosOrder o, DateTime now) {
   final at = o.pickupAt;
-  if (at == null) return (state: PickupState.asap, label: 'ASAP');
+  if (at == null) return (state: PickupState.asap, label: tr('ASAP'));
   final diff = at.difference(now);
   final mins = diff.inSeconds.abs() ~/ 60 + (diff.inSeconds.abs() % 60 > 0 ? 1 : 0);
-  if (diff.isNegative && o.status != 'ready') return (state: PickupState.late, label: 'Late by $mins min');
-  if (diff.isNegative) return (state: PickupState.onTime, label: 'Waiting since ${-diff.inMinutes} min');
-  if (mins <= 5) return (state: PickupState.dueSoon, label: 'Due in $mins min');
-  return (state: PickupState.onTime, label: 'In $mins min');
+  if (diff.isNegative && o.status != 'ready') return (state: PickupState.late, label: tr('Late by {0} min', [mins]));
+  if (diff.isNegative) return (state: PickupState.onTime, label: tr('Waiting since {0} min', [-diff.inMinutes]));
+  if (mins <= 5) return (state: PickupState.dueSoon, label: tr('Due in {0} min', [mins]));
+  return (state: PickupState.onTime, label: tr('In {0} min', [mins]));
 }
 
 /// Total waiting customers' tokens, e.g. for "Now serving".

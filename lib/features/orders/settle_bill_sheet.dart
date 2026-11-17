@@ -11,6 +11,7 @@ import 'bill.dart';
 import '../receipt/bill_view.dart';
 import 'order_model.dart';
 import 'order_service.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Billing & checkout: discount, payment method, cash received / change,
 /// then "Mark paid" or "Paid & free table" (shows the receipt).
@@ -76,7 +77,7 @@ class _SettleSheetState extends State<_SettleSheet> {
   Future<void> _settle({required bool complete}) async {
     final b = _bill;
     if (_method == PaymentMethod.cash && _cashReceived != null && _cashReceived! < b.total) {
-      return showError(context, 'Cash received is less than the total.');
+      return showError(context, tr('Cash received is less than the total.'));
     }
     setState(() => _busy = true);
     try {
@@ -99,7 +100,7 @@ class _SettleSheetState extends State<_SettleSheet> {
     } catch (e) {
       if (mounted) {
         setState(() => _busy = false);
-        showError(context, 'Could not save the payment. Please check your connection.');
+        showError(context, tr('Could not save the payment. Please check your connection.'));
       }
     }
   }
@@ -119,7 +120,7 @@ class _SettleSheetState extends State<_SettleSheet> {
           children: [
             Row(
               children: [
-                Expanded(child: Text('Settle bill', style: context.text.headlineSmall)),
+                Expanded(child: Text(tr('Settle bill'), style: context.text.headlineSmall)),
                 Text(widget.order.billNo, style: TextStyle(color: p.inkSubtle, fontWeight: FontWeight.w600)),
               ],
             ),
@@ -157,13 +158,13 @@ class _SettleSheetState extends State<_SettleSheet> {
             const SizedBox(height: Space.lg),
 
             // Discount
-            Text('Discount', style: context.text.titleSmall),
+            Text(tr('Discount'), style: context.text.titleSmall),
             const SizedBox(height: Space.sm),
             Row(
               children: [
                 SegmentedButton<DiscountType>(
-                  segments: const [
-                    ButtonSegment(value: DiscountType.none, label: Text('None')),
+                  segments: [
+                    ButtonSegment(value: DiscountType.none, label: Text(tr('None'))),
                     ButtonSegment(value: DiscountType.percent, label: Text('%')),
                     ButtonSegment(value: DiscountType.amount, label: Text('₹')),
                   ],
@@ -183,7 +184,7 @@ class _SettleSheetState extends State<_SettleSheet> {
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
                       decoration: InputDecoration(
-                        hintText: _dType == DiscountType.percent ? 'e.g. 10' : 'e.g. 50',
+                        hintText: _dType == DiscountType.percent ? tr('e.g. 10') : tr('e.g. 50'),
                         suffixText: _dType == DiscountType.percent ? '%' : '₹',
                       ),
                       onChanged: (_) => setState(() {}),
@@ -204,7 +205,7 @@ class _SettleSheetState extends State<_SettleSheet> {
             const SizedBox(height: Space.lg),
 
             // Payment method
-            Text('Payment method', style: context.text.titleSmall),
+            Text(tr('Payment method'), style: context.text.titleSmall),
             const SizedBox(height: Space.sm),
             Row(
               children: [
@@ -229,7 +230,7 @@ class _SettleSheetState extends State<_SettleSheet> {
                       controller: _cash,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-                      decoration: const InputDecoration(labelText: 'Cash received', prefixText: '₹ '),
+                      decoration: InputDecoration(labelText: tr('Cash received'), prefixText: '₹ '),
                       onChanged: (_) => setState(() {}),
                     ),
                   ),
@@ -244,10 +245,10 @@ class _SettleSheetState extends State<_SettleSheet> {
                       ),
                       child: Row(
                         children: [
-                          Text('Change', style: TextStyle(color: p.inkSubtle, fontSize: 13)),
+                          Text(tr('Change'), style: TextStyle(color: p.inkSubtle, fontSize: 13)),
                           const Spacer(),
                           Text(
-                            _cashReceived == null ? '—' : (change >= 0 ? Fmt.money(change) : 'Short ${Fmt.money(-change)}'),
+                            _cashReceived == null ? '—' : (change >= 0 ? Fmt.money(change) : tr('Short {0}', [Fmt.money(-change)])),
                             style: TextStyle(
                               fontWeight: FontWeight.w800,
                               fontSize: 17,
@@ -277,13 +278,13 @@ class _SettleSheetState extends State<_SettleSheet> {
               decoration: BoxDecoration(border: Border.all(color: p.border), borderRadius: Radii.cardR),
               child: Column(
                 children: [
-                  _row('Subtotal', Fmt.money(b.subtotal)),
-                  if (b.discount > 0) _row('Discount', '− ₹${b.discount.toStringAsFixed(2)}', color: p.primaryHover),
-                  if (b.gstEnabled) _row('GST ${formatPrice(b.gstPercent)}%', '₹${b.gst.toStringAsFixed(2)}'),
+                  _row(tr('Subtotal'), Fmt.money(b.subtotal)),
+                  if (b.discount > 0) _row(tr('Discount'), '− ₹${b.discount.toStringAsFixed(2)}', color: p.primaryHover),
+                  if (b.gstEnabled) _row(tr('GST {0}%', [formatPrice(b.gstPercent)]), '₹${b.gst.toStringAsFixed(2)}'),
                   const Divider(height: Space.lg),
                   Row(
                     children: [
-                      Text('Grand total', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                      Text(tr('Grand total'), style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
                       const Spacer(),
                       MoneyText(b.total, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
                     ],
@@ -298,14 +299,14 @@ class _SettleSheetState extends State<_SettleSheet> {
                   child: OutlinedButton.icon(
                     onPressed: _busy ? null : () => printBill(context, order: _draftWithDiscount(), settings: widget.settings.receiptSettings, orderId: widget.order.id),
                     icon: const Icon(Icons.print_outlined, size: 18),
-                    label: const Text('Print'),
+                    label: Text(tr('Print')),
                   ),
                 ),
                 const SizedBox(width: Space.sm),
                 Expanded(
                   child: OutlinedButton(
                     onPressed: _busy ? null : () => _settle(complete: false),
-                    child: const Text('Mark paid'),
+                    child: Text(tr('Mark paid')),
                   ),
                 ),
               ],
@@ -319,7 +320,7 @@ class _SettleSheetState extends State<_SettleSheet> {
                 icon: _busy
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.check_circle_outline),
-                label: Text(widget.order.isTakeaway && widget.order.tableNo.isEmpty ? 'Paid & hand over' : 'Paid & free table',
+                label: Text(widget.order.isTakeaway && widget.order.tableNo.isEmpty ? tr('Paid & hand over') : tr('Paid & free table'),
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
               ),
             ),
@@ -378,7 +379,7 @@ class _MethodButton extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, size: 20, color: selected ? p.primary : p.inkSubtle),
-              Text(method.label, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: selected ? p.primaryHover : p.inkMuted)),
+              Text(tr(method.label), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: selected ? p.primaryHover : p.inkMuted)),
             ],
           ),
         ),

@@ -20,6 +20,7 @@ import '../orders/order_service.dart';
 import '../settings/business_settings.dart';
 import 'pos_cart.dart';
 import 'print_helper.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Take a new order or edit an existing one (Manager and Captain).
 ///
@@ -186,7 +187,7 @@ class _PosScreenState extends State<PosScreen> {
   }
 
   Future<void> _printDraft() async {
-    if (cart.isEmpty) return showError(context, 'Add at least one item to print the bill.');
+    if (cart.isEmpty) return showError(context, tr('Add at least one item to print the bill.'));
     await printBill(context, order: _draft(), settings: _bs.receiptSettings, orderId: widget.editing?.id);
   }
 
@@ -199,12 +200,12 @@ class _PosScreenState extends State<PosScreen> {
 
   Future<void> _save() async {
     if (_saving) return;
-    if (cart.isEmpty) return showError(context, 'Add at least one item.');
+    if (cart.isEmpty) return showError(context, tr('Add at least one item.'));
     if (_name.text.trim().isEmpty) {
       setState(() => _nameMissing = true);
       cart.touch(); // the phone cart sheet rebuilds from the cart
       _nameFocus.requestFocus();
-      return showError(context, 'Enter the customer name.');
+      return showError(context, tr('Enter the customer name.'));
     }
     setState(() => _saving = true);
     cart.touch();
@@ -226,7 +227,7 @@ class _PosScreenState extends State<PosScreen> {
         assignBillNumber: _bs.autoGenBillNumber,
       );
       if (!mounted) return;
-      final msg = widget.editing == null ? 'Order sent to kitchen' : 'Order updated';
+      final msg = widget.editing == null ? tr('Order sent to kitchen') : tr('Order updated');
       if (_sheetOpen) Navigator.of(context).pop();
       // New takeaway: show the token big so it can be told/printed for the customer.
       if (isTakeaway && widget.editing == null) {
@@ -249,7 +250,7 @@ class _PosScreenState extends State<PosScreen> {
       });
       widget.onDone?.call();
     } catch (e) {
-      if (mounted) showError(context, 'Could not save the order. Please check your connection.');
+      if (mounted) showError(context, tr('Could not save the order. Please check your connection.'));
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -265,11 +266,11 @@ class _PosScreenState extends State<PosScreen> {
         final p = ctx.palette;
         return AlertDialog(
           icon: Icon(Icons.shopping_bag_outlined, color: p.primary, size: 32),
-          title: const Text('Takeaway order placed', textAlign: TextAlign.center),
+          title: Text(tr('Takeaway order placed'), textAlign: TextAlign.center),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(token == null ? 'Bill' : 'Token', style: TextStyle(color: p.inkSubtle, fontWeight: FontWeight.w600)),
+              Text(token == null ? tr('Bill') : tr('Token'), style: TextStyle(color: p.inkSubtle, fontWeight: FontWeight.w600)),
               Text(
                 token == null ? displayBillNo(order, orderId) : '#$token',
                 style: TextStyle(fontSize: 64, fontWeight: FontWeight.w800, color: p.primary, height: 1.1, letterSpacing: -1),
@@ -281,9 +282,9 @@ class _PosScreenState extends State<PosScreen> {
             OutlinedButton.icon(
               onPressed: () => printBill(ctx, order: order, settings: _bs.receiptSettings, orderId: orderId),
               icon: const Icon(Icons.print_outlined, size: 18),
-              label: const Text('Print token'),
+              label: Text(tr('Print token')),
             ),
-            FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done')),
+            FilledButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Done'))),
           ],
         );
       },
@@ -295,11 +296,11 @@ class _PosScreenState extends State<PosScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Clear the cart?'),
-        content: const Text('All items in this order will be removed.'),
+        title: Text(tr('Clear the cart?')),
+        content: Text(tr('All items in this order will be removed.')),
         actions: [
-          OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear')),
+          OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Keep'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Clear'))),
         ],
       ),
     );
@@ -313,8 +314,8 @@ class _PosScreenState extends State<PosScreen> {
     final body = StreamBuilder<MenuData>(
       stream: _menu,
       builder: (context, snap) {
-        if (snap.hasError) return const ErrorState(message: 'Could not load the menu.');
-        if (!snap.hasData) return const LoadingState(label: 'Loading menu…');
+        if (snap.hasError) return ErrorState(message: tr('Could not load the menu.'));
+        if (!snap.hasData) return LoadingState(label: tr('Loading menu…'));
         final menu = snap.data!;
         return LayoutBuilder(builder: (context, c) {
           if (c.maxWidth >= 900) {
@@ -339,7 +340,7 @@ class _PosScreenState extends State<PosScreen> {
 
     if (!widget.standalone) return body;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.editing == null ? 'New order' : 'Edit ${widget.editing!.displayName}')),
+      appBar: AppBar(title: Text(widget.editing == null ? tr('New order') : tr('Edit {0}', [widget.editing!.displayName]))),
       body: body,
     );
   }
@@ -409,13 +410,13 @@ class _PosScreenState extends State<PosScreen> {
             children: [
               SearchField(
                 controller: _search,
-                hint: 'Search menu',
+                hint: tr('Search menu'),
                 onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
               ),
               if (showCategoryPills && _query.isEmpty) ...[
                 const SizedBox(height: Space.md),
                 FilterPills<String?>(
-                  options: [(null, 'All'), for (final c in menu.categories) (c.id, c.name)],
+                  options: [(null, tr('All')), for (final c in menu.categories) (c.id, c.name)],
                   selected: _categoryId,
                   onSelected: _selectCategory,
                 ),
@@ -423,7 +424,7 @@ class _PosScreenState extends State<PosScreen> {
               if (subs.isNotEmpty && _query.isEmpty) ...[
                 const SizedBox(height: Space.sm),
                 FilterPills<String?>(
-                  options: [(null, 'All'), for (final s in subs) (s.id, s.name)],
+                  options: [(null, tr('All')), for (final s in subs) (s.id, s.name)],
                   selected: _subcategoryId,
                   onSelected: (v) => setState(() => _subcategoryId = v),
                 ),
@@ -434,9 +435,9 @@ class _PosScreenState extends State<PosScreen> {
         Divider(height: 1, color: p.border),
         Expanded(
           child: menu.items.isEmpty
-              ? const EmptyState(icon: Icons.restaurant_menu, title: 'Menu is empty', message: 'Add items from the Menu section.')
+              ? EmptyState(icon: Icons.restaurant_menu, title: tr('Menu is empty'), message: tr('Add items from the Menu section.'))
               : items.isEmpty
-                  ? const EmptyState(icon: Icons.search_off_rounded, title: 'No items found')
+                  ? EmptyState(icon: Icons.search_off_rounded, title: tr('No items found'))
                   : ListView(
                       padding: EdgeInsets.fromLTRB(pad, Space.lg, pad, Space.xxl),
                       children: [
@@ -489,21 +490,21 @@ class _PosScreenState extends State<PosScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(editing == null ? 'Current order' : 'Editing ${editing.billNo}', style: context.text.titleLarge),
+                        child: Text(editing == null ? tr('Current order') : tr('Editing {0}', [editing.billNo]), style: context.text.titleLarge),
                       ),
                       if (!cart.isEmpty)
                         TextButton(
                           onPressed: _confirmClear,
                           style: TextButton.styleFrom(foregroundColor: p.danger),
-                          child: const Text('Clear'),
+                          child: Text(tr('Clear')),
                         ),
                     ],
                   ),
                   const SizedBox(height: Space.md),
                   SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: 'Dine-In', label: Text('Dine-in'), icon: Icon(Icons.table_restaurant_outlined, size: 18)),
-                      ButtonSegment(value: 'Takeaway', label: Text('Takeaway'), icon: Icon(Icons.shopping_bag_outlined, size: 18)),
+                    segments: [
+                      ButtonSegment(value: 'Dine-In', label: Text(tr('Dine-in')), icon: Icon(Icons.table_restaurant_outlined, size: 18)),
+                      ButtonSegment(value: 'Takeaway', label: Text(tr('Takeaway')), icon: Icon(Icons.shopping_bag_outlined, size: 18)),
                     ],
                     selected: {cart.orderType == 'Takeaway' ? 'Takeaway' : 'Dine-In'},
                     onSelectionChanged: (s) => cart.setOrderType(s.first),
@@ -513,11 +514,12 @@ class _PosScreenState extends State<PosScreen> {
                   if (cart.orderType != 'Takeaway') ...[
                     TextField(
                       controller: _table,
-                      decoration: const InputDecoration(labelText: 'Table / counter', prefixIcon: Icon(Icons.table_restaurant_outlined, size: 20)),
+                      decoration: InputDecoration(labelText: tr('Table / counter'), prefixIcon: Icon(Icons.table_restaurant_outlined, size: 20)),
                     ),
                     const SizedBox(height: Space.md),
                   ],
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start, // helper text under Mobile
                     children: [
                       Expanded(
                         child: TextField(
@@ -526,9 +528,9 @@ class _PosScreenState extends State<PosScreen> {
                           inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
                           onChanged: _lookup,
                           decoration: InputDecoration(
-                            labelText: 'Mobile',
+                            labelText: tr('Mobile'),
                             // Consent: say why the number is taken.
-                            helperText: 'Ask first · for the bill & WhatsApp only',
+                            helperText: tr('Ask first · for the bill & WhatsApp only'),
                             prefixIcon: const Icon(Icons.phone_outlined, size: 20),
                             suffixIcon: _lookingUp
                                 ? const Padding(padding: EdgeInsets.all(14), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))
@@ -551,8 +553,8 @@ class _PosScreenState extends State<PosScreen> {
                             }
                           },
                           decoration: InputDecoration(
-                            labelText: 'Customer name *',
-                            errorText: _nameMissing ? 'Name is required' : null,
+                            labelText: tr('Customer name *'),
+                            errorText: _nameMissing ? tr('Name is required') : null,
                           ),
                         ),
                       ),
@@ -569,7 +571,7 @@ class _PosScreenState extends State<PosScreen> {
                           const SizedBox(width: Space.sm),
                           Expanded(
                             child: Text(
-                              'Welcome back, ${_known!.name}${_known!.lastVisit != null ? ' · last visit ${Fmt.date(_known!.lastVisit)}' : ''}',
+                              tr('Welcome back, {0}{1}', [_known!.name, _known!.lastVisit != null ? tr(' · last visit {0}', [Fmt.date(_known!.lastVisit)]) : '']),
                               style: TextStyle(color: p.success, fontWeight: FontWeight.w600, fontSize: 13),
                             ),
                           ),
@@ -577,9 +579,9 @@ class _PosScreenState extends State<PosScreen> {
                             TextButton(
                               onPressed: () {
                                 cart.addAll(_known!.lastItems);
-                                showSuccess(context, 'Previous items added');
+                                showSuccess(context, tr('Previous items added'));
                               },
-                              child: const Text('Repeat'),
+                              child: Text(tr('Repeat')),
                             ),
                         ],
                       ),
@@ -594,8 +596,8 @@ class _PosScreenState extends State<PosScreen> {
                         children: [
                           Icon(Icons.shopping_cart_outlined, size: 36, color: p.borderStrong),
                           const SizedBox(height: Space.sm),
-                          Text('No items yet', style: TextStyle(color: p.inkSubtle, fontWeight: FontWeight.w600)),
-                          Text('Tap a menu item to add it', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
+                          Text(tr('No items yet'), style: TextStyle(color: p.inkSubtle, fontWeight: FontWeight.w600)),
+                          Text(tr('Tap a menu item to add it'), style: TextStyle(color: p.inkSubtle, fontSize: 12)),
                         ],
                       ),
                     )
@@ -607,7 +609,7 @@ class _PosScreenState extends State<PosScreen> {
                       key: const Key('pos-add-extra'),
                       onPressed: _addExtra,
                       icon: const Icon(Icons.add_shopping_cart_outlined, size: 18),
-                      label: const Text('Extra item (not on menu)'),
+                      label: Text(tr('Extra item (not on menu)')),
                     ),
                   ),
                   const SizedBox(height: Space.sm),
@@ -615,9 +617,9 @@ class _PosScreenState extends State<PosScreen> {
                     controller: _note,
                     maxLines: 2,
                     minLines: 1,
-                    decoration: const InputDecoration(
-                      labelText: 'Kitchen note (optional)',
-                      hintText: 'e.g. less spicy, Jain, no onion',
+                    decoration: InputDecoration(
+                      labelText: tr('Kitchen note (optional)'),
+                      hintText: tr('e.g. less spicy, Jain, no onion'),
                       prefixIcon: Icon(Icons.sticky_note_2_outlined, size: 20),
                     ),
                   ),
@@ -632,12 +634,12 @@ class _PosScreenState extends State<PosScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _totalRow('Subtotal', Fmt.money(b.subtotal)),
-                    if (b.gstEnabled) _totalRow('GST ${formatPrice(b.gstPercent)}%', '₹${b.gst.toStringAsFixed(2)}'),
+                    _totalRow(tr('Subtotal'), Fmt.money(b.subtotal)),
+                    if (b.gstEnabled) _totalRow(tr('GST {0}%', [formatPrice(b.gstPercent)]), '₹${b.gst.toStringAsFixed(2)}'),
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Text('Total', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                        Text(tr('Total'), style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
                         const Spacer(),
                         MoneyText(b.total, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
                       ],
@@ -649,7 +651,7 @@ class _PosScreenState extends State<PosScreen> {
                           child: OutlinedButton.icon(
                             onPressed: cart.isEmpty ? null : _printDraft,
                             icon: const Icon(Icons.print_outlined, size: 18),
-                            label: const Text('Print bill'),
+                            label: Text(tr('Print bill')),
                           ),
                         ),
                         const SizedBox(width: Space.sm),
@@ -661,7 +663,7 @@ class _PosScreenState extends State<PosScreen> {
                               onPressed: cart.isEmpty || _saving ? null : _save,
                               child: _saving
                                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                                  : Text(editing == null ? 'Send to kitchen' : 'Update order', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                                  : Text(editing == null ? tr('Send to kitchen') : tr('Update order'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                             ),
                           ),
                         ),
@@ -705,7 +707,7 @@ class _PosScreenState extends State<PosScreen> {
               children: [
                 Text(l['name'].toString(), style: const TextStyle(fontWeight: FontWeight.w600)),
                 Text(
-                  [if (size != 'Standard') size, '₹${formatPrice(price)} each', if (l['custom'] == true) 'extra' else if (l['isDone'] == true) 'sent'].join(' · '),
+                  [if (size != 'Standard') size, tr('₹{0} each', [formatPrice(price)]), if (l['custom'] == true) 'extra' else if (l['isDone'] == true) 'sent'].join(' · '),
                   style: TextStyle(fontSize: 12, color: p.inkSubtle),
                 ),
               ],
@@ -771,7 +773,7 @@ class _CategoryRail extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.all(Space.md),
         children: [
-          tile(null, 'All items', menu.items.length),
+          tile(null, tr('All items'), menu.items.length),
           for (final c in menu.categories) tile(c.id, c.name, menu.itemsOf(c.id).length),
         ],
       ),
@@ -812,7 +814,7 @@ class _ItemCard extends StatelessWidget {
                     Container(
                       color: p.surface.withValues(alpha: 0.7),
                       alignment: Alignment.center,
-                      child: const StatusChip('Sold out'),
+                      child: StatusChip(tr('Sold out')),
                     ),
                   if (qty > 0)
                     Positioned(
@@ -874,7 +876,7 @@ class _ItemRow extends StatelessWidget {
 
     Widget action;
     if (off) {
-      action = const StatusChip('Sold out');
+      action = StatusChip(tr('Sold out'));
     } else if (simpleIdx >= 0) {
       action = QuantityStepper(
         qty: ((cart.lines[simpleIdx]['qty'] ?? 1) as num).toInt(),
@@ -892,7 +894,7 @@ class _ItemRow extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
           ),
           onPressed: onAdd,
-          child: Text(qty > 0 ? 'Add · $qty' : 'Add'),
+          child: Text(qty > 0 ? tr('Add · {0}', [qty]) : tr('Add')),
         ),
       );
     }
@@ -1024,7 +1026,7 @@ class _MobileCartBar extends StatelessWidget {
                   child: Text('${cart.itemCount}', style: TextStyle(color: p.primary, fontWeight: FontWeight.w800)),
                 ),
                 const SizedBox(width: Space.md),
-                Expanded(child: Text(cart.isEmpty ? 'Order details' : 'View order', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700))),
+                Expanded(child: Text(cart.isEmpty ? tr('Order details') : tr('View order'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700))),
                 MoneyText(total, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
               ],
             ),

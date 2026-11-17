@@ -1,3 +1,4 @@
+import 'package:pos_app/core/i18n/tr.dart';
 /// The three platform roles. Stored as Firebase Auth custom claims, which only
 /// the backend can set — the app only ever reads them.
 enum UserRole {
@@ -5,11 +6,12 @@ enum UserRole {
   manager('manager', 'Manager'),
   captain('captain', 'Captain');
 
-  const UserRole(this.claim, this.label);
+  const UserRole(this.claim, this.englishLabel);
 
   /// Value used in custom claims and Firestore `users/{uid}.role`.
   final String claim;
-  final String label;
+  final String englishLabel;
+  String get label => tr(englishLabel);
 
   static UserRole? fromClaim(Object? value) {
     for (final r in UserRole.values) {

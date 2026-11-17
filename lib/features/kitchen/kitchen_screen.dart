@@ -7,6 +7,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/ui.dart';
 import '../orders/order_model.dart';
 import '../orders/order_service.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Kitchen display: New → Preparing → Ready. Same status updates as the
 /// original Captain screen (status + kitchenStatus).
@@ -40,7 +41,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
     try {
       await OrderService.instance.setStatus(o.id, status);
     } catch (_) {
-      if (mounted) showError(context, 'Could not update. Please check your connection.');
+      if (mounted) showError(context, tr('Could not update. Please check your connection.'));
     }
   }
 
@@ -50,7 +51,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
       stream: _orders,
       builder: (context, snap) {
         if (snap.hasError) return const ErrorState();
-        if (!snap.hasData) return const LoadingState(label: 'Loading orders…');
+        if (!snap.hasData) return LoadingState(label: tr('Loading orders…'));
         final active = snap.data!.where((o) => o.isActive).toList()
           ..sort((a, b) => (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0)));
         final cols = {
@@ -60,10 +61,10 @@ class _KitchenScreenState extends State<KitchenScreen> {
         };
 
         if (active.isEmpty) {
-          return const EmptyState(
+          return EmptyState(
             icon: Icons.soup_kitchen_outlined,
-            title: 'No active orders',
-            message: 'New orders will appear here automatically.',
+            title: tr('No active orders'),
+            message: tr('New orders will appear here automatically.'),
           );
         }
 
@@ -75,9 +76,9 @@ class _KitchenScreenState extends State<KitchenScreen> {
                 child: SegmentedButton<String>(
                   showSelectedIcon: false,
                   segments: [
-                    ButtonSegment(value: 'pending', label: Text('New ${cols['pending']!.length}')),
-                    ButtonSegment(value: 'preparing', label: Text('Cooking ${cols['preparing']!.length}')),
-                    ButtonSegment(value: 'ready', label: Text('Ready ${cols['ready']!.length}')),
+                    ButtonSegment(value: 'pending', label: Text(tr('New {0}', [cols['pending']!.length]))),
+                    ButtonSegment(value: 'preparing', label: Text(tr('Cooking {0}', [cols['preparing']!.length]))),
+                    ButtonSegment(value: 'ready', label: Text(tr('Ready {0}', [cols['ready']!.length]))),
                   ],
                   selected: {_mobileTab},
                   onSelectionChanged: (s) => setState(() => _mobileTab = s.first),
@@ -107,9 +108,9 @@ class _KitchenScreenState extends State<KitchenScreen> {
   Widget _column(BuildContext context, String status, List<PosOrder> list, {bool showHeader = true}) {
     final p = context.palette;
     final (title, color) = switch (status) {
-      'pending' => ('New orders', p.warning),
-      'preparing' => ('Preparing', p.info),
-      _ => ('Ready to serve', p.success),
+      'pending' => (tr('New orders'), p.warning),
+      'preparing' => (tr('Preparing'), p.info),
+      _ => (tr('Ready to serve'), p.success),
     };
     return Container(
       decoration: showHeader ? BoxDecoration(color: p.surfaceAlt, borderRadius: Radii.cardR) : null,
@@ -139,7 +140,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
           Expanded(
             child: list.isEmpty
                 ? Center(
-                    child: Text('Nothing here', style: TextStyle(color: p.inkSubtle)),
+                    child: Text(tr('Nothing here'), style: TextStyle(color: p.inkSubtle)),
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.all(Space.md),
@@ -219,7 +220,7 @@ class _TicketCard extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
-                          'NEW ITEMS ADDED',
+                          tr('NEW ITEMS ADDED'),
                           style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: p.primary, letterSpacing: 0.5),
                         ),
                       ),
@@ -272,20 +273,20 @@ class _TicketCard extends StatelessWidget {
                         style: FilledButton.styleFrom(backgroundColor: p.info, foregroundColor: context.onStatusFill),
                         onPressed: () => onAdvance(o, 'preparing'),
                         icon: const Icon(Icons.local_fire_department_outlined),
-                        label: const Text('Start cooking'),
+                        label: Text(tr('Start cooking')),
                       )
                     else if (o.status == 'preparing')
                       FilledButton.icon(
                         style: FilledButton.styleFrom(backgroundColor: p.success, foregroundColor: context.onStatusFill),
                         onPressed: () => onAdvance(o, 'ready'),
                         icon: const Icon(Icons.check_circle_outline),
-                        label: const Text('Mark ready'),
+                        label: Text(tr('Mark ready')),
                       )
                     else
                       OutlinedButton.icon(
                         onPressed: () => onAdvance(o, 'preparing'),
                         icon: const Icon(Icons.undo_rounded, size: 18),
-                        label: const Text('Back to preparing'),
+                        label: Text(tr('Back to preparing')),
                       ),
                   ],
                 ),

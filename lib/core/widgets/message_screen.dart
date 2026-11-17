@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/tokens.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Full-screen message with an optional action, used for loading/blocked/
 /// error states (e.g. "account not set up", "cafe suspended").
@@ -25,7 +26,7 @@ class MessageScreen extends StatelessWidget {
               children: [
                 const SizedBox(width: 30, height: 30, child: CircularProgressIndicator(strokeWidth: 3)),
                 const SizedBox(height: Space.lg),
-                Text(text, style: TextStyle(color: context.palette.inkSubtle)),
+                Text(tr(text), style: TextStyle(color: context.palette.inkSubtle)),
               ],
             ),
           ),
@@ -62,7 +63,7 @@ class MessageScreen extends StatelessWidget {
                 const SizedBox(height: Space.lg),
                 Text(title, textAlign: TextAlign.center, style: context.text.headlineSmall),
                 const SizedBox(height: Space.sm),
-                Text(message, textAlign: TextAlign.center, style: TextStyle(color: p.inkSubtle, height: 1.4)),
+                Text(tr(message), textAlign: TextAlign.center, style: TextStyle(color: p.inkSubtle, height: 1.4)),
                 if (actionLabel != null && onAction != null) ...[
                   const SizedBox(height: Space.xl),
                   OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),

@@ -1,4 +1,5 @@
 import '../utils/formatters.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Cafe lifecycle status (set by the Super Admin).
 class CafeStatus {
@@ -60,24 +61,24 @@ const int kExpiryWarningDays = 7;
 ///   - subscription expiry date (if set) must be in the future
 /// Data is never deleted when access is blocked.
 CafeAccess evaluateCafeAccess(Map<String, dynamic> cafe, DateTime now) {
-  final name = (cafe['name'] ?? 'This cafe').toString();
+  final name = (cafe['name'] ?? tr('This cafe')).toString();
   final status = (cafe['status'] ?? CafeStatus.active).toString();
 
   if (status == CafeStatus.deleted) {
     return CafeAccess(CafeAccessState.blocked,
-        title: '$name has been closed', message: 'This cafe account is no longer active. Please contact the administrator.');
+        title: tr('{0} has been closed', [name]), message: tr('This cafe account is no longer active. Please contact the administrator.'));
   }
   if (status == CafeStatus.suspended) {
     return CafeAccess(CafeAccessState.blocked,
-        title: '$name is suspended', message: 'Access has been paused by the administrator. Your data is safe.');
+        title: tr('{0} is suspended', [name]), message: tr('Access has been paused by the administrator. Your data is safe.'));
   }
   if (status != CafeStatus.active) {
     return CafeAccess(CafeAccessState.blocked,
-        title: '$name is inactive', message: 'This cafe is currently inactive. Please contact the administrator.');
+        title: tr('{0} is inactive', [name]), message: tr('This cafe is currently inactive. Please contact the administrator.'));
   }
   if (cafe['legacyData'] == true) {
     return CafeAccess(CafeAccessState.migrating,
-        title: '$name is being upgraded', message: 'Your cafe data is being moved to the new system. Please try again shortly.');
+        title: tr('{0} is being upgraded', [name]), message: tr('Your cafe data is being moved to the new system. Please try again shortly.'));
   }
 
   final sub = cafe['subscription'];
@@ -88,13 +89,12 @@ CafeAccess evaluateCafeAccess(Map<String, dynamic> cafe, DateTime now) {
 
   if (subStatus == SubscriptionStatus.suspended) {
     return CafeAccess(CafeAccessState.blocked,
-        title: 'Subscription suspended', message: 'The POS subscription for $name is suspended. Your data is safe. Please contact the administrator.');
+        title: tr('Subscription suspended'), message: tr('The POS subscription for {0} is suspended. Your data is safe. Please contact the administrator.', [name]));
   }
   if (subStatus == SubscriptionStatus.expired || (expiry != null && !expiry.isAfter(now))) {
     return CafeAccess(CafeAccessState.blocked,
-        title: 'Subscription expired',
-        message: 'The POS subscription for $name expired${expiry != null ? ' on ${Fmt.date(expiry)}' : ''}. '
-            'Your data is safe. Please renew to continue using the POS.');
+        title: tr('Subscription expired'),
+        message: tr('The POS subscription for {0} expired{1}. Your data is safe. Please renew to continue using the POS.', [name, expiry != null ? ' on ${Fmt.date(expiry)}' : '']));
   }
 
   if (expiry != null) {
@@ -102,18 +102,18 @@ CafeAccess evaluateCafeAccess(Map<String, dynamic> cafe, DateTime now) {
     if (daysLeft <= kExpiryWarningDays) {
       final d = daysLeft.ceil();
       return CafeAccess(CafeAccessState.allowedWithWarning,
-          message: 'Subscription expires ${d <= 1 ? 'within a day' : 'in $d days'} (${Fmt.date(expiry)}). Please renew to avoid interruption.');
+          message: tr('Subscription expires {0} ({1}). Please renew to avoid interruption.', [d <= 1 ? tr('within a day') : tr('in {0} days', [d]), Fmt.date(expiry)]));
     }
   }
   if (subStatus == SubscriptionStatus.cancelled) {
     return CafeAccess(CafeAccessState.allowedWithWarning,
-        message: 'Subscription cancelled${expiry != null ? ' – the POS works until ${Fmt.date(expiry)}' : ''}. Please contact the administrator to renew.');
+        message: tr('Subscription cancelled{0}. Please contact the administrator to renew.', [expiry != null ? tr(' – the POS works until {0}', [Fmt.date(expiry)]) : '']));
   }
   if (subStatus == SubscriptionStatus.pending) {
-    return const CafeAccess(CafeAccessState.allowedWithWarning, message: 'Subscription payment is pending. Please contact the administrator.');
+    return CafeAccess(CafeAccessState.allowedWithWarning, message: tr('Subscription payment is pending. Please contact the administrator.'));
   }
   if (subStatus == SubscriptionStatus.trial && expiry != null) {
-    return CafeAccess(CafeAccessState.allowed, message: 'Trial until ${Fmt.date(expiry)}');
+    return CafeAccess(CafeAccessState.allowed, message: tr('Trial until {0}', [Fmt.date(expiry)]));
   }
   return const CafeAccess(CafeAccessState.allowed);
 }

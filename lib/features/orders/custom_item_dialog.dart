@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/theme/tokens.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// An item that is not on the menu (e.g. a cold drink or cigarettes the
 /// manager fetched for the customer), added to an order with its own price.
@@ -39,7 +40,7 @@ Future<CustomItem?> showCustomItemDialog(BuildContext context) {
       }
 
       return AlertDialog(
-        title: const Text('Add extra item'),
+        title: Text(tr('Add extra item')),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 400),
           child: SingleChildScrollView(
@@ -47,7 +48,7 @@ Future<CustomItem?> showCustomItemDialog(BuildContext context) {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('For things not on the menu, e.g. a cold drink or water bottle bought for the customer.',
+                Text(tr('For things not on the menu, e.g. a cold drink or water bottle bought for the customer.'),
                     style: TextStyle(color: ctx.palette.inkSubtle, fontSize: 13)),
                 const SizedBox(height: Space.lg),
                 TextField(
@@ -55,7 +56,7 @@ Future<CustomItem?> showCustomItemDialog(BuildContext context) {
                   controller: name,
                   autofocus: true,
                   textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(labelText: 'Item name', hintText: 'e.g. Coke 750 ml'),
+                  decoration: InputDecoration(labelText: tr('Item name'), hintText: tr('e.g. Coke 750 ml')),
                   onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: Space.md),
@@ -67,7 +68,7 @@ Future<CustomItem?> showCustomItemDialog(BuildContext context) {
                       controller: price,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-                      decoration: const InputDecoration(labelText: 'Price (each)', prefixText: '₹ '),
+                      decoration: InputDecoration(labelText: tr('Price (each)'), prefixText: '₹ '),
                       onChanged: (_) => setState(() {}),
                       onSubmitted: (_) => submit(),
                     ),
@@ -80,7 +81,7 @@ Future<CustomItem?> showCustomItemDialog(BuildContext context) {
                       controller: qty,
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(labelText: 'Qty'),
+                      decoration: InputDecoration(labelText: tr('Qty')),
                       onChanged: (_) => setState(() {}),
                       onSubmitted: (_) => submit(),
                     ),
@@ -91,10 +92,10 @@ Future<CustomItem?> showCustomItemDialog(BuildContext context) {
           ),
         ),
         actions: [
-          OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          OutlinedButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel'))),
           FilledButton(
             onPressed: item == null ? null : submit,
-            child: Text(item == null ? 'Add' : 'Add  ₹${_fmt(item.price * item.qty)}'),
+            child: Text(item == null ? tr('Add') : tr('Add  ₹{0}', [_fmt(item.price * item.qty)])),
           ),
         ],
       );

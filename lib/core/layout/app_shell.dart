@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/tokens.dart';
 import 'breakpoints.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 class ShellDestination {
   const ShellDestination({
@@ -142,7 +143,7 @@ class AppShell extends StatelessWidget {
         actions: [
           ...actions,
           if (wide) ...[
-            IconButton(tooltip: 'Sign out', onPressed: onLogout, icon: const Icon(Icons.logout_rounded)),
+            IconButton(tooltip: tr('Sign out'), onPressed: onLogout, icon: const Icon(Icons.logout_rounded)),
           ],
           const SizedBox(width: Space.sm),
         ],
@@ -167,7 +168,7 @@ class AppShell extends StatelessWidget {
               label: destinations[i].label,
               tooltip: destinations[i].label,
             ),
-          if (hasMore) const NavigationDestination(icon: Icon(Icons.menu_rounded), label: 'More'),
+          if (hasMore) NavigationDestination(icon: Icon(Icons.menu_rounded), label: tr('More')),
         ],
       ),
     );
@@ -205,7 +206,7 @@ class AppShell extends StatelessWidget {
               selectedIcon: _badge(context, destinations[i].badge, Icon(destinations[i].selectedIcon)),
               label: destinations[i].label,
             ),
-          if (hasMore) const NavigationDestination(icon: Icon(Icons.menu_rounded), label: 'More'),
+          if (hasMore) NavigationDestination(icon: Icon(Icons.menu_rounded), label: tr('More')),
         ],
       ),
     );
@@ -243,7 +244,7 @@ class AppShell extends StatelessWidget {
                 ListTile(
                   minTileHeight: 52,
                   leading: const Icon(Icons.logout_rounded),
-                  title: const Text('Sign out', style: TextStyle(fontWeight: FontWeight.w600)),
+                  title: Text(tr('Sign out'), style: TextStyle(fontWeight: FontWeight.w600)),
                   onTap: () {
                     Navigator.pop(ctx);
                     onLogout();
@@ -433,7 +434,7 @@ class _Sidebar extends StatelessWidget {
                       minTileHeight: kTouch,
                       leading: const Icon(Icons.logout_rounded, size: 20),
                       title: Text(
-                        'Sign out',
+                        tr('Sign out'),
                         style: TextStyle(color: p.inkMuted, fontWeight: FontWeight.w500),
                       ),
                       onTap: shell.onLogout,
@@ -482,7 +483,7 @@ class _Rail extends StatelessWidget {
               ),
             ),
             IconButton(
-              tooltip: 'Sign out',
+              tooltip: tr('Sign out'),
               onPressed: shell.onLogout,
               icon: Icon(Icons.logout_rounded, color: p.inkSubtle),
             ),

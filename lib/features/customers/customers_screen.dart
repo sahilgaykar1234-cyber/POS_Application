@@ -10,6 +10,7 @@ import '../../core/widgets/confirm_dialog.dart';
 import 'customer_privacy.dart';
 import '../orders/order_model.dart';
 import '../orders/order_service.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 class CustomerSummary {
   CustomerSummary({required this.name, required this.phone, required this.lastOrder});
@@ -87,23 +88,23 @@ class _CustomersScreenState extends State<CustomersScreen> {
 
         return PageBody(
           children: [
-            PageHeader(title: 'Customers', subtitle: '$total customers · $repeat repeat'),
+            PageHeader(title: tr('Customers'), subtitle: tr('{0} customers · {1} repeat', [total, repeat])),
             ResponsiveGrid(minTileWidth: 170, equalHeights: true, fill: true, children: [
-              StatCard(label: 'Customers', value: '$total', icon: Icons.groups_outlined, color: p.info, caption: 'With a completed bill'),
+              StatCard(label: tr('Customers'), value: '$total', icon: Icons.groups_outlined, color: p.info, caption: tr('With a completed bill')),
               StatCard(
-                label: 'Repeat customers',
+                label: tr('Repeat customers'),
                 value: '$repeat',
                 icon: Icons.repeat_rounded,
                 color: p.success,
-                caption: total == 0 ? 'No customers yet' : '${(repeat / total * 100).round()}% came back',
+                caption: total == 0 ? tr('No customers yet') : tr('{0}% came back', [(repeat / total * 100).round()]),
               ),
-              StatCard(label: 'Total spent', value: Fmt.money(spentAll), icon: Icons.account_balance_wallet_outlined, color: p.primary, caption: '$visits visit${visits == 1 ? '' : 's'}'),
+              StatCard(label: tr('Total spent'), value: Fmt.money(spentAll), icon: Icons.account_balance_wallet_outlined, color: p.primary, caption: '$visits visit${visits == 1 ? '' : 's'}'),
               StatCard(
-                label: 'Avg per customer',
+                label: tr('Avg per customer'),
                 value: Fmt.money(total == 0 ? 0 : (spentAll / total).round()),
                 icon: Icons.person_outline_rounded,
                 color: p.violet,
-                caption: 'Lifetime spend',
+                caption: tr('Lifetime spend'),
               ),
             ]),
             const SizedBox(height: Space.lg),
@@ -112,10 +113,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
               runSpacing: Space.md,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                SearchField(width: context.isMobile ? double.infinity : 320, hint: 'Search name or phone', onChanged: (v) => setState(() => _q = v.trim().toLowerCase())),
+                SearchField(width: context.isMobile ? double.infinity : 320, hint: tr('Search name or phone'), onChanged: (v) => setState(() => _q = v.trim().toLowerCase())),
                 FilterPills<String>(
                   scroll: false,
-                  options: const [('recent', 'Recent'), ('spent', 'Top spenders'), ('orders', 'Most visits')],
+                  options: [('recent', tr('Recent')), ('spent', tr('Top spenders')), ('orders', tr('Most visits'))],
                   selected: _sort,
                   onSelected: (v) => setState(() => _sort = v),
                 ),
@@ -123,7 +124,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
             ),
             const SizedBox(height: Space.lg),
             if (list.isEmpty)
-              EmptyState(icon: Icons.groups_outlined, title: total == 0 ? 'No customers yet' : 'No match', message: total == 0 ? 'Customers appear here after their bill is completed.' : null)
+              EmptyState(icon: Icons.groups_outlined, title: total == 0 ? tr('No customers yet') : tr('No match'), message: total == 0 ? tr('Customers appear here after their bill is completed.') : null)
             else
               SurfaceCard(
                 child: Column(
@@ -151,16 +152,16 @@ class _CustomerTile extends StatelessWidget {
   Future<void> _remove(BuildContext context) async {
     final ok = await showDangerConfirmDialog(
       context,
-      title: 'Remove ${c.name}\'s data?',
-      message: 'Their name and mobile number will be removed from all their bills. The bills and amounts stay. This cannot be undone.',
-      confirmLabel: 'Remove',
+      title: tr('Remove {0}\'s data?', [c.name]),
+      message: tr('Their name and mobile number will be removed from all their bills. The bills and amounts stay. This cannot be undone.'),
+      confirmLabel: tr('Remove'),
     );
     if (!ok || !context.mounted) return;
     try {
       final n = await CustomerPrivacy.instance.removeCustomer(phone: c.phone, name: c.lastOrder.customerName);
-      if (context.mounted) showSuccess(context, 'Removed from $n bill${n == 1 ? '' : 's'}');
+      if (context.mounted) showSuccess(context, tr('Removed from {0} bill{1}', [n, n == 1 ? '' : 's']));
     } catch (e) {
-      if (context.mounted) showError(context, friendlyError(e, 'remove the data'));
+      if (context.mounted) showError(context, friendlyError(e, tr('remove the data')));
     }
   }
 
@@ -176,14 +177,14 @@ class _CustomerTile extends StatelessWidget {
           child: Text(c.name.characters.first.toUpperCase(), style: TextStyle(color: p.primary, fontWeight: FontWeight.w800)),
         ),
         title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text([if (c.phone.isNotEmpty) c.phone, '${c.orders} visit${c.orders == 1 ? '' : 's'}', 'last ${Fmt.date(c.lastOrder.createdAt)}'].join(' · ')),
+        subtitle: Text([if (c.phone.isNotEmpty) c.phone, c.orders == 1 ? tr('1 visit') : tr('{0} visits', [c.orders]), tr('last {0}', [Fmt.date(c.lastOrder.createdAt)])].join(' · ')),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             MoneyText(c.spent, style: const TextStyle(fontWeight: FontWeight.w700)),
             if (c.phone.length >= 10)
               IconButton(
-                tooltip: 'Call',
+                tooltip: tr('Call'),
                 icon: const Icon(Icons.call_outlined),
                 onPressed: () => launchUrl(Uri.parse('tel:${c.phone}')),
               ),
@@ -198,7 +199,7 @@ class _CustomerTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Last order · ${Fmt.dateTime(c.lastOrder.createdAt)}${c.lastOrder.tableNo.isNotEmpty ? ' · ${c.lastOrder.tableNo}' : ''}',
+                Text(tr('Last order · {0}{1}', [Fmt.dateTime(c.lastOrder.createdAt), c.lastOrder.tableNo.isNotEmpty ? ' · ${c.lastOrder.tableNo}' : '']),
                     style: TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w600)),
                 const SizedBox(height: Space.sm),
                 for (final it in c.lastOrder.items)
@@ -207,7 +208,7 @@ class _CustomerTile extends StatelessWidget {
                     child: Text('${it['qty'] ?? 1}× ${it['name']}${(it['size'] ?? 'Standard') != 'Standard' ? ' (${it['size']})' : ''}'),
                   ),
                 const SizedBox(height: Space.sm),
-                Text('Total ${Fmt.money(c.lastOrder.totalPrice)}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(tr('Total {0}', [Fmt.money(c.lastOrder.totalPrice)]), style: const TextStyle(fontWeight: FontWeight.w700)),
               ],
             ),
           ),
@@ -218,7 +219,7 @@ class _CustomerTile extends StatelessWidget {
               style: TextButton.styleFrom(foregroundColor: p.danger),
               onPressed: () => _remove(context),
               icon: const Icon(Icons.person_remove_outlined, size: 18),
-              label: const Text('Remove customer data'),
+              label: Text(tr('Remove customer data')),
             ),
           ),
         ],

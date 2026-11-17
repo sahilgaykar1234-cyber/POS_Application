@@ -23,6 +23,7 @@ import '../orders/bill.dart';
 import '../orders/order_model.dart';
 import '../orders/order_service.dart';
 import 'reports_csv.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 enum _Period { today, week, month, custom }
 
@@ -82,13 +83,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
     downloadFileCrossPlatform(content, name);
     // Exports can contain customer names and numbers: keep a record.
     unawaited(AuditService.instance.log('export.$kind', details: {'file': name}));
-    showSuccess(context, 'Downloading $name');
+    showSuccess(context, tr('Downloading {0}', [name]));
   }
 
   /// Prints the day-end (Z) summary of the selected period on the receipt
   /// paper chosen for bills (80 mm by default).
   Future<void> _printDayEnd(List<PosOrder> period) async {
-    if (!canPrintHtml) return showError(context, 'Printing is available in the web app.');
+    if (!canPrintHtml) return showError(context, tr('Printing is available in the web app.'));
     var shop = '';
     try {
       shop = (await BusinessSettingsRepository.instance.load()).shopName;
@@ -96,7 +97,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final printer = await savedReceiptPrinter();
     final paper = printer?.paper ?? PaperSize.thermal80;
     final from = BusinessDay.dateOf(_range.start), to = BusinessDay.dateOf(_range.end);
-    final label = from == to ? 'Business day ${Fmt.date(from)}' : '${Fmt.date(from)} – ${Fmt.date(to)}';
+    final label = from == to ? tr('Business day {0}', [Fmt.date(from)]) : '${Fmt.date(from)} – ${Fmt.date(to)}';
     try {
       await printHtml(dayEndHtml(DayEndSummary.of(period), shopName: shop, periodLabel: label, printedAt: DateTime.now(), paper: paper));
       unawaited(AuditService.instance.log('report.dayEnd', details: {'period': label}));
@@ -111,7 +112,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       stream: _orders,
       builder: (context, snap) {
         if (snap.hasError) return const ErrorState();
-        if (!snap.hasData) return const LoadingState(label: 'Building report…');
+        if (!snap.hasData) return LoadingState(label: tr('Building report…'));
         return _body(context, snap.data!);
       },
     );
@@ -161,7 +162,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       lifetime[k] = (lifetime[k] ?? 0) + 1;
       spend[k] = (spend[k] ?? 0) + o.totalPrice;
       final clean = o.customerName.replaceAll(RegExp(r'\(Table\s*\d+\)', caseSensitive: false), '').trim();
-      names[k] = clean.isEmpty ? 'Guest' : clean;
+      names[k] = clean.isEmpty ? tr('Guest') : clean;
     }
     final periodKeys = period.map(keyOf).where((k) => k.isNotEmpty).toSet();
     final returning = periodKeys.where((k) => (lifetime[k] ?? 1) > 1).length;
@@ -170,7 +171,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return PageBody(
       children: [
         PageHeader(
-          title: 'Reports',
+          title: tr('Reports'),
           subtitle: BusinessDay.dateOf(_range.start) == BusinessDay.dateOf(_range.end)
               ? Fmt.date(BusinessDay.dateOf(_range.start))
               : '${Fmt.date(BusinessDay.dateOf(_range.start))} – ${Fmt.date(BusinessDay.dateOf(_range.end))}',
@@ -179,27 +180,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
               key: const Key('day-end-report'),
               onPressed: () => _printDayEnd(period),
               icon: const Icon(Icons.summarize_outlined, size: 18),
-              label: const Text('Day-end report'),
+              label: Text(tr('Day-end report')),
             ),
             PopupMenuButton<String>(
-              tooltip: 'Export CSV',
+              tooltip: tr('Export CSV'),
               onSelected: (k) => _export(all, k),
-              itemBuilder: (_) => const [
+              itemBuilder: (_) => [
                 PopupMenuItem(
                   value: 'sales',
-                  child: ListTile(leading: Icon(Icons.receipt_long_outlined), title: Text('Sales report'), subtitle: Text('Bill-wise totals, GST, discount')),
+                  child: ListTile(leading: Icon(Icons.receipt_long_outlined), title: Text(tr('Sales report')), subtitle: Text(tr('Bill-wise totals, GST, discount'))),
                 ),
                 PopupMenuItem(
                   value: 'customers',
-                  child: ListTile(leading: Icon(Icons.groups_outlined), title: Text('Customer report'), subtitle: Text('Visits and spend')),
+                  child: ListTile(leading: Icon(Icons.groups_outlined), title: Text(tr('Customer report')), subtitle: Text(tr('Visits and spend'))),
                 ),
                 PopupMenuItem(
                   value: 'items',
-                  child: ListTile(leading: Icon(Icons.fastfood_outlined), title: Text('Item sales report'), subtitle: Text('Qty and revenue per item')),
+                  child: ListTile(leading: Icon(Icons.fastfood_outlined), title: Text(tr('Item sales report')), subtitle: Text(tr('Qty and revenue per item'))),
                 ),
               ],
               child: IgnorePointer(
-                child: OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.download_outlined, size: 18), label: const Text('Export CSV')),
+                child: OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.download_outlined, size: 18), label: Text(tr('Export CSV'))),
               ),
             ),
           ],
@@ -211,7 +212,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           children: [
             FilterPills<_Period>(
               scroll: false,
-              options: const [(_Period.today, 'Today'), (_Period.week, 'This week'), (_Period.month, 'This month')],
+              options: [(_Period.today, tr('Today')), (_Period.week, tr('This week')), (_Period.month, tr('This month'))],
               selected: _period,
               onSelected: (v) => setState(() {
                 _period = v;
@@ -220,9 +221,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
             ActionChip(
               avatar: const Icon(Icons.date_range_outlined, size: 18),
-              label: Text(_period == _Period.custom ? 'Custom range' : 'Pick dates'),
+              label: Text(_period == _Period.custom ? tr('Custom range') : tr('Pick dates')),
               backgroundColor: _period == _Period.custom ? p.ink : null,
-              labelStyle: TextStyle(fontFamily: AppTheme.fontFamily, color: _period == _Period.custom ? p.surface : p.inkMuted),
+              labelStyle: TextStyle(fontFamily: AppTheme.fontFamily, fontFamilyFallback: AppTheme.fontFallback, color: _period == _Period.custom ? p.surface : p.inkMuted),
               onPressed: _pickCustom,
             ),
           ],
@@ -234,76 +235,76 @@ class _ReportsScreenState extends State<ReportsScreen> {
           fill: true,
           children: [
             StatCard(
-              label: 'Collected (paid)',
+              label: tr('Collected (paid)'),
               value: Fmt.money(stats.sales),
               icon: Icons.account_balance_wallet_outlined,
               highlight: true,
-              caption: '${stats.orders - stats.unpaid - stats.cancelled} paid bills',
+              caption: tr('{0} paid bills', [stats.orders - stats.unpaid - stats.cancelled]),
             ),
             StatCard(
-              label: 'Billed (all orders)',
+              label: tr('Billed (all orders)'),
               value: Fmt.money(billed),
               icon: Icons.receipt_long_outlined,
               caption: '${period.length} orders',
               color: p.info,
             ),
             StatCard(
-              label: 'Average bill',
+              label: tr('Average bill'),
               value: Fmt.money(stats.averageBill.round()),
               icon: Icons.payments_outlined,
               color: p.violet,
-              caption: 'Per paid bill',
+              caption: tr('Per paid bill'),
             ),
-            StatCard(label: 'Highest bill', value: Fmt.money(highest), icon: Icons.star_outline_rounded, color: p.warning, caption: 'Single bill'),
-            StatCard(label: 'Discounts given', value: Fmt.money(discounts), icon: Icons.local_offer_outlined, color: p.primary, caption: 'Total off bills'),
+            StatCard(label: tr('Highest bill'), value: Fmt.money(highest), icon: Icons.star_outline_rounded, color: p.warning, caption: tr('Single bill')),
+            StatCard(label: tr('Discounts given'), value: Fmt.money(discounts), icon: Icons.local_offer_outlined, color: p.primary, caption: tr('Total off bills')),
           ],
         ),
         const SizedBox(height: Space.lg),
         SectionCard(
-          title: 'Sales trend',
-          subtitle: 'Paid sales per day',
+          title: tr('Sales trend'),
+          subtitle: tr('Paid sales per day'),
           icon: Icons.show_chart_rounded,
           child: SizedBox(height: 240, child: _TrendChart(points: daily)),
         ),
         _pair(
           context,
           SectionCard(
-            title: 'Orders',
+            title: tr('Orders'),
             icon: Icons.pie_chart_outline_rounded,
             child: Column(
               children: [
-                _kv(context, 'Dine-in', '$dineIn'),
-                _kv(context, 'Takeaway', '$takeaway'),
-                _kv(context, 'Completed', '${stats.completed}'),
-                _kv(context, 'Cancelled', '${stats.cancelled}'),
-                _kv(context, 'Unpaid', '${stats.unpaid}'),
+                _kv(context, tr('Dine-in'), '$dineIn'),
+                _kv(context, tr('Takeaway'), '$takeaway'),
+                _kv(context, tr('Completed'), '${stats.completed}'),
+                _kv(context, tr('Cancelled'), '${stats.cancelled}'),
+                _kv(context, tr('Unpaid'), '${stats.unpaid}'),
                 const Divider(height: Space.xl),
-                for (final m in PaymentMethod.values) _kv(context, 'Paid by ${m.label}', Fmt.money(stats.byMethod[m]!)),
+                for (final m in PaymentMethod.values) _kv(context, tr('Paid by {0}', [tr(m.label)]), Fmt.money(stats.byMethod[m]!)),
               ],
             ),
           ),
           SectionCard(
-            title: 'Customers',
+            title: tr('Customers'),
             icon: Icons.groups_outlined,
             child: Column(
               children: [
-                _kv(context, 'Total customers (all time)', '${lifetime.keys.where((k) => k.isNotEmpty).length}'),
-                _kv(context, 'Visited in this period', '${periodKeys.length}'),
-                _kv(context, 'New', '${periodKeys.length - returning}'),
-                _kv(context, 'Returning', '$returning'),
-                if (topSpender != null) _kv(context, 'Top spender', '${names[topSpender.key]} · ${Fmt.money(topSpender.value)}'),
+                _kv(context, tr('Total customers (all time)'), '${lifetime.keys.where((k) => k.isNotEmpty).length}'),
+                _kv(context, tr('Visited in this period'), '${periodKeys.length}'),
+                _kv(context, tr('New'), '${periodKeys.length - returning}'),
+                _kv(context, tr('Returning'), '$returning'),
+                if (topSpender != null) _kv(context, tr('Top spender'), '${names[topSpender.key]} · ${Fmt.money(topSpender.value)}'),
               ],
             ),
           ),
         ),
         SectionCard(
-          title: 'Top items',
+          title: tr('Top items'),
           icon: Icons.emoji_events_outlined,
           padding: const EdgeInsets.fromLTRB(Space.lg + 4, Space.lg + 4, Space.lg + 4, Space.sm),
           child: topItems.isEmpty
               ? Padding(
                   padding: const EdgeInsets.symmetric(vertical: Space.lg),
-                  child: Text('No sales in this period.', style: TextStyle(color: p.inkSubtle)),
+                  child: Text(tr('No sales in this period.'), style: TextStyle(color: p.inkSubtle)),
                 )
               : Column(
                   children: [
@@ -313,14 +314,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         children: [
                           Expanded(
                             child: Text(
-                              'Item',
+                              tr('Item'),
                               style: TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w600),
                             ),
                           ),
                           SizedBox(
                             width: 70,
                             child: Text(
-                              'Qty',
+                              tr('Qty'),
                               textAlign: TextAlign.right,
                               style: TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w600),
                             ),
@@ -328,7 +329,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           SizedBox(
                             width: 100,
                             child: Text(
-                              'Revenue',
+                              tr('Revenue'),
                               textAlign: TextAlign.right,
                               style: TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w600),
                             ),

@@ -22,6 +22,8 @@ import '../pos/pos_screen.dart';
 import '../reports/reports_screen.dart';
 import '../settings/business_settings.dart';
 import '../settings/settings_screen.dart';
+import 'package:pos_app/core/i18n/tr.dart';
+import 'package:pos_app/core/i18n/language_picker.dart';
 
 /// Keeps every page that has been opened alive (so a half-built order or a
 /// scrolled list survives switching sections) but only builds a page the
@@ -52,7 +54,7 @@ class _LazyStackState extends State<_LazyStack> {
 }
 
 Future<void> _confirmSignOut(BuildContext context) async {
-  final ok = await showConfirmDialog(context, title: 'Sign out?', message: 'You will need your username and password to sign in again.', confirmLabel: 'Sign out');
+  final ok = await showConfirmDialog(context, title: tr('Sign out?'), message: tr('You will need your username and password to sign in again.'), confirmLabel: tr('Sign out'));
   if (ok && context.mounted) await signOutToLogin(context);
 }
 
@@ -111,7 +113,7 @@ class _ShellFrame extends StatelessWidget {
             context: context,
             settings: s.data,
             child: AppShell(
-              brandTitle: name.isEmpty ? 'My Cafe' : name,
+              brandTitle: name.isEmpty ? tr('My Cafe') : name,
               brandSubtitle: roleLabel,
               brandLogoBase64: s.data?.logoBase64,
               destinations: destinations(running.data ?? (dineIn: 0, takeaway: 0)),
@@ -120,7 +122,7 @@ class _ShellFrame extends StatelessWidget {
               onLogout: () => _confirmSignOut(context),
               actions: [
                 if (onSwitchMode != null)
-                  TextButton.icon(onPressed: onSwitchMode, icon: const Icon(Icons.swap_horiz_rounded, size: 18), label: Text(switchLabel ?? 'Switch')),
+                  TextButton.icon(onPressed: onSwitchMode, icon: const Icon(Icons.swap_horiz_rounded, size: 18), label: Text(switchLabel ?? tr('Switch'))),
               ],
               bottomNav: bottomNav,
               body: _LazyStack(index: index, builders: builders),
@@ -157,23 +159,23 @@ class _ManagerShellState extends State<ManagerShell> {
   Widget build(BuildContext context) {
     final cafeId = FirestorePaths.activeCafeId;
     return _ShellFrame(
-      roleLabel: 'Manager',
+      roleLabel: tr('Manager'),
       // Navigation at the bottom on every screen size (as in the original app).
       bottomNav: true,
       index: _i,
       onSelect: _go,
       onSwitchMode: widget.onSwitchMode,
-      switchLabel: 'Captain view',
+      switchLabel: tr('Captain view'),
       destinations: (running) => [
-        const ShellDestination(icon: Icons.space_dashboard_outlined, selectedIcon: Icons.space_dashboard, label: 'Dashboard', onMobileBar: true),
-        ShellDestination(icon: Icons.table_restaurant_outlined, selectedIcon: Icons.table_restaurant, label: 'Tables', badge: running.dineIn, onMobileBar: true),
-        ShellDestination(icon: Icons.shopping_bag_outlined, selectedIcon: Icons.shopping_bag, label: 'Takeaway', badge: running.takeaway, onMobileBar: true),
-        const ShellDestination(icon: Icons.receipt_long_outlined, selectedIcon: Icons.receipt_long, label: 'Orders'),
-        const ShellDestination(icon: Icons.soup_kitchen_outlined, selectedIcon: Icons.soup_kitchen, label: 'Kitchen', onMobileBar: true),
-        const ShellDestination(icon: Icons.restaurant_menu_outlined, selectedIcon: Icons.restaurant_menu, label: 'Menu', onMobileBar: true),
-        const ShellDestination(icon: Icons.insights_outlined, selectedIcon: Icons.insights, label: 'Reports'),
-        const ShellDestination(icon: Icons.groups_outlined, selectedIcon: Icons.groups, label: 'Customers'),
-        const ShellDestination(icon: Icons.settings_outlined, selectedIcon: Icons.settings, label: 'Settings'),
+        ShellDestination(icon: Icons.space_dashboard_outlined, selectedIcon: Icons.space_dashboard, label: tr('Dashboard'), onMobileBar: true),
+        ShellDestination(icon: Icons.table_restaurant_outlined, selectedIcon: Icons.table_restaurant, label: tr('Tables'), badge: running.dineIn, onMobileBar: true),
+        ShellDestination(icon: Icons.shopping_bag_outlined, selectedIcon: Icons.shopping_bag, label: tr('Takeaway'), badge: running.takeaway, onMobileBar: true),
+        ShellDestination(icon: Icons.receipt_long_outlined, selectedIcon: Icons.receipt_long, label: tr('Orders')),
+        ShellDestination(icon: Icons.soup_kitchen_outlined, selectedIcon: Icons.soup_kitchen, label: tr('Kitchen'), onMobileBar: true),
+        ShellDestination(icon: Icons.restaurant_menu_outlined, selectedIcon: Icons.restaurant_menu, label: tr('Menu'), onMobileBar: true),
+        ShellDestination(icon: Icons.insights_outlined, selectedIcon: Icons.insights, label: tr('Reports')),
+        ShellDestination(icon: Icons.groups_outlined, selectedIcon: Icons.groups, label: tr('Customers')),
+        ShellDestination(icon: Icons.settings_outlined, selectedIcon: Icons.settings, label: tr('Settings')),
       ],
       builders: [
         (_) => ManagerHomeScreen(onNewOrder: _newOrder, onOpenTables: () => _go(_tables), onOpenOrders: () => _go(_orders)),
@@ -202,7 +204,7 @@ class CaptainShell extends StatelessWidget {
       stream: BusinessSettingsRepository.instance.watch(),
       builder: (context, s) {
         final p = context.palette;
-        final name = (s.data?.shopName ?? '').isEmpty ? 'My Cafe' : s.data!.shopName;
+        final name = (s.data?.shopName ?? '').isEmpty ? tr('My Cafe') : s.data!.shopName;
         final logo = decodeLogo(s.data?.logoBase64);
         final wide = !context.isMobile;
         return _brandTab(
@@ -234,7 +236,7 @@ class CaptainShell extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                        Text('Captain · Kitchen', style: TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w500)),
+                        Text(tr('Captain · Kitchen'), style: TextStyle(color: p.inkSubtle, fontSize: 12, fontWeight: FontWeight.w500)),
                       ],
                     ),
                   ),
@@ -243,10 +245,11 @@ class CaptainShell extends StatelessWidget {
               actions: [
                 if (onSwitchMode != null)
                   wide
-                      ? TextButton.icon(onPressed: onSwitchMode, icon: const Icon(Icons.swap_horiz_rounded, size: 18), label: const Text('Manager view'))
-                      : IconButton(tooltip: 'Manager view', onPressed: onSwitchMode, icon: const Icon(Icons.swap_horiz_rounded)),
+                      ? TextButton.icon(onPressed: onSwitchMode, icon: const Icon(Icons.swap_horiz_rounded, size: 18), label: Text(tr('Manager view')))
+                      : IconButton(tooltip: tr('Manager view'), onPressed: onSwitchMode, icon: const Icon(Icons.swap_horiz_rounded)),
+                const LanguageMenuButton(compact: true),
                 const SystemAlertsButton(),
-                IconButton(tooltip: 'Sign out', onPressed: () => _confirmSignOut(context), icon: const Icon(Icons.logout_rounded)),
+                IconButton(tooltip: tr('Sign out'), onPressed: () => _confirmSignOut(context), icon: const Icon(Icons.logout_rounded)),
                 const SizedBox(width: Space.sm),
               ],
             ),

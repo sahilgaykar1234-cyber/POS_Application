@@ -7,6 +7,9 @@ class AppTheme {
 
   static const String fontFamily = 'Inter';
 
+  /// Bundled scripts for Hindi / Marathi (Devanagari) and Gujarati text.
+  static const List<String> fontFallback = ['NotoSansDevanagari', 'NotoSansGujarati'];
+
   static ThemeData light() => _build(Palette.light, Brightness.light);
   static ThemeData dark() => _build(Palette.dark, Brightness.dark);
 
@@ -34,7 +37,7 @@ class AppTheme {
       outlineVariant: p.border,
     );
 
-    final base = ThemeData(brightness: b, useMaterial3: true, fontFamily: fontFamily);
+    final base = ThemeData(brightness: b, useMaterial3: true, fontFamily: fontFamily, fontFamilyFallback: fontFallback);
     final text = base.textTheme
         .copyWith(
           displaySmall: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: -0.6),
@@ -50,11 +53,11 @@ class AppTheme {
           labelMedium: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
           labelSmall: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.3),
         )
-        .apply(bodyColor: p.ink, displayColor: p.ink, fontFamily: fontFamily);
+        .apply(bodyColor: p.ink, displayColor: p.ink, fontFamily: fontFamily, fontFamilyFallback: fontFallback);
 
     final controlShape = RoundedRectangleBorder(borderRadius: Radii.controlR);
     const minSize = Size(64, kTouch);
-    const btnText = TextStyle(fontFamily: fontFamily, fontSize: 14, fontWeight: FontWeight.w600);
+    const btnText = TextStyle(fontFamily: fontFamily, fontFamilyFallback: fontFallback, fontSize: 14, fontWeight: FontWeight.w600);
 
     OutlineInputBorder ob(Color c, [double w = 1]) => OutlineInputBorder(
       borderRadius: Radii.controlR,
@@ -151,19 +154,19 @@ class AppTheme {
         errorBorder: ob(p.danger),
         focusedErrorBorder: ob(p.danger, 2),
         disabledBorder: ob(p.border),
-        labelStyle: TextStyle(fontFamily: fontFamily, color: p.inkSubtle, fontSize: 14),
-        floatingLabelStyle: TextStyle(fontFamily: fontFamily, color: p.primary, fontWeight: FontWeight.w600),
-        hintStyle: TextStyle(fontFamily: fontFamily, color: p.inkSubtle),
+        labelStyle: TextStyle(fontFamily: fontFamily, fontFamilyFallback: fontFallback, color: p.inkSubtle, fontSize: 14),
+        floatingLabelStyle: TextStyle(fontFamily: fontFamily, fontFamilyFallback: fontFallback, color: p.primary, fontWeight: FontWeight.w600),
+        hintStyle: TextStyle(fontFamily: fontFamily, fontFamilyFallback: fontFallback, color: p.inkSubtle),
         prefixIconColor: p.inkSubtle,
         suffixIconColor: p.inkSubtle,
-        errorStyle: TextStyle(fontFamily: fontFamily, color: p.danger, fontSize: 12, fontWeight: FontWeight.w500),
+        errorStyle: TextStyle(fontFamily: fontFamily, fontFamilyFallback: fontFallback, color: p.danger, fontSize: 12, fontWeight: FontWeight.w500),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: p.surface,
         selectedColor: p.ink,
         disabledColor: p.surfaceAlt,
-        labelStyle: TextStyle(fontFamily: fontFamily, color: p.inkMuted, fontWeight: FontWeight.w500, fontSize: 13),
-        secondaryLabelStyle: TextStyle(fontFamily: fontFamily, color: p.surface, fontWeight: FontWeight.w600, fontSize: 13),
+        labelStyle: TextStyle(fontFamily: fontFamily, fontFamilyFallback: fontFallback, color: p.inkMuted, fontWeight: FontWeight.w500, fontSize: 13),
+        secondaryLabelStyle: TextStyle(fontFamily: fontFamily, fontFamilyFallback: fontFallback, color: p.surface, fontWeight: FontWeight.w600, fontSize: 13),
         side: BorderSide(color: p.borderStrong),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.pill)),
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
@@ -186,7 +189,7 @@ class AppTheme {
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: p.ink,
-        contentTextStyle: TextStyle(fontFamily: fontFamily, color: p.surface, fontSize: 14),
+        contentTextStyle: TextStyle(fontFamily: fontFamily, fontFamilyFallback: fontFallback, color: p.surface, fontSize: 14),
         shape: RoundedRectangleBorder(borderRadius: Radii.controlR),
         width: 420,
       ),
@@ -197,7 +200,7 @@ class AppTheme {
         height: 68,
         labelTextStyle: WidgetStateProperty.resolveWith(
           (s) => TextStyle(
-            fontFamily: fontFamily,
+            fontFamily: fontFamily, fontFamilyFallback: fontFallback,
             fontSize: 11,
             fontWeight: s.contains(WidgetState.selected) ? FontWeight.w700 : FontWeight.w500,
             color: s.contains(WidgetState.selected) ? p.primary : p.inkSubtle,
@@ -210,15 +213,15 @@ class AppTheme {
         indicatorColor: p.primaryTint,
         selectedIconTheme: IconThemeData(color: p.primary),
         unselectedIconTheme: IconThemeData(color: p.inkSubtle),
-        selectedLabelTextStyle: TextStyle(fontFamily: fontFamily, color: p.primary, fontWeight: FontWeight.w700, fontSize: 12),
-        unselectedLabelTextStyle: TextStyle(fontFamily: fontFamily, color: p.inkSubtle, fontSize: 12),
+        selectedLabelTextStyle: TextStyle(fontFamily: fontFamily, fontFamilyFallback: fontFallback, color: p.primary, fontWeight: FontWeight.w700, fontSize: 12),
+        unselectedLabelTextStyle: TextStyle(fontFamily: fontFamily, fontFamilyFallback: fontFallback, color: p.inkSubtle, fontSize: 12),
       ),
       tabBarTheme: TabBarThemeData(
         labelColor: p.primary,
         unselectedLabelColor: p.inkSubtle,
         indicatorColor: p.primary,
         dividerColor: p.border,
-        labelStyle: const TextStyle(fontFamily: fontFamily, fontWeight: FontWeight.w600, fontSize: 14),
+        labelStyle: const TextStyle(fontFamily: fontFamily, fontFamilyFallback: fontFallback, fontWeight: FontWeight.w600, fontSize: 14),
       ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? p.surface : p.surface),
@@ -244,7 +247,7 @@ class AppTheme {
       listTileTheme: ListTileThemeData(
         iconColor: p.inkSubtle,
         textColor: p.ink,
-        subtitleTextStyle: TextStyle(fontFamily: fontFamily, color: p.inkSubtle, fontSize: 13),
+        subtitleTextStyle: TextStyle(fontFamily: fontFamily, fontFamilyFallback: fontFallback, color: p.inkSubtle, fontSize: 13),
         shape: RoundedRectangleBorder(borderRadius: Radii.controlR),
       ),
       popupMenuTheme: PopupMenuThemeData(
@@ -254,12 +257,12 @@ class AppTheme {
           borderRadius: Radii.controlR,
           side: BorderSide(color: p.border),
         ),
-        textStyle: TextStyle(fontFamily: fontFamily, color: p.ink, fontSize: 14),
+        textStyle: TextStyle(fontFamily: fontFamily, fontFamilyFallback: fontFallback, color: p.ink, fontSize: 14),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(color: p.primary, linearTrackColor: p.surfaceAlt),
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(color: p.ink, borderRadius: BorderRadius.circular(6)),
-        textStyle: TextStyle(fontFamily: fontFamily, color: p.surface, fontSize: 12),
+        textStyle: TextStyle(fontFamily: fontFamily, fontFamilyFallback: fontFallback, color: p.surface, fontSize: 12),
       ),
       drawerTheme: DrawerThemeData(backgroundColor: p.surface, surfaceTintColor: Colors.transparent),
       datePickerTheme: DatePickerThemeData(backgroundColor: p.surface, surfaceTintColor: Colors.transparent),

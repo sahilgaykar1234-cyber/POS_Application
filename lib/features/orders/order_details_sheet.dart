@@ -14,6 +14,7 @@ import 'order_model.dart';
 import 'order_service.dart';
 import 'settle_bill_sheet.dart';
 import 'void_bill_dialog.dart';
+import 'package:pos_app/core/i18n/tr.dart';
 
 /// Everything you can do with one running order (table tap).
 Future<void> showOrderDetailsSheet(
@@ -44,7 +45,7 @@ class _OrderDetails extends StatelessWidget {
       await fn();
       if (parent.mounted) showSuccess(parent, ok);
     } catch (_) {
-      if (parent.mounted) showError(parent, 'Could not update the order. Please check your connection.');
+      if (parent.mounted) showError(parent, tr('Could not update the order. Please check your connection.'));
     }
   }
 
@@ -73,7 +74,7 @@ class _OrderDetails extends StatelessWidget {
                         o.billNo,
                         o.orderType,
                         if (o.customerPhone.isNotEmpty) o.customerPhone,
-                        if (minutes != null) '$minutes min ago',
+                        if (minutes != null) tr('{0} min ago', [minutes]),
                       ].join(' · '),
                       style: TextStyle(color: p.inkSubtle, fontSize: 13),
                     ),
@@ -85,7 +86,7 @@ class _OrderDetails extends StatelessWidget {
                 children: [
                   StatusChip(o.statusLabel),
                   const SizedBox(height: 4),
-                  StatusChip(o.isPaid ? 'Paid · ${o.paymentLabel}' : 'Payment due',
+                  StatusChip(o.isPaid ? tr('Paid · {0}', [o.paymentLabel]) : tr('Payment due'),
                       color: o.isPaid ? p.success : p.warning, tint: o.isPaid ? p.successTint : p.warningTint),
                 ],
               ),
@@ -122,7 +123,7 @@ class _OrderDetails extends StatelessWidget {
                 const Divider(height: Space.lg),
                 Row(
                   children: [
-                    const Text('Total', style: TextStyle(fontWeight: FontWeight.w700)),
+                    Text(tr('Total'), style: TextStyle(fontWeight: FontWeight.w700)),
                     const Spacer(),
                     MoneyText(o.totalPrice, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
                   ],
@@ -136,14 +137,14 @@ class _OrderDetails extends StatelessWidget {
           if (o.status == 'pending')
             _ActionButton(
               icon: Icons.local_fire_department_outlined,
-              label: 'Start cooking',
-              onTap: () => _run(context, () => OrderService.instance.setStatus(o.id, 'preparing'), 'Marked as preparing'),
+              label: tr('Start cooking'),
+              onTap: () => _run(context, () => OrderService.instance.setStatus(o.id, 'preparing'), tr('Marked as preparing')),
             ),
           if (o.status == 'preparing')
             _ActionButton(
               icon: Icons.room_service_outlined,
-              label: 'Food ready',
-              onTap: () => _run(context, () => OrderService.instance.setStatus(o.id, 'ready'), 'Marked as ready'),
+              label: tr('Food ready'),
+              onTap: () => _run(context, () => OrderService.instance.setStatus(o.id, 'ready'), tr('Marked as ready')),
             ),
           const SizedBox(height: Space.sm),
           SizedBox(
@@ -154,7 +155,7 @@ class _OrderDetails extends StatelessWidget {
                 showSettleBillSheet(parent, o, settings);
               },
               icon: const Icon(Icons.receipt_long_outlined),
-              label: Text(o.isPaid ? 'Bill & free table' : 'Settle bill', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              label: Text(o.isPaid ? tr('Bill & free table') : tr('Settle bill'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
             ),
           ),
           const SizedBox(height: Space.sm),
@@ -167,7 +168,7 @@ class _OrderDetails extends StatelessWidget {
                     Navigator.push(parent, MaterialPageRoute(builder: (_) => PosScreen(editing: o, standalone: true)));
                   },
                   icon: const Icon(Icons.add_circle_outline, size: 18),
-                  label: const Text('Add items'),
+                  label: Text(tr('Add items')),
                 ),
               ),
               const SizedBox(width: Space.sm),
@@ -175,7 +176,7 @@ class _OrderDetails extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: () => printBill(context, order: o.data, settings: settings.receiptSettings, orderId: o.id),
                   icon: const Icon(Icons.print_outlined, size: 18),
-                  label: const Text('Print'),
+                  label: Text(tr('Print')),
                 ),
               ),
             ],
@@ -187,10 +188,10 @@ class _OrderDetails extends StatelessWidget {
               final item = await showCustomItemDialog(context);
               if (item == null || !context.mounted) return;
               await _run(context, () => OrderService.instance.addCustomItem(o, item.toLine()),
-                  '${item.name} added · ₹${formatPrice(item.price * item.qty)}');
+                  tr('{0} added · ₹{1}', [item.name, formatPrice(item.price * item.qty)]));
             },
             icon: const Icon(Icons.add_shopping_cart_outlined, size: 18),
-            label: const Text('Extra item (not on menu)'),
+            label: Text(tr('Extra item (not on menu)')),
           ),
           const SizedBox(height: Space.sm),
           Row(
@@ -200,9 +201,9 @@ class _OrderDetails extends StatelessWidget {
                   onPressed: () async {
                     final ok = await showConfirmDialog(
                       context,
-                      title: 'Free ${o.displayName}?',
-                      message: 'The bill will be closed and the table marked free${o.isPaid ? '' : ' without recording a payment'}.',
-                      confirmLabel: 'Free table',
+                      title: tr('Free {0}?', [o.displayName]),
+                      message: tr('The bill will be closed and the table marked free{0}.', [o.isPaid ? '' : tr(' without recording a payment')]),
+                      confirmLabel: tr('Free table'),
                     );
                     if (!ok || !context.mounted) return;
                     Navigator.pop(context);
@@ -217,10 +218,10 @@ class _OrderDetails extends StatelessWidget {
                         mode: o.isPaid ? BillMode.details : BillMode.closedUnpaid,
                       );
                     } catch (_) {
-                      if (parent.mounted) showError(parent, 'Could not close the bill.');
+                      if (parent.mounted) showError(parent, tr('Could not close the bill.'));
                     }
                   },
-                  child: const Text('Free table only'),
+                  child: Text(tr('Free table only')),
                 ),
               ),
               if (canDelete)
@@ -231,7 +232,7 @@ class _OrderDetails extends StatelessWidget {
                       final voided = await showVoidBillDialog(parent, o);
                       if (voided && context.mounted) Navigator.pop(context);
                     },
-                    child: const Text('Cancel bill'),
+                    child: Text(tr('Cancel bill')),
                   ),
                 ),
             ],
