@@ -5,6 +5,7 @@ import '../../core/auth/auth_service.dart';
 import '../../core/config/app_config.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_logo.dart';
+import 'product_video.dart';
 
 /// Form validators, kept public so they can be unit-tested.
 class LoginValidators {
@@ -209,6 +210,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     : const Text('Sign in', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
               ),
             ),
+            if (!wide) ...[
+              // Phones / tablets: the side panel is hidden, so the product
+              // film is offered here (it only plays when tapped).
+              const SizedBox(height: Space.lg),
+              Text('New to Cafe POS?', textAlign: TextAlign.center, style: TextStyle(color: p.inkSubtle)),
+              const SizedBox(height: Space.sm),
+              const ProductVideoButton(),
+            ],
             const SizedBox(height: Space.lg),
             Wrap(
               alignment: WrapAlignment.center,
@@ -270,6 +279,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         Text(f, style: TextStyle(color: p.border, fontSize: 16)),
                       ]),
                     ),
+                  const SizedBox(height: Space.xl),
+                  const ProductVideoButton(onDark: true),
                   const Spacer(),
                   Text(AppConfig.appTagline, style: TextStyle(color: p.inkSubtle, fontSize: 13)),
                 ],
