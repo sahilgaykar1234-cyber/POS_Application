@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -200,6 +202,7 @@ class _PlatformSettingsScreenState extends State<PlatformSettingsScreen> {
                 ),
               ],
               [
+                const _PayeeCard(),
                 SectionCard(
                   title: 'Alerts',
                   icon: Icons.notifications_outlined,
@@ -287,6 +290,98 @@ class _PlatformSettingsScreenState extends State<PlatformSettingsScreen> {
           ],
         );
       },
+    );
+  }
+}
+
+/// Where cafes pay their subscription ("Pay now" shows a UPI QR for this ID).
+/// Saved on its own (platform/payee), because every cafe can read it.
+class _PayeeCard extends StatefulWidget {
+  const _PayeeCard();
+
+  @override
+  State<_PayeeCard> createState() => _PayeeCardState();
+}
+
+class _PayeeCardState extends State<_PayeeCard> {
+  final _upi = TextEditingController();
+  final _name = TextEditingController();
+  late final StreamSubscription<UpiPayee> _sub;
+  bool _dirty = false, _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _sub = AdminService.instance.watchPayee().listen((v) {
+      if (_dirty || !mounted) return;
+      setState(() {
+        _upi.text = v.upiId;
+        _name.text = v.payeeName;
+      });
+    }, onError: (_) {});
+  }
+
+  @override
+  void dispose() {
+    _sub.cancel();
+    _upi.dispose();
+    _name.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final id = _upi.text.trim();
+    if (id.isNotEmpty && !isValidUpiId(id)) return showError(context, 'Enter a UPI ID like yourname@okaxis.');
+    setState(() => _saving = true);
+    try {
+      await AdminService.instance.savePayee(upiId: id, payeeName: _name.text);
+      if (mounted) {
+        setState(() => _dirty = false);
+        showSuccess(context, 'UPI details saved');
+      }
+    } catch (e) {
+      if (mounted) showError(context, friendlyError(e, 'save the UPI details'));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return SectionCard(
+      title: 'Subscription payments (UPI)',
+      subtitle: 'Cafes pay you here from "Pay now". Use a business UPI ID.',
+      icon: Icons.qr_code_2_rounded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            key: const Key('payee-upi'),
+            controller: _upi,
+            onChanged: (_) => setState(() => _dirty = true),
+            decoration: const InputDecoration(labelText: 'Your UPI ID', hintText: 'yourbusiness@okaxis'),
+          ),
+          const SizedBox(height: Space.md),
+          TextField(
+            key: const Key('payee-name'),
+            controller: _name,
+            onChanged: (_) => setState(() => _dirty = true),
+            decoration: const InputDecoration(labelText: 'Name shown in the UPI app'),
+          ),
+          const SizedBox(height: Space.sm),
+          Text('Leave the UPI ID empty to hide "Pay now" from cafes.', style: TextStyle(color: p.inkSubtle, fontSize: 12)),
+          const SizedBox(height: Space.sm),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton(
+              key: const Key('payee-save'),
+              onPressed: _dirty && !_saving ? _save : null,
+              child: Text(_saving ? 'Saving…' : 'Save UPI details'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

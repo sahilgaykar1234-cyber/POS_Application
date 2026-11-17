@@ -64,6 +64,15 @@ directly for live/offline use):
 ---
 
 ## Already in the app (no console work needed)
+- **Subscription renewals ("Pay now", free, no gateway):** set your business UPI ID in
+  Platform settings › Subscription payments. Cafes see a UPI QR with the exact amount,
+  pay, and send the 12-digit UPI reference (UTR). You approve it in Payments › Waiting
+  for approval **only after the money is in your account** – a claim alone never renews
+  a cafe. Each UTR can be claimed once; rejected claims are kept in the cafe's history.
+- **Grace period:** the POS keeps working for 3 days after expiry (red "Pay now" banner)
+  and stops at the end of that business day; the database rules allow at most 4 days.
+- Every new cafe starts on a free trial with an end date (no cafe without a plan).
+  Cafes created by `tools/admin` scripts still need a plan assigned in the panel.
 - Bills are **cancelled with a reason, never deleted**; numbers never reused; rules
   protect bill number, token and creation time; cancelled bills are final.
 - Audit log for cancelled bills, edits of paid bills, exports, customer-data removal,

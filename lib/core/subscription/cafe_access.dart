@@ -1,3 +1,4 @@
+import '../utils/business_day.dart';
 import '../utils/formatters.dart';
 
 /// Cafe lifecycle status (set by the Super Admin).
@@ -31,6 +32,10 @@ enum CafeAccessState {
   /// Usable, but show a warning banner (expiring soon / payment pending).
   allowedWithWarning,
 
+  /// The subscription has expired but is inside the grace period: the POS
+  /// still works, with a red "renew now" banner.
+  grace,
+
   /// Data still in the old global collections — waiting for migration.
   migrating,
 
@@ -39,17 +44,35 @@ enum CafeAccessState {
 }
 
 class CafeAccess {
-  const CafeAccess(this.state, {this.title = '', this.message = ''});
+  const CafeAccess(this.state, {this.title = '', this.message = '', this.canRenew = false});
 
   final CafeAccessState state;
   final String title;
   final String message;
 
-  bool get canUsePos => state == CafeAccessState.allowed || state == CafeAccessState.allowedWithWarning;
+  /// Paying the subscription would fix this (expiring, pending, in grace or
+  /// expired). False for a suspended / closed cafe: only the admin can help.
+  final bool canRenew;
+
+  bool get canUsePos =>
+      state == CafeAccessState.allowed || state == CafeAccessState.allowedWithWarning || state == CafeAccessState.grace;
 }
 
 /// Days before expiry at which staff start seeing a reminder.
 const int kExpiryWarningDays = 7;
+
+/// Days the POS keeps working after the expiry date, so a cafe is never cut
+/// off in the middle of service and has time to pay.
+const int kGraceDays = 3;
+
+/// When the grace period ends: the end of the cafe's business day that is
+/// running [kGraceDays] days after [expiry] (e.g. expiry 10 Nov 20:00 with a
+/// 5 AM day end → blocked 14 Nov 05:00, after that night's service).
+///
+/// Always within 4 days of the expiry, which is what firestore.rules allow
+/// (`cafeOperational`), so the app never lets a cafe work longer than the
+/// server does.
+DateTime graceEndFor(DateTime expiry) => BusinessDay.nextChange(expiry.add(const Duration(days: kGraceDays)));
 
 /// Decides whether a cafe's staff may use the POS.
 ///
@@ -57,7 +80,8 @@ const int kExpiryWarningDays = 7;
 /// (function `cafeOperational`) so it cannot be bypassed from the app:
 ///   - cafe status must be "active"
 ///   - subscription status must not be "expired" or "suspended"
-///   - subscription expiry date (if set) must be in the future
+///   - subscription expiry date (if set) plus the grace period must be in
+///     the future
 /// Data is never deleted when access is blocked.
 CafeAccess evaluateCafeAccess(Map<String, dynamic> cafe, DateTime now) {
   final name = (cafe['name'] ?? 'This cafe').toString();
@@ -90,11 +114,21 @@ CafeAccess evaluateCafeAccess(Map<String, dynamic> cafe, DateTime now) {
     return CafeAccess(CafeAccessState.blocked,
         title: 'Subscription suspended', message: 'The POS subscription for $name is suspended. Your data is safe. Please contact the administrator.');
   }
-  if (subStatus == SubscriptionStatus.expired || (expiry != null && !expiry.isAfter(now))) {
-    return CafeAccess(CafeAccessState.blocked,
+
+  CafeAccess expired() => CafeAccess(CafeAccessState.blocked,
+      title: 'Subscription expired',
+      message: 'The POS subscription for $name expired${expiry != null ? ' on ${Fmt.date(expiry)}' : ''}. '
+          'Your data is safe. Please renew to continue using the POS.',
+      canRenew: true);
+
+  if (subStatus == SubscriptionStatus.expired) return expired();
+  if (expiry != null && !expiry.isAfter(now)) {
+    final graceEnd = graceEndFor(expiry);
+    if (!now.isBefore(graceEnd)) return expired();
+    return CafeAccess(CafeAccessState.grace,
         title: 'Subscription expired',
-        message: 'The POS subscription for $name expired${expiry != null ? ' on ${Fmt.date(expiry)}' : ''}. '
-            'Your data is safe. Please renew to continue using the POS.');
+        message: 'Subscription expired on ${Fmt.date(expiry)}. The POS stops on ${Fmt.dateTime(graceEnd)} – please renew now.',
+        canRenew: true);
   }
 
   if (expiry != null) {
@@ -102,7 +136,8 @@ CafeAccess evaluateCafeAccess(Map<String, dynamic> cafe, DateTime now) {
     if (daysLeft <= kExpiryWarningDays) {
       final d = daysLeft.ceil();
       return CafeAccess(CafeAccessState.allowedWithWarning,
-          message: 'Subscription expires ${d <= 1 ? 'within a day' : 'in $d days'} (${Fmt.date(expiry)}). Please renew to avoid interruption.');
+          message: 'Subscription expires ${d <= 1 ? 'within a day' : 'in $d days'} (${Fmt.date(expiry)}). Please renew to avoid interruption.',
+          canRenew: true);
     }
   }
   if (subStatus == SubscriptionStatus.cancelled) {
@@ -110,7 +145,8 @@ CafeAccess evaluateCafeAccess(Map<String, dynamic> cafe, DateTime now) {
         message: 'Subscription cancelled${expiry != null ? ' – the POS works until ${Fmt.date(expiry)}' : ''}. Please contact the administrator to renew.');
   }
   if (subStatus == SubscriptionStatus.pending) {
-    return const CafeAccess(CafeAccessState.allowedWithWarning, message: 'Subscription payment is pending. Please contact the administrator.');
+    return const CafeAccess(CafeAccessState.allowedWithWarning,
+        message: 'Subscription payment is pending. Please pay to keep using the POS.', canRenew: true);
   }
   if (subStatus == SubscriptionStatus.trial && expiry != null) {
     return CafeAccess(CafeAccessState.allowed, message: 'Trial until ${Fmt.date(expiry)}');

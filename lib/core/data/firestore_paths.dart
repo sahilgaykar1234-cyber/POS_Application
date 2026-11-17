@@ -108,6 +108,18 @@ class FirestorePaths {
   static CollectionReference<Map<String, dynamic>> subscriptionPayments() =>
       _db.collection('subscriptionPayments');
 
+  /// Where cafes pay their subscription (UPI ID + payee name): platform/payee.
+  /// Readable by every signed-in user, written by the Super Admin only.
+  static DocumentReference<Map<String, dynamic>> platformPayee() => _db.collection('platform').doc('payee');
+
+  /// "We paid by UPI" claims, one open claim per cafe: paymentClaims/{cafeId}.
+  static CollectionReference<Map<String, dynamic>> paymentClaims() => _db.collection('paymentClaims');
+  static DocumentReference<Map<String, dynamic>> paymentClaim(String cafeId) => paymentClaims().doc(cafeId);
+
+  /// Every UPI reference (UTR) ever claimed, so one payment can't be claimed
+  /// twice: paymentRefs/{utr}.
+  static DocumentReference<Map<String, dynamic>> paymentRef(String utr) => _db.collection('paymentRefs').doc(utr);
+
   static CollectionReference<Map<String, dynamic>> auditLogs() => _db.collection('auditLogs');
 
   static CollectionReference<Map<String, dynamic>> notifications() => _db.collection('notifications');

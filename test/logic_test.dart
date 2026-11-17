@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:pos_app/core/subscription/cafe_access.dart';
+import 'package:pos_app/core/utils/business_day.dart';
 import 'package:pos_app/core/utils/formatters.dart';
 import 'package:pos_app/features/admin/admin_service.dart';
 import 'package:pos_app/features/menu/menu_models.dart';
@@ -22,8 +23,8 @@ void main() {
     test('legacy data waits for migration', () {
       expect(s({'status': 'active', 'legacyData': true}), CafeAccessState.migrating);
     });
-    test('expired by date or status blocks; data is not touched', () {
-      expect(s({'status': 'active', 'subscription': {'status': 'active', 'expiryDate': now.subtract(const Duration(hours: 1))}}),
+    test('expired by date or status blocks after the grace period; data is not touched', () {
+      expect(s({'status': 'active', 'subscription': {'status': 'active', 'expiryDate': now.subtract(const Duration(days: 5))}}),
           CafeAccessState.blocked);
       expect(s({'status': 'active', 'subscription': {'status': 'expired'}}), CafeAccessState.blocked);
       expect(s({'status': 'active', 'subscription': {'status': 'suspended'}}), CafeAccessState.blocked);
@@ -42,6 +43,50 @@ void main() {
           CafeAccessState.allowedWithWarning);
       expect(s({'status': 'active', 'subscription': {'status': 'trial', 'expiryDate': now.add(const Duration(days: 20))}}),
           CafeAccessState.allowed);
+    });
+  });
+
+  group('grace period after expiry', () {
+    setUp(() => BusinessDay.setCutoff(5 * 60));
+    tearDown(() => BusinessDay.setCutoff(BusinessDay.defaultCutoffMinutes));
+
+    test('ends at the end of the business day 3 days after expiry', () {
+      // Expired 10 Nov 20:00 → 13 Nov 20:00 is in the 13 Nov business day,
+      // which ends 14 Nov 05:00 (after that night's service).
+      expect(graceEndFor(DateTime(2026, 11, 10, 20)), DateTime(2026, 11, 14, 5));
+      // Expired 10 Nov 02:00 (still the 9 Nov business day) → 13 Nov 05:00.
+      expect(graceEndFor(DateTime(2026, 11, 10, 2)), DateTime(2026, 11, 13, 5));
+    });
+
+    test('never longer than the 4 days firestore.rules allow', () {
+      for (var cutoff = 0; cutoff <= BusinessDay.maxCutoffMinutes; cutoff += 30) {
+        BusinessDay.setCutoff(cutoff);
+        for (var h = 0; h < 24; h++) {
+          final exp = DateTime(2026, 11, 10, h, 17);
+          final end = graceEndFor(exp);
+          expect(end.isAfter(exp.add(const Duration(days: 3))) || end == exp.add(const Duration(days: 3)), isTrue);
+          expect(end.isAfter(exp.add(const Duration(days: 4))), isFalse, reason: 'cutoff $cutoff, hour $h');
+        }
+      }
+    });
+
+    test('in grace: works, red banner, can renew; after it: blocked, can renew', () {
+      Map<String, dynamic> cafe(DateTime exp) => {'status': 'active', 'subscription': {'status': 'active', 'expiryDate': exp}};
+      final exp = now.subtract(const Duration(hours: 1));
+      final a = evaluateCafeAccess(cafe(exp), now);
+      expect(a.state, CafeAccessState.grace);
+      expect(a.canUsePos, isTrue);
+      expect(a.canRenew, isTrue);
+      expect(a.message, contains('stops on'));
+
+      final after = evaluateCafeAccess(cafe(exp), graceEndFor(exp));
+      expect(after.state, CafeAccessState.blocked);
+      expect(after.canRenew, isTrue);
+    });
+
+    test('suspended or closed cafes cannot fix it by paying', () {
+      expect(evaluateCafeAccess({'status': 'suspended'}, now).canRenew, isFalse);
+      expect(evaluateCafeAccess({'status': 'active', 'subscription': {'status': 'suspended'}}, now).canRenew, isFalse);
     });
   });
 

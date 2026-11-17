@@ -150,6 +150,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
               },
             ),
             const SizedBox(height: Space.lg),
+            if (d.claims.isNotEmpty) ...[
+              _ClaimsCard(claims: d.claims, cafes: d.cafes),
+            ],
             SurfaceCard(
               child: list.isEmpty
                   ? EmptyState(
@@ -205,6 +208,68 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
           ],
         );
       },
+    );
+  }
+}
+
+/// Cafes that tapped "I've paid" in Pay now. Check the UTR in your bank /
+/// UPI app, then approve (renews the cafe) or reject (tells the cafe why).
+class _ClaimsCard extends StatelessWidget {
+  const _ClaimsCard({required this.claims, required this.cafes});
+  final List<PaymentClaim> claims;
+  final List<CafeSummary> cafes;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return SectionCard(
+      title: 'Waiting for approval (${claims.length})',
+      subtitle: 'Cafes paid by UPI. Approve only after the money is in your account.',
+      icon: Icons.hourglass_top_rounded,
+      child: Column(
+        children: [
+          for (var i = 0; i < claims.length; i++) ...[
+            if (i > 0) Divider(height: 1, color: p.border),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: Space.sm),
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: Space.md,
+                runSpacing: Space.sm,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${claims[i].cafeName} · ${Fmt.money(claims[i].amount)}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                      Text(
+                        'UTR ${claims[i].utr} · ${claims[i].planName} ${claims[i].cycleLabel.toLowerCase()} · ${Fmt.dateTime(claims[i].submittedAt)}',
+                        style: TextStyle(color: p.inkSubtle, fontSize: 12.5),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      OutlinedButton(
+                        key: Key('claim-reject-${claims[i].cafeId}'),
+                        onPressed: () => showRejectClaim(context, claims[i]),
+                        child: const Text('Reject'),
+                      ),
+                      const SizedBox(width: Space.sm),
+                      FilledButton(
+                        key: Key('claim-approve-${claims[i].cafeId}'),
+                        onPressed: () => showRecordPayment(context, cafes, claim: claims[i]),
+                        child: const Text('Approve'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

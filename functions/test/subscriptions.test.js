@@ -24,11 +24,18 @@ test('within 7 days -> expiring reminder (deduplicated per expiry date)', () => 
   assert.strictEqual(r.key, r2.key, 'same key on the next day -> no duplicate notice');
 });
 
-test('past expiry -> mark expired once', () => {
+test('just expired -> grace period: notify, do not block', () => {
   const r = evaluateSubscription(cafe({ status: 'active', expiryDate: now - DAY }), now);
   assert.strictEqual(r.type, 'expired');
+  assert.strictEqual(r.inGrace, true);
+  assert.strictEqual(r.setExpired, false);
+});
+
+test('after the grace period -> mark expired once', () => {
+  const r = evaluateSubscription(cafe({ status: 'active', expiryDate: now - 5 * DAY }), now);
+  assert.strictEqual(r.inGrace, false);
   assert.strictEqual(r.setExpired, true);
-  const again = evaluateSubscription(cafe({ status: 'expired', expiryDate: now - DAY }), now);
+  const again = evaluateSubscription(cafe({ status: 'expired', expiryDate: now - 5 * DAY }), now);
   assert.strictEqual(again.setExpired, false);
 });
 

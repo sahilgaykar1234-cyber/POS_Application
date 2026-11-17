@@ -396,12 +396,16 @@ exports.checkSubscriptions = onSchedule({ schedule: 'every day 06:00', timeZone:
       await notify(doc.id, name, action.key, 'superAdmin', {
         type: 'subscription_expired',
         title: `${name}: subscription expired`,
-        message: `Expired on ${dateStr}. POS access is paused until renewal. No data was deleted.`,
+        message: action.inGrace
+          ? `Expired on ${dateStr}. In the grace period: the POS stops in a few days unless renewed.`
+          : `Expired on ${dateStr}. POS access is paused until renewal. No data was deleted.`,
       });
       await notify(doc.id, name, action.key, 'cafe', {
         type: 'subscription_expired',
         title: 'Subscription expired',
-        message: `Your POS subscription expired on ${dateStr}. Please renew to continue. Your data is safe.`,
+        message: action.inGrace
+          ? `Your POS subscription expired on ${dateStr}. The POS keeps working for a few more days – please renew now with "Pay now".`
+          : `Your POS subscription expired on ${dateStr}. Please renew to continue. Your data is safe.`,
       });
     } else {
       const sent = await notify(doc.id, name, action.key, 'superAdmin', {

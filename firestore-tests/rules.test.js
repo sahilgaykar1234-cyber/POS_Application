@@ -10,7 +10,7 @@ const {
   assertFails,
   assertSucceeds,
 } = require('@firebase/rules-unit-testing');
-const { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, collection, query, where, Timestamp } = require('firebase/firestore');
+const { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, collection, query, where, Timestamp, writeBatch, serverTimestamp } = require('firebase/firestore');
 
 let env;
 
@@ -247,7 +247,7 @@ test('subscription payments: manager sees only own cafe', async () => {
 
 test('expired / suspended / inactive / migrating cafes cannot write (data stays readable)', async () => {
   const cases = [
-    { subscription: { status: 'active', expiryDate: past() } },
+    { subscription: { status: 'active', expiryDate: Timestamp.fromMillis(Date.now() - 5 * day) } },
     { subscription: { status: 'expired' } },
     { subscription: { status: 'suspended', expiryDate: future() } },
     { status: 'suspended' },
@@ -275,4 +275,64 @@ test('audit logs are append-only and in your own name', async () => {
   await assertSucceeds(addDoc(collection(m, 'auditLogs'), { actorUid: 'mA', cafeId: 'A', action: 'x' }));
   await assertFails(addDoc(collection(m, 'auditLogs'), { actorUid: 'someoneElse', cafeId: 'A', action: 'x' }));
   await assertFails(addDoc(collection(m, 'auditLogs'), { actorUid: 'mA', cafeId: 'B', action: 'x' }));
+});
+
+test('grace period: the POS keeps working for up to 4 days after expiry', async () => {
+  await seed({ subscription: { status: 'active', expiryDate: past() } });
+  await assertSucceeds(addDoc(collection(ctx.managerA(), 'cafes/A/orders'), { totalPrice: 1 }));
+  await seed({ subscription: { status: 'active', expiryDate: Timestamp.fromMillis(Date.now() - 3.5 * day) } });
+  await assertSucceeds(addDoc(collection(ctx.managerA(), 'cafes/A/orders'), { totalPrice: 1 }));
+  await seed({ subscription: { status: 'active', expiryDate: Timestamp.fromMillis(Date.now() - 4 * day - 60000) } });
+  await assertFails(addDoc(collection(ctx.managerA(), 'cafes/A/orders'), { totalPrice: 1 }));
+});
+
+function claimBatch(db, cafeId, utr, extra = {}, uid = 'mA') {
+  const b = writeBatch(db);
+  b.set(doc(db, `paymentClaims/${cafeId}`), {
+    cafeId, cafeName: 'Cafe', utr, amount: 899, planId: 'std', planName: 'Standard', cycle: 'monthly',
+    status: 'pending', submittedBy: uid, submittedAt: serverTimestamp(), ...extra,
+  });
+  b.set(doc(db, `paymentRefs/${utr}`), { cafeId, createdAt: serverTimestamp() });
+  return b.commit();
+}
+
+test('pay now: a manager can send a claim, even while blocked, but never renew', async () => {
+  await seed({ subscription: { status: 'expired', expiryDate: past() } });
+  const m = ctx.managerA();
+  await assertSucceeds(claimBatch(m, 'A', '123456789012'));
+  // Only one open claim at a time.
+  await assertFails(claimBatch(m, 'A', '123456789013'));
+  // The cafe can't approve itself or touch its subscription.
+  await assertFails(updateDoc(doc(m, 'paymentClaims/A'), { status: 'approved' }));
+  await assertFails(updateDoc(doc(m, 'cafes/A'), { 'subscription.status': 'active' }));
+  // Super Admin approves; the UTR stays used.
+  await assertSucceeds(updateDoc(doc(ctx.superAdmin(), 'paymentClaims/A'), { status: 'approved' }));
+  await assertFails(claimBatch(m, 'A', '123456789012'), 'same UTR again');
+  await assertSucceeds(claimBatch(m, 'A', '123456789014'), 'new claim after approval');
+});
+
+test('pay now: claims are checked and private to the cafe', async () => {
+  await seed();
+  const m = ctx.managerA();
+  await assertFails(claimBatch(m, 'A', '12345'), 'UTR must be 12 digits');
+  await assertFails(claimBatch(m, 'A', '123456789012', { status: 'approved' }));
+  await assertFails(claimBatch(m, 'A', '123456789012', { amount: -1 }));
+  await assertFails(claimBatch(m, 'B', '123456789012'), 'not your cafe');
+  await assertFails(claimBatch(ctx.captainA(), 'A', '123456789012', {}, 'cA'), 'captains cannot pay');
+  // A UTR used by another cafe is refused.
+  await assertSucceeds(claimBatch(ctx.managerB(), 'B', '999999999999', {}, 'mB'));
+  await assertFails(claimBatch(m, 'A', '999999999999'));
+  await assertFails(getDoc(doc(m, 'paymentClaims/B')));
+  await assertFails(getDoc(doc(m, 'paymentRefs/999999999999')));
+  // A ref can't be written without its claim.
+  await assertFails(setDoc(doc(m, 'paymentRefs/111111111111'), { cafeId: 'A' }));
+});
+
+test('platform payee: readable by signed-in users, written by the Super Admin only', async () => {
+  await seed();
+  await assertSucceeds(setDoc(doc(ctx.superAdmin(), 'platform/payee'), { upiId: 'owner@okaxis' }));
+  await assertSucceeds(getDoc(doc(ctx.managerA(), 'platform/payee')));
+  await assertFails(getDoc(doc(ctx.anon(), 'platform/payee')));
+  await assertFails(setDoc(doc(ctx.managerA(), 'platform/payee'), { upiId: 'thief@okaxis' }));
+  await assertFails(getDoc(doc(ctx.managerA(), 'platform/settings')));
 });

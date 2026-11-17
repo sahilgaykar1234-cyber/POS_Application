@@ -8,9 +8,13 @@ import 'package:flutter/material.dart';
 import '../../features/admin/super_admin_shell.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/shell/role_shells.dart';
+import '../../features/subscription/pay_now_dialog.dart';
+import '../../features/subscription/renewal_service.dart';
+import '../../features/subscription/upi_payment.dart';
 import '../data/firestore_paths.dart';
 import '../subscription/cafe_access.dart';
 import '../theme/tokens.dart';
+import '../utils/formatters.dart';
 import '../widgets/message_screen.dart';
 import 'app_user.dart';
 import 'auth_service.dart';
@@ -131,6 +135,14 @@ class _CafeGate extends StatelessWidget {
   }
 
   Widget _cafe(BuildContext context) {
+    // Re-checked every few minutes as well, so an expiry or the end of the
+    // grace period takes effect without reloading the page.
+    return StreamBuilder<void>(stream: _recheck, builder: (context, _) => _cafeDoc(context));
+  }
+
+  static final Stream<void> _recheck = Stream<void>.periodic(const Duration(minutes: 5)).asBroadcastStream();
+
+  Widget _cafeDoc(BuildContext context) {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirestorePaths.cafe(user.cafeId!).snapshots(),
       builder: (context, snap) {
@@ -152,14 +164,29 @@ class _CafeGate extends StatelessWidget {
           );
         }
 
-        final access = evaluateCafeAccess(cafe.data() ?? const {}, DateTime.now());
+        final data = cafe.data() ?? const <String, dynamic>{};
+        final cafeName = (data['name'] ?? 'Your cafe').toString();
+        final subscription = data['subscription'] is Map ? Map<String, dynamic>.from(data['subscription'] as Map) : const <String, dynamic>{};
+        // Only a Manager can pay (the rules allow claims from managers only).
+        Future<void> pay() => showPayNowDialog(context, cafeId: user.cafeId!, cafeName: cafeName, subscription: subscription);
+
+        final access = evaluateCafeAccess(data, DateTime.now());
         switch (access.state) {
           case CafeAccessState.blocked:
-            return _SignOutMessage(icon: Icons.block_rounded, title: access.title, message: access.message);
+            return MessageScreen(
+              icon: Icons.block_rounded,
+              title: access.title,
+              message: access.canRenew && !user.isManager ? '${access.message} Ask your manager to renew.' : access.message,
+              actionLabel: access.canRenew && user.isManager ? 'Pay now' : 'Sign out',
+              onAction: access.canRenew && user.isManager ? pay : () => signOutToLogin(context),
+              secondaryLabel: access.canRenew && user.isManager ? 'Sign out' : null,
+              onSecondary: () => signOutToLogin(context),
+            );
           case CafeAccessState.migrating:
             return _SignOutMessage(icon: Icons.construction_rounded, title: access.title, message: access.message);
           case CafeAccessState.allowed:
           case CafeAccessState.allowedWithWarning:
+          case CafeAccessState.grace:
             break;
         }
 
@@ -169,26 +196,75 @@ class _CafeGate extends StatelessWidget {
 
         // A cafe login (manager role) chooses Manager or Captain view after
         // signing in; a captain-only account goes straight to the kitchen.
-        final cafeName = (cafe.data()?['name'] ?? 'Your cafe').toString();
         final dashboard = user.isManager ? _ModeChooser(cafeName: cafeName) : const CaptainShell();
+        final showBanner = access.state == CafeAccessState.allowedWithWarning || access.state == CafeAccessState.grace;
         // Always the same widget structure, so the dashboard (and any
         // half-entered order) survives the banner appearing/disappearing.
-        return _WarningBanner(message: access.state == CafeAccessState.allowedWithWarning ? access.message : null, child: dashboard);
+        return _WarningBanner(
+          message: showBanner ? access.message : null,
+          urgent: access.state == CafeAccessState.grace,
+          cafeId: user.cafeId!,
+          onPay: showBanner && access.canRenew && user.isManager ? pay : null,
+          askManager: showBanner && access.canRenew && !user.isManager,
+          child: dashboard,
+        );
       },
     );
   }
 }
 
-/// Thin banner above the dashboard (e.g. "Subscription expires in 3 days").
+/// Thin banner above the dashboard (e.g. "Subscription expires in 3 days"),
+/// red during the grace period, with "Pay now" for the cafe's Manager.
 class _WarningBanner extends StatelessWidget {
-  const _WarningBanner({required this.message, required this.child});
+  const _WarningBanner({
+    required this.message,
+    required this.child,
+    required this.cafeId,
+    this.urgent = false,
+    this.onPay,
+    this.askManager = false,
+  });
   final String? message;
   final Widget child;
+  final String cafeId;
+  final bool urgent;
+  final VoidCallback? onPay;
+  final bool askManager;
 
   @override
   Widget build(BuildContext context) {
     final msg = message;
     final p = context.palette;
+    final fg = urgent ? p.danger : p.warning;
+    Widget bar(String text, {bool sent = false}) => Container(
+          width: double.infinity,
+          color: sent ? p.infoTint : (urgent ? p.dangerTint : p.warningTint),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              Icon(sent ? Icons.hourglass_top_rounded : (urgent ? Icons.error_outline_rounded : Icons.warning_amber_rounded),
+                  color: sent ? p.info : fg, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  askManager ? '$text Ask your manager to renew.' : text,
+                  style: TextStyle(color: sent ? p.info : fg, fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ),
+              if (onPay != null) ...[
+                const SizedBox(width: 8),
+                sent
+                    ? TextButton(onPressed: onPay, child: const Text('Details'))
+                    : FilledButton(
+                        key: const Key('banner-pay-now'),
+                        style: FilledButton.styleFrom(backgroundColor: fg, foregroundColor: Colors.white, visualDensity: VisualDensity.compact),
+                        onPressed: onPay,
+                        child: const Text('Pay now'),
+                      ),
+              ],
+            ],
+          ),
+        );
     return Material(
       color: p.canvas,
       child: Column(
@@ -196,23 +272,19 @@ class _WarningBanner extends StatelessWidget {
           if (msg != null)
             SafeArea(
               bottom: false,
-              child: Container(
-                width: double.infinity,
-                color: p.warningTint,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Row(
-                  children: [
-                    Icon(Icons.warning_amber_rounded, color: p.warning, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        msg,
-                        style: TextStyle(color: p.warning, fontSize: 13, fontWeight: FontWeight.w600),
-                      ),
+              child: onPay == null
+                  ? bar(msg)
+                  // A payment already sent shows "being verified" instead.
+                  : StreamBuilder<PaymentClaim?>(
+                      stream: RenewalService.instance.watchClaim(cafeId),
+                      builder: (context, snap) {
+                        final c = snap.data;
+                        if (c != null && c.isPending) {
+                          return bar('Payment of ${Fmt.money(c.amount)} sent – being verified. $msg', sent: true);
+                        }
+                        return bar(msg);
+                      },
                     ),
-                  ],
-                ),
-              ),
             ),
           Expanded(
             key: const ValueKey('cafe-dashboard'),

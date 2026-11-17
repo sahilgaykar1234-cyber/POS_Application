@@ -13,6 +13,8 @@ class MessageScreen extends StatelessWidget {
     this.actionLabel,
     this.onAction,
     this.iconColor,
+    this.secondaryLabel,
+    this.onSecondary,
   });
 
   /// Plain loading screen.
@@ -38,6 +40,11 @@ class MessageScreen extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
   final Color? iconColor;
+
+  /// Optional second, quieter action (e.g. "Sign out" under "Pay now").
+  /// With it, the main action is shown as a filled button.
+  final String? secondaryLabel;
+  final VoidCallback? onSecondary;
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +72,13 @@ class MessageScreen extends StatelessWidget {
                 Text(message, textAlign: TextAlign.center, style: TextStyle(color: p.inkSubtle, height: 1.4)),
                 if (actionLabel != null && onAction != null) ...[
                   const SizedBox(height: Space.xl),
-                  OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
+                  secondaryLabel != null
+                      ? FilledButton(onPressed: onAction, child: Text(actionLabel!))
+                      : OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
+                ],
+                if (secondaryLabel != null && onSecondary != null) ...[
+                  const SizedBox(height: Space.sm),
+                  TextButton(onPressed: onSecondary, child: Text(secondaryLabel!)),
                 ],
               ],
             ),

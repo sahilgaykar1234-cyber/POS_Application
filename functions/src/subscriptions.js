@@ -4,6 +4,8 @@
  */
 
 const WARNING_DAYS = 7;
+/** The POS keeps working this long after expiry (firestore.rules allows 4 days; the app blocks at the end of the business day 3 days after expiry). */
+const GRACE_MS = 4 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function toMillis(v) {
@@ -33,9 +35,13 @@ function evaluateSubscription(cafe, nowMs) {
   if (expiryMs == null) return null;
 
   if (expiryMs <= nowMs) {
+    // During the grace period the cafe is told to renew but is not blocked;
+    // the status becomes "expired" only once the grace period is over.
+    const inGrace = nowMs < expiryMs + GRACE_MS;
     return {
       type: 'expired',
-      setExpired: sub.status !== 'expired',
+      inGrace,
+      setExpired: !inGrace && sub.status !== 'expired',
       daysLeft: 0,
       expiryMs,
       key: `expired_${istDateKey(expiryMs)}`,
@@ -48,4 +54,4 @@ function evaluateSubscription(cafe, nowMs) {
   return null;
 }
 
-module.exports = { evaluateSubscription, istDateKey, toMillis, WARNING_DAYS };
+module.exports = { evaluateSubscription, istDateKey, toMillis, WARNING_DAYS, GRACE_MS };
