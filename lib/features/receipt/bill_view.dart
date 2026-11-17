@@ -87,6 +87,7 @@ class _BillViewState extends State<BillView> {
       printSavedBill(context, order: widget.order, orderId: widget.orderId, settings: widget.settings, choose: choose);
 
   void _whatsApp() => shareSavedBillOnWhatsApp(context, order: widget.order, orderId: widget.orderId, settings: widget.settings);
+  void _whatsAppText() => sendBillTextOnWhatsApp(context, order: widget.order, orderId: widget.orderId, settings: widget.settings);
 
   Future<void> _shareImage() async {
     if (_png == null) await _capture();
@@ -147,6 +148,7 @@ class _BillViewState extends State<BillView> {
                     onPrint: _print,
                     onChoosePrinter: () => _print(choose: true),
                     onWhatsApp: _whatsApp,
+                    onWhatsAppText: _whatsAppText,
                     onShareImage: _shareImage,
                     onClose: _close,
                   ),
@@ -194,8 +196,13 @@ class _BillViewState extends State<BillView> {
         actions: [
           PopupMenuButton<String>(
             tooltip: tr('More'),
-            onSelected: (v) => v == 'image' ? _shareImage() : _print(choose: true),
+            onSelected: (v) => switch (v) {
+              'image' => _shareImage(),
+              'text' => _whatsAppText(),
+              _ => _print(choose: true),
+            },
             itemBuilder: (_) => [
+              PopupMenuItem(value: 'text', child: ListTile(leading: Icon(Icons.chat_outlined), title: Text(tr('Send as WhatsApp text')))),
               PopupMenuItem(value: 'image', child: ListTile(leading: Icon(Icons.image_outlined), title: Text(tr('Share receipt image')))),
               PopupMenuItem(value: 'printer', child: ListTile(leading: Icon(Icons.print_outlined), title: Text(tr('Change printer')))),
             ],
@@ -353,6 +360,7 @@ class _Actions extends StatelessWidget {
     required this.onPrint,
     required this.onChoosePrinter,
     required this.onWhatsApp,
+    required this.onWhatsAppText,
     required this.onShareImage,
     required this.onClose,
   });
@@ -360,6 +368,7 @@ class _Actions extends StatelessWidget {
   final VoidCallback onPrint;
   final VoidCallback onChoosePrinter;
   final VoidCallback onWhatsApp;
+  final VoidCallback onWhatsAppText;
   final VoidCallback onShareImage;
   final VoidCallback onClose;
 
@@ -386,9 +395,12 @@ class _Actions extends StatelessWidget {
         const SizedBox(height: Space.sm),
         _WhatsAppButton(onPressed: onWhatsApp, label: tr('Share on WhatsApp')),
         const SizedBox(height: Space.xs),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(onPressed: onShareImage, icon: const Icon(Icons.image_outlined, size: 18), label: Text(tr('Receipt image'))),
+        Wrap(
+          spacing: Space.xs,
+          children: [
+            TextButton.icon(onPressed: onWhatsAppText, icon: const Icon(Icons.chat_outlined, size: 18), label: Text(tr('Send as text'))),
+            TextButton.icon(onPressed: onShareImage, icon: const Icon(Icons.image_outlined, size: 18), label: Text(tr('Receipt image'))),
+          ],
         ),
       ],
     );

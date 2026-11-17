@@ -92,7 +92,7 @@ class ProductVideoButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final label = Text(tr('See how it works ({0})', [kProductVideoLength]));
+    final label = Text(tr('See how it works'));
     const icon = Icon(Icons.play_circle_fill_rounded, size: 22);
     if (onDark) {
       return FilledButton.icon(
