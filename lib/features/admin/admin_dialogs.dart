@@ -75,8 +75,8 @@ Future<String?> showCafeForm(
   };
   var dayEnds = currentDayEndsAt ?? platform?.defaultDayEndsAt ?? BusinessDay.defaultCutoffMinutes;
   final trialPlan = plans.where((p) => p.tier == PlanTier.trial && p.isActive).firstOrNull;
-  var startTrial = isNew;
-  var trialDays = trialPlan?.trialDays ?? platform?.trialDays ?? 14;
+  // At least 1 day: a cafe always starts with an end date.
+  var trialDays = (trialPlan?.trialDays ?? platform?.trialDays ?? 14).clamp(1, 90);
   final form = GlobalKey<FormState>();
   var saving = false;
 
@@ -108,7 +108,7 @@ Future<String?> showCafeForm(
                 profile: profile,
                 dayEndsAt: dayEnds,
                 trialPlan: trialPlan,
-                trialDays: startTrial ? trialDays : null,
+                trialDays: trialDays,
               );
               if (ctx.mounted) Navigator.pop(ctx, id);
             } else {
@@ -166,23 +166,17 @@ Future<String?> showCafeForm(
                     ),
                   ),
                   if (isNew) ...[
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      value: startTrial,
-                      onChanged: (v) => setState(() => startTrial = v),
-                      title: const Text('Start a free trial'),
-                      subtitle: Text(startTrial ? '$trialDays days, then assign a plan' : 'Assign a plan later'),
+                    // Every new cafe starts on a trial with an end date, so no
+                    // cafe can use the POS for free forever by mistake. Assign
+                    // a paid plan any time from the cafe's page.
+                    Row(
+                      children: [
+                        const Expanded(child: Text('Free trial (then a paid plan)')),
+                        IconButton(onPressed: trialDays > 1 ? () => setState(() => trialDays--) : null, icon: const Icon(Icons.remove_circle_outline)),
+                        Text('$trialDays days', key: const Key('cafe-trial-days'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                        IconButton(onPressed: trialDays < 90 ? () => setState(() => trialDays++) : null, icon: const Icon(Icons.add_circle_outline)),
+                      ],
                     ),
-                    if (startTrial)
-                      Row(
-                        children: [
-                          const Text('Trial length'),
-                          const Spacer(),
-                          IconButton(onPressed: trialDays > 1 ? () => setState(() => trialDays--) : null, icon: const Icon(Icons.remove_circle_outline)),
-                          Text('$trialDays days', style: const TextStyle(fontWeight: FontWeight.w700)),
-                          IconButton(onPressed: trialDays < 90 ? () => setState(() => trialDays++) : null, icon: const Icon(Icons.add_circle_outline)),
-                        ],
-                      ),
                     const SizedBox(height: Space.xs),
                     Text(
                       'After saving, create the cafe\'s login with the admin script (shown next).',
@@ -601,16 +595,24 @@ Future<void> confirmCancelSubscription(BuildContext context, CafeSummary cafe) a
 // =============================================================== payment ==
 
 /// Records money already received (manual). Never claims a gateway payment.
-Future<void> showRecordPayment(BuildContext context, List<CafeSummary> cafes, {CafeSummary? cafe}) {
+///
+/// With [claim] it approves a cafe's "Pay now" UPI claim: everything is
+/// filled in from the claim, and saving also marks the claim approved and
+/// puts the cafe on the plan it paid for.
+Future<void> showRecordPayment(BuildContext context, List<CafeSummary> cafes, {CafeSummary? cafe, PaymentClaim? claim}) {
   final live = cafes.where((c) => !c.isDeleted).toList();
+  if (claim != null) cafe ??= live.where((c) => c.id == claim.cafeId).firstOrNull;
   var selected = cafe ?? live.firstOrNull;
-  final amount = TextEditingController(text: selected != null && selected.amount > 0 ? _num(selected.amount) : '');
-  final ref = TextEditingController();
-  final notes = TextEditingController();
-  var method = paymentMethods.first;
-  var paidAt = DateTime.now();
+  final amount = TextEditingController(
+    text: claim != null ? _num(claim.amount) : (selected != null && selected.amount > 0 ? _num(selected.amount) : ''),
+  );
+  final ref = TextEditingController(text: claim?.utr ?? '');
+  final notes = TextEditingController(text: claim == null ? '' : 'Pay now · ${claim.planName} ${claim.cycle}');
+  var method = claim != null ? 'UPI' : paymentMethods.first;
+  var paidAt = claim?.submittedAt ?? DateTime.now();
   var extend = true;
-  int monthsFor(CafeSummary? c) => c?.billingCycle == 'yearly' ? 12 : 1;
+  int monthsFor(CafeSummary? c) => claim != null ? monthsForCycle(claim.cycle) : (c?.billingCycle == 'yearly' ? 12 : 1);
+  bool canExtend(CafeSummary c) => claim != null || c.hasSubscription;
   DateTime extendFrom(CafeSummary c) => c.expiryDate != null && c.expiryDate!.isAfter(DateTime.now()) ? c.expiryDate! : DateTime.now();
   DateTime extendTo(CafeSummary c) {
     final f = extendFrom(c);
@@ -620,20 +622,31 @@ Future<void> showRecordPayment(BuildContext context, List<CafeSummary> cafes, {C
   var saving = false;
   return _sheet<void>(
     context,
-    title: 'Record payment',
+    title: claim != null ? 'Approve payment · ${claim.cafeName}' : 'Record payment',
     body: (ctx, setState) {
-      if (live.isEmpty) return const Text('No cafes yet.');
+      if (live.isEmpty || selected == null) return const Text('No cafes yet.');
       final c = selected!;
       return Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'For money already received (UPI, cash, bank). The app does not collect payments.',
-            style: TextStyle(color: ctx.palette.inkSubtle, fontSize: 13),
-          ),
+          if (claim != null)
+            Container(
+              padding: const EdgeInsets.all(Space.md),
+              decoration: BoxDecoration(color: ctx.palette.warningTint, borderRadius: BorderRadius.circular(10)),
+              child: Text(
+                'Approve only after you see ${Fmt.money(claim.amount)} with UTR ${claim.utr} in your bank or UPI app. '
+                'Never approve from a screenshot.',
+                style: TextStyle(color: ctx.palette.warning, fontWeight: FontWeight.w600),
+              ),
+            )
+          else
+            Text(
+              'For money already received (UPI, cash, bank). The app does not collect payments.',
+              style: TextStyle(color: ctx.palette.inkSubtle, fontSize: 13),
+            ),
           const SizedBox(height: Space.md),
-          if (cafe == null) ...[
+          if (cafe == null && claim == null) ...[
             DropdownButtonFormField<String>(
               isExpanded: true,
               initialValue: c.id,
@@ -684,12 +697,12 @@ Future<void> showRecordPayment(BuildContext context, List<CafeSummary> cafes, {C
             controller: notes,
             decoration: const InputDecoration(labelText: 'Notes'),
           ),
-          if (c.hasSubscription)
+          if (canExtend(c))
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: extend,
               onChanged: (v) => setState(() => extend = v),
-              title: const Text('Extend the subscription'),
+              title: Text(claim != null ? 'Renew on ${claim.planName} (${claim.cycleLabel.toLowerCase()})' : 'Extend the subscription'),
               subtitle: Text(extend ? 'Until ${Fmt.date(extendTo(c))} (${monthsFor(c) == 12 ? '1 year' : '1 month'})' : 'Only record the payment'),
             ),
         ],
@@ -709,7 +722,7 @@ Future<void> showRecordPayment(BuildContext context, List<CafeSummary> cafes, {C
                     final c = selected!;
                     setBtn(() => saving = true);
                     try {
-                      final doExtend = extend && c.hasSubscription;
+                      final doExtend = extend && canExtend(c);
                       final no = await AdminService.instance.recordPayment(
                         cafe: c,
                         amount: a,
@@ -720,19 +733,73 @@ Future<void> showRecordPayment(BuildContext context, List<CafeSummary> cafes, {C
                         periodStart: doExtend ? extendFrom(c) : null,
                         periodEnd: doExtend ? extendTo(c) : null,
                         extendTo: doExtend ? extendTo(c) : null,
+                        claim: claim,
                       );
                       if (ctx.mounted) {
                         Navigator.pop(ctx);
-                        showSuccess(context, 'Payment recorded · $no');
+                        showSuccess(context, claim != null ? 'Approved · $no · ${c.name} renewed' : 'Payment recorded · $no');
                       }
                     } catch (e) {
                       setBtn(() => saving = false);
                       if (ctx.mounted) showError(ctx, friendlyError(e, 'record the payment'));
                     }
                   },
-            child: Text(saving ? 'Saving…' : 'Record payment'),
+            child: Text(saving ? 'Saving…' : (claim != null ? 'Approve & renew' : 'Record payment')),
           ),
         ),
+    ],
+  );
+}
+
+/// The payment of a "Pay now" claim is not in the bank: tell the cafe why.
+/// Its subscription is not changed.
+Future<void> showRejectClaim(BuildContext context, PaymentClaim claim) {
+  final reason = TextEditingController(text: 'Payment not found in our account');
+  var saving = false;
+  return _sheet<void>(
+    context,
+    title: 'Reject payment · ${claim.cafeName}',
+    body: (ctx, setState) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('${Fmt.money(claim.amount)} · UTR ${claim.utr} · sent ${Fmt.dateTime(claim.submittedAt)}'),
+        const SizedBox(height: Space.md),
+        TextField(
+          key: const Key('claim-reject-reason'),
+          controller: reason,
+          maxLength: 200,
+          decoration: const InputDecoration(labelText: 'Reason (shown to the cafe)'),
+        ),
+        Text('The cafe\'s subscription is not changed. They can pay again or send the correct number.',
+            style: TextStyle(color: ctx.palette.inkSubtle, fontSize: 12)),
+      ],
+    ),
+    actions: (ctx) => [
+      OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+      StatefulBuilder(
+        builder: (ctx2, setBtn) => FilledButton(
+          key: const Key('claim-reject-save'),
+          style: FilledButton.styleFrom(backgroundColor: ctx.palette.danger),
+          onPressed: saving
+              ? null
+              : () async {
+                  if (reason.text.trim().isEmpty) return showError(ctx, 'Enter a reason.');
+                  setBtn(() => saving = true);
+                  try {
+                    await AdminService.instance.rejectClaim(claim, reason: reason.text);
+                    if (ctx.mounted) {
+                      Navigator.pop(ctx);
+                      showSuccess(context, 'Payment rejected');
+                    }
+                  } catch (e) {
+                    setBtn(() => saving = false);
+                    if (ctx.mounted) showError(ctx, friendlyError(e, 'reject the payment'));
+                  }
+                },
+          child: Text(saving ? 'Saving…' : 'Reject'),
+        ),
+      ),
     ],
   );
 }

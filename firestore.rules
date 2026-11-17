@@ -43,7 +43,10 @@ service cloud.firestore {
     function cafeData(cafeId) { return get(/databases/$(database)/documents/cafes/$(cafeId)).data; }
 
     // Same policy as lib/core/subscription/cafe_access.dart:
-    // cafe active, subscription not expired/suspended, expiry (if any) in future.
+    // cafe active, subscription not expired/suspended, and the expiry (if any)
+    // plus the grace period still ahead. The app blocks at the end of the
+    // business day 3 days after expiry (graceEndFor), which is always within
+    // these 4 days, so the server never blocks earlier than the app.
     function cafeOperational(cafeId) {
       let c = cafeData(cafeId);
       let sub = c.get('subscription', {});
@@ -51,7 +54,7 @@ service cloud.firestore {
       return c.get('status', 'active') == 'active'
         && c.get('legacyData', false) != true
         && !(sub.get('status', 'active') in ['expired', 'suspended'])
-        && (exp == null || exp > request.time);
+        && (exp == null || exp + duration.value(4, 'd') > request.time);
     }
 
     function canReadCafe(cafeId) { return isSuper() || isStaffOf(cafeId); }
@@ -159,9 +162,49 @@ service cloud.firestore {
       allow read, write: if isSuper();
     }
 
+    // "Pay now": a cafe's Manager says "we paid by UPI, reference X". A claim
+    // never changes the subscription – only the Super Admin approves it (and
+    // records the payment). One open claim per cafe (document id = cafe id),
+    // and a UPI reference (UTR) can be claimed only once across all cafes
+    // (paymentRefs/{utr}, written in the same batch). Works while the cafe is
+    // blocked, so an expired cafe can still pay.
+    function validClaim(cafeId) {
+      let d = request.resource.data;
+      let refPath = /databases/$(database)/documents/paymentRefs/$(d.utr);
+      return d.keys().hasOnly(['cafeId', 'cafeName', 'utr', 'amount', 'planId', 'planName', 'cycle', 'status', 'submittedBy', 'submittedAt'])
+        && d.cafeId == cafeId && d.status == 'pending'
+        && d.utr is string && d.utr.matches('^[0-9]{12}$')
+        && d.amount is number && d.amount > 0 && d.amount < 1000000
+        && d.cycle in ['monthly', 'yearly']
+        && d.submittedBy == request.auth.uid
+        && d.submittedAt == request.time
+        && !exists(refPath) && existsAfter(refPath);
+    }
+    match /paymentClaims/{cafeId} {
+      allow read: if isSuper() || isManagerOf(cafeId);
+      allow create: if isManagerOf(cafeId) && validClaim(cafeId);
+      // A new claim only after the last one was approved or rejected.
+      allow update: if isSuper() || (isManagerOf(cafeId) && resource.data.status != 'pending' && validClaim(cafeId));
+      allow delete: if isSuper();
+    }
+    match /paymentRefs/{utr} {
+      allow read: if isSuper();
+      allow create: if role() == 'manager' && loginActive()
+        && request.resource.data.keys().hasOnly(['cafeId', 'createdAt'])
+        && request.resource.data.cafeId == myCafe()
+        && getAfter(/databases/$(database)/documents/paymentClaims/$(myCafe())).data.utr == utr;
+      allow update: if false;
+      allow delete: if isSuper();
+    }
+
     // Platform-wide settings (trial length, defaults, alerts): Super Admin only.
     match /platform/{doc} {
       allow read, write: if isSuper();
+    }
+    // Where cafes pay (UPI ID + name), shown in "Pay now". Written by the
+    // Super Admin only (rule above).
+    match /platform/payee {
+      allow read: if signedIn();
     }
 
     // --------------------------------------------------------- audit & alerts

@@ -9,8 +9,10 @@ import '../../core/data/firestore_paths.dart';
 import '../../core/subscription/cafe_access.dart';
 import '../../core/utils/business_day.dart';
 import '../../core/utils/formatters.dart';
+import '../subscription/upi_payment.dart';
 import 'admin_models.dart';
 
+export '../subscription/upi_payment.dart' show PaymentClaim, ClaimStatus, UpiPayee, isValidUpiId, monthsForCycle;
 export 'admin_models.dart';
 
 /// Operational numbers of one cafe (read with aggregate queries: counts and
@@ -147,25 +149,25 @@ class AdminService {
 
   // ---------------------------------------------------------------- cafes
 
-  /// Creates a cafe (record + its settings, optionally a trial). Its login
-  /// is created afterwards in the panel (Add login).
-  Future<String> createCafe({required Map<String, dynamic> profile, required int dayEndsAt, SubscriptionPlan? trialPlan, int? trialDays}) async {
+  /// Creates a cafe (record + its settings + its trial). Its login is
+  /// created afterwards in the panel (Add login). Every cafe starts on a trial with an end date ([trialDays] ≥ 1), so a
+  /// cafe can never use the POS for free forever by mistake.
+  Future<String> createCafe({required Map<String, dynamic> profile, required int dayEndsAt, SubscriptionPlan? trialPlan, required int trialDays}) async {
+    if (trialDays < 1) throw ArgumentError('A new cafe needs a trial of at least 1 day');
     final ref = FirestorePaths.cafes().doc();
     final now = DateTime.now();
     final batch = _db.batch();
     final cafe = <String, dynamic>{...profile, 'status': CafeStatus.active, 'legacyData': false, 'createdAt': FieldValue.serverTimestamp(), 'createdBy': _uid};
-    if (trialDays != null && trialDays > 0) {
-      cafe['subscription'] = {
-        'planId': trialPlan?.id,
-        'planName': trialPlan?.name ?? 'Free Trial',
-        'billingCycle': 'trial',
-        'status': SubscriptionStatus.trial,
-        'startDate': Timestamp.fromDate(now),
-        'expiryDate': Timestamp.fromDate(now.add(Duration(days: trialDays))),
-        'amount': 0,
-        'paymentStatus': 'none',
-      };
-    }
+    cafe['subscription'] = {
+      'planId': trialPlan?.id,
+      'planName': trialPlan?.name ?? 'Free Trial',
+      'billingCycle': 'trial',
+      'status': SubscriptionStatus.trial,
+      'startDate': Timestamp.fromDate(now),
+      'expiryDate': Timestamp.fromDate(now.add(Duration(days: trialDays))),
+      'amount': 0,
+      'paymentStatus': 'none',
+    };
     batch.set(ref, cafe);
     batch.set(FirestorePaths.businessSettings(ref.id), {
       'shopName': profile['name'],
@@ -177,19 +179,17 @@ class AdminService {
       'dayEndsAt': BusinessDay.format(dayEndsAt),
       'updatedAt': FieldValue.serverTimestamp(),
     });
-    if (trialDays != null && trialDays > 0) {
-      batch.set(FirestorePaths.subscriptionHistory(ref.id).doc(), {
-        'action': 'trial',
-        'planName': trialPlan?.name ?? 'Free Trial',
-        'status': SubscriptionStatus.trial,
-        'expiryDate': Timestamp.fromDate(now.add(Duration(days: trialDays))),
-        'amount': 0,
-        'by': _uid,
-        'at': FieldValue.serverTimestamp(),
-      });
-    }
+    batch.set(FirestorePaths.subscriptionHistory(ref.id).doc(), {
+      'action': 'trial',
+      'planName': trialPlan?.name ?? 'Free Trial',
+      'status': SubscriptionStatus.trial,
+      'expiryDate': Timestamp.fromDate(now.add(Duration(days: trialDays))),
+      'amount': 0,
+      'by': _uid,
+      'at': FieldValue.serverTimestamp(),
+    });
     await batch.commit();
-    await audit('cafe.create', cafeId: ref.id, details: {'name': profile['name'], 'trialDays': ?trialDays});
+    await audit('cafe.create', cafeId: ref.id, details: {'name': profile['name'], 'trialDays': trialDays});
     return ref.id;
   }
 
@@ -351,6 +351,7 @@ class AdminService {
     DateTime? periodEnd,
     String? planName,
     DateTime? extendTo,
+    PaymentClaim? claim,
   }) async {
     final counterRef = FirestorePaths.counter('subscriptionReceipts');
     final paymentRef = FirestorePaths.subscriptionPayments().doc();
@@ -369,8 +370,9 @@ class AdminService {
         'method': method,
         'referenceId': referenceId.trim(),
         'notes': notes.trim(),
-        'planName': planName ?? cafe.planName,
+        'planName': planName ?? claim?.planName ?? cafe.planName,
         'status': 'received',
+        if (claim != null) 'source': 'upi-claim',
         'periodStart': periodStart == null ? null : Timestamp.fromDate(periodStart),
         'periodEnd': periodEnd == null ? null : Timestamp.fromDate(periodEnd),
         'paidAt': Timestamp.fromDate(paidAt),
@@ -388,6 +390,19 @@ class AdminService {
         if (periodStart != null) cafeUpdate['subscription.startDate'] = Timestamp.fromDate(periodStart);
       } else if (cafe.subscriptionStatus == SubscriptionStatus.pending) {
         cafeUpdate['subscription.status'] = SubscriptionStatus.active;
+      }
+      if (claim != null) {
+        // Approving a "Pay now" claim: the cafe is on the plan it paid for.
+        cafeUpdate['subscription.planId'] = claim.planId;
+        cafeUpdate['subscription.planName'] = claim.planName;
+        cafeUpdate['subscription.billingCycle'] = claim.cycle;
+        cafeUpdate['subscription.amount'] = claim.amount;
+        tx.update(FirestorePaths.paymentClaim(claim.cafeId), {
+          'status': ClaimStatus.approved,
+          'receiptNo': receiptNo,
+          'reviewedBy': _uid,
+          'reviewedAt': FieldValue.serverTimestamp(),
+        });
       }
       tx.update(FirestorePaths.cafe(cafe.id), cafeUpdate);
       tx.set(FirestorePaths.subscriptionHistory(cafe.id).doc(), {
@@ -407,6 +422,50 @@ class AdminService {
       details: {'receiptNo': receiptNo, 'amount': amount, 'method': method, if (extendTo != null) 'extendedTo': Fmt.date(extendTo)},
     );
     return receiptNo;
+  }
+
+  // ------------------------------------------------- "Pay now" UPI claims
+
+  /// Claims waiting for the Super Admin (oldest first: first come, first served).
+  Stream<List<PaymentClaim>> watchPendingClaims() =>
+      FirestorePaths.paymentClaims().where('status', isEqualTo: ClaimStatus.pending).snapshots().map((s) {
+        final list = s.docs.map((d) => PaymentClaim(d.id, d.data())).toList();
+        list.sort((a, b) => (a.submittedAt ?? DateTime(0)).compareTo(b.submittedAt ?? DateTime(0)));
+        return list;
+      });
+
+  /// The payment was not found in the bank. The cafe sees [reason] and can
+  /// send a new claim; its subscription is not touched. The UTR is freed in
+  /// case it was only mistyped.
+  Future<void> rejectClaim(PaymentClaim claim, {required String reason}) async {
+    final batch = _db.batch();
+    batch.update(FirestorePaths.paymentClaim(claim.cafeId), {
+      'status': ClaimStatus.rejected,
+      'rejectReason': reason.trim(),
+      'reviewedBy': _uid,
+      'reviewedAt': FieldValue.serverTimestamp(),
+    });
+    batch.delete(FirestorePaths.paymentRef(claim.utr));
+    batch.set(FirestorePaths.subscriptionHistory(claim.cafeId).doc(), {
+      'action': 'claim_rejected',
+      'utr': claim.utr,
+      'amount': claim.amount,
+      'reason': reason.trim(),
+      'by': _uid,
+      'at': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    await audit('payment.claim.reject', cafeId: claim.cafeId, details: {'utr': claim.utr, 'amount': claim.amount, 'reason': reason.trim()});
+  }
+
+  Stream<UpiPayee> watchPayee() => FirestorePaths.platformPayee().snapshots().map((d) => UpiPayee.fromMap(d.data()));
+
+  /// Where cafes pay (shown to every cafe in "Pay now").
+  Future<void> savePayee({required String upiId, required String payeeName}) async {
+    final id = upiId.trim();
+    if (id.isNotEmpty && !isValidUpiId(id)) throw ArgumentError('Not a valid UPI ID');
+    await FirestorePaths.platformPayee().set({'upiId': id, 'payeeName': payeeName.trim(), 'updatedAt': FieldValue.serverTimestamp()});
+    await audit('platform.payee', details: {'upiId': id});
   }
 
   // ---------------------------------------------------------------- logins

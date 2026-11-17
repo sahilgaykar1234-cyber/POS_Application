@@ -322,7 +322,9 @@ List<AdminAlert> computeAlerts({required List<CafeSummary> cafes, required List<
         AdminAlert(
           AlertLevel.critical,
           '${c.name}: subscription expired',
-          'Expired${c.expiryDate != null ? ' on ${Fmt.date(c.expiryDate)}' : ''}. The POS is blocked until it is renewed.',
+          c.access(now).state == CafeAccessState.grace
+              ? 'Expired on ${Fmt.date(c.expiryDate)}. Grace period: the POS stops on ${Fmt.dateTime(graceEndFor(c.expiryDate!))}.'
+              : 'Expired${c.expiryDate != null ? ' on ${Fmt.date(c.expiryDate)}' : ''}. The POS is blocked until it is renewed.',
           cafeId: c.id,
           at: c.expiryDate,
         ),

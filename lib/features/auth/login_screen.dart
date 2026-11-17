@@ -7,6 +7,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_logo.dart';
 import 'package:pos_app/core/i18n/tr.dart';
 import 'package:pos_app/core/i18n/language_picker.dart';
+import 'product_video.dart';
 
 /// Form validators, kept public so they can be unit-tested.
 class LoginValidators {
@@ -211,6 +212,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     : Text(tr('Sign in'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
               ),
             ),
+            if (!wide) ...[
+              // Phones / tablets: the side panel is hidden, so the product
+              // film is offered here (it only plays when tapped).
+              const SizedBox(height: Space.lg),
+              Text(tr('New to Cafe POS?'), textAlign: TextAlign.center, style: TextStyle(color: p.inkSubtle)),
+              const SizedBox(height: Space.sm),
+              const ProductVideoButton(),
+            ],
             const SizedBox(height: Space.lg),
             Wrap(
               alignment: WrapAlignment.center,
@@ -272,6 +281,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         Text(f, style: TextStyle(color: p.border, fontSize: 16)),
                       ]),
                     ),
+                  const SizedBox(height: Space.xl),
+                  const ProductVideoButton(onDark: true),
                   const Spacer(),
                   Text(tr(AppConfig.appTagline), style: TextStyle(color: p.inkSubtle, fontSize: 13)),
                 ],

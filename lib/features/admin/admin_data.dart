@@ -12,6 +12,7 @@ class AdminData {
     this.staff = const [],
     this.plans = const [],
     this.payments = const [],
+    this.claims = const [],
     this.platform,
     this.loading = true,
     this.error,
@@ -21,6 +22,9 @@ class AdminData {
   final List<StaffMember> staff;
   final List<SubscriptionPlan> plans;
   final List<SubscriptionPayment> payments;
+
+  /// "Pay now" UPI claims waiting for approval (oldest first).
+  final List<PaymentClaim> claims;
   final PlatformSettings? platform;
   final bool loading;
   final Object? error;
@@ -35,6 +39,7 @@ class AdminData {
     List<StaffMember>? staff,
     List<SubscriptionPlan>? plans,
     List<SubscriptionPayment>? payments,
+    List<PaymentClaim>? claims,
     PlatformSettings? platform,
     bool? loading,
     Object? error,
@@ -43,6 +48,7 @@ class AdminData {
     staff: staff ?? this.staff,
     plans: plans ?? this.plans,
     payments: payments ?? this.payments,
+    claims: claims ?? this.claims,
     platform: platform ?? this.platform,
     loading: loading ?? this.loading,
     error: error ?? this.error,
@@ -62,7 +68,7 @@ class AdminDataController extends ValueNotifier<AdminData> {
     final s = AdminService.instance;
     void got(String k, AdminData Function(AdminData) f) {
       _received.add(k);
-      value = f(value).copyWith(loading: _received.length < 5);
+      value = f(value).copyWith(loading: _received.length < 6);
     }
 
     void fail(Object e) => value = value.copyWith(error: e, loading: false);
@@ -71,6 +77,7 @@ class AdminDataController extends ValueNotifier<AdminData> {
       s.watchStaff().listen((v) => got('staff', (d) => d.copyWith(staff: v)), onError: fail),
       s.watchPlans().listen((v) => got('plans', (d) => d.copyWith(plans: v)), onError: fail),
       s.watchPayments().listen((v) => got('payments', (d) => d.copyWith(payments: v)), onError: fail),
+      s.watchPendingClaims().listen((v) => got('claims', (d) => d.copyWith(claims: v)), onError: fail),
       s.watchPlatformSettings().listen((v) => got('platform', (d) => d.copyWith(platform: v)), onError: fail),
     ]);
   }
