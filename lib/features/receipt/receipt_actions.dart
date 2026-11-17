@@ -11,6 +11,7 @@ import '../orders/whatsapp_bill.dart';
 import '../orders/whatsapp_launch.dart';
 import 'receipt_data.dart';
 import 'receipt_html.dart';
+import 'receipt_pdf.dart';
 import '../../core/utils/friendly_error.dart';
 import 'package:pos_app/core/i18n/tr.dart';
 
@@ -134,16 +135,58 @@ Future<ReceiptPrinter?> chooseReceiptPrinter(BuildContext context) async {
   );
 }
 
-/// Opens WhatsApp with the bill typed in, for the customer's number (or one
-/// typed here). The user reviews it and taps Send in WhatsApp – nothing is
-/// sent automatically, and we never claim it was delivered.
+/// Sends the FULL bill as a PDF on WhatsApp (same details as the printed
+/// receipt). Nothing is sent automatically – staff pick the chat and tap Send.
+///  - Phones / tablets: the share sheet opens with the PDF attached → pick
+///    WhatsApp → pick the customer's chat → Send.
+///  - Computers (no file sharing): the PDF is downloaded and the customer's
+///    WhatsApp Web chat opens with a short note → drag the PDF in → Send.
+/// If the PDF can't be made, the bill is sent as a text message instead.
 Future<void> shareSavedBillOnWhatsApp(
   BuildContext context, {
   required Map<String, dynamic> order,
   required String orderId,
   required Map<String, dynamic> settings,
 }) async {
-  final text = buildWhatsAppBill(order: order, orderId: orderId, settings: settings);
+  final r = ReceiptData.from(order, orderId, settings);
+  final Uint8List pdf;
+  try {
+    pdf = await buildReceiptPdf(r);
+  } catch (e) {
+    debugPrint('Bill PDF not made: $e');
+    if (context.mounted) await sendBillTextOnWhatsApp(context, order: order, orderId: orderId, settings: settings);
+    return;
+  }
+  final name = receiptPdfFileName(r);
+  if (canShareFile(name, 'application/pdf')) {
+    // No text with the file: WhatsApp on iPhone drops the file when both
+    // are shared together.
+    final result = await shareFile(pdf, name, 'application/pdf');
+    if (result != ShareFileResult.unsupported) return;
+  }
+  downloadFile(pdf, name, 'application/pdf');
+  if (!context.mounted) return;
+  showSuccess(context, tr('Bill PDF saved – attach it in the WhatsApp chat that opens.'));
+  final note = [
+    if (r.shopName.isNotEmpty) '*${r.shopName}*',
+    'Bill ${r.billNo} · ${receiptMoney(r.total)}',
+    'Your bill is attached (PDF).',
+  ].join('\n');
+  await _openChat(context, order, note);
+}
+
+/// The bill typed out as a WhatsApp message (no file).
+Future<void> sendBillTextOnWhatsApp(
+  BuildContext context, {
+  required Map<String, dynamic> order,
+  required String orderId,
+  required Map<String, dynamic> settings,
+}) =>
+    _openChat(context, order, buildWhatsAppBill(order: order, orderId: orderId, settings: settings));
+
+/// Opens WhatsApp with [text] for the customer's number (or one typed here,
+/// or "choose the chat in WhatsApp").
+Future<void> _openChat(BuildContext context, Map<String, dynamic> order, String text) async {
   var number = normalizeWhatsAppNumber((order['customerPhone'] ?? '').toString());
   if (number == null) {
     final entered = await _askNumber(context, (order['customerPhone'] ?? '').toString());
