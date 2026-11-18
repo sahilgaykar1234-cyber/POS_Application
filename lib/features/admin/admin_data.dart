@@ -69,6 +69,7 @@ class AdminDataController extends ValueNotifier<AdminData> {
     void got(String k, AdminData Function(AdminData) f) {
       _received.add(k);
       value = f(value).copyWith(loading: _received.length < 6);
+      _publishReminderDays();
     }
 
     void fail(Object e) => value = value.copyWith(error: e, loading: false);
@@ -80,6 +81,22 @@ class AdminDataController extends ValueNotifier<AdminData> {
       s.watchPendingClaims().listen((v) => got('claims', (d) => d.copyWith(claims: v)), onError: fail),
       s.watchPlatformSettings().listen((v) => got('platform', (d) => d.copyWith(platform: v)), onError: fail),
     ]);
+  }
+
+  bool _publishing = false;
+
+  /// Keeps every cafe (new ones too) on the current "Warn before expiry" days.
+  Future<void> _publishReminderDays() async {
+    final v = value;
+    if (_publishing || v.loading || v.settings.data['reminderDays'] is! num) return;
+    _publishing = true;
+    try {
+      await AdminService.instance.publishReminderDays(v.settings.reminderDays, v.cafes);
+    } catch (_) {
+      // Tried again on the next update; the default reminder still works.
+    } finally {
+      _publishing = false;
+    }
   }
 
   @override

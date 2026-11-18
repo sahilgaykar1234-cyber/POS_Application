@@ -558,6 +558,19 @@ class AdminService {
     await audit('platform.settings', details: {'fields': fields.keys.toList()});
   }
 
+  /// Copies "Warn before expiry" onto each cafe, because cafe logins can read
+  /// their own cafe but not the platform settings. Only changed cafes are written.
+  Future<void> publishReminderDays(int days, List<CafeSummary> cafes) async {
+    final stale = cafes.where((c) => !c.isDeleted && c.data['reminderDays'] != days).toList();
+    for (var i = 0; i < stale.length; i += 400) {
+      final batch = _db.batch();
+      for (final c in stale.skip(i).take(400)) {
+        batch.update(FirestorePaths.cafe(c.id), {'reminderDays': days});
+      }
+      await batch.commit();
+    }
+  }
+
   // ---------------------------------------------------------------- audit
 
   /// Who did what, never with passwords or tokens.

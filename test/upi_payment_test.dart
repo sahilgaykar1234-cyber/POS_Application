@@ -5,11 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pos_app/core/auth/app_user.dart';
 import 'package:pos_app/core/auth/auth_service.dart';
 import 'package:pos_app/core/data/firestore_paths.dart';
+import 'package:pos_app/core/subscription/cafe_access.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
 import 'package:pos_app/features/admin/admin_data.dart';
 import 'package:pos_app/features/admin/admin_service.dart';
 import 'package:pos_app/features/admin/payments_screen.dart';
 import 'package:pos_app/features/subscription/pay_now_dialog.dart';
+import 'package:pos_app/features/subscription/renewal_reminder.dart';
 import 'package:pos_app/features/subscription/upi_payment.dart';
 
 import 'layout_test.dart' as lt;
@@ -100,6 +102,85 @@ void main() {
       expect(((await db.doc('cafes/A').get()).data()!['subscription'] as Map)['status'], 'trial');
       final h = (await db.collection('cafes/A/subscriptionHistory').get()).docs.single.data();
       expect(h['action'], 'claim_rejected');
+    });
+  });
+
+  group('renewal reminder', () {
+    final now = DateTime(2026, 11, 18, 21);
+    CafeAccess access(DateTime expiry, int? warn) => evaluateCafeAccess({
+          'status': 'active',
+          if (warn != null) 'reminderDays': warn,
+          'subscription': {'status': 'trial', 'expiryDate': expiry},
+        }, now);
+
+    test('follows the Super Admin\'s days, counted by calendar date', () {
+      // 8 days away by the date, even though it is a little over 8×24 hours.
+      expect(access(DateTime(2026, 11, 26, 23, 59), 8).shouldRemindToPay, isTrue);
+      expect(access(DateTime(2026, 11, 26, 23, 59), 8).daysLeft, 8);
+      expect(access(DateTime(2026, 11, 27, 0, 1), 8).shouldRemindToPay, isFalse);
+      expect(access(DateTime(2026, 11, 26), 7).shouldRemindToPay, isFalse);
+      expect(access(DateTime(2026, 11, 25), null).shouldRemindToPay, isTrue);
+      expect(access(DateTime(2026, 11, 26), null).shouldRemindToPay, isFalse);
+      expect(access(DateTime(2026, 11, 17), 3).shouldRemindToPay, isTrue);
+    });
+
+    late FakeFirebaseFirestore db;
+    setUp(() {
+      db = FakeFirebaseFirestore();
+      FirestorePaths.overrideDb = db;
+    });
+    tearDown(() => FirestorePaths.overrideDb = null);
+
+    // The saved-payment check runs on the (real-time) fake database.
+    Future<void> settle(WidgetTester t) async {
+      await t.pump();
+      await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await t.pumpAndSettle();
+    }
+
+    Widget app(Widget child) => MaterialApp(theme: AppTheme.light(), home: Scaffold(body: child));
+
+    testWidgets('Manager: pop-up once, and Pay now opens payment', (t) async {
+      var paid = 0;
+      Widget reminder() => RenewalReminder(cafeId: 'A', message: 'Expires in 5 days', onPay: () => paid++, child: const Text('dash'));
+      await t.pumpWidget(app(reminder()));
+      await settle(t);
+      expect(find.text('Expires in 5 days'), findsOneWidget);
+      await t.tap(find.byKey(const Key('renew-reminder-pay')));
+      await t.pumpAndSettle();
+      expect(paid, 1);
+      await t.pumpWidget(app(reminder()));
+      await settle(t);
+      expect(find.byKey(const Key('renew-reminder')), findsNothing);
+    });
+
+    testWidgets('Captain: told to ask the Manager, no Pay now', (t) async {
+      await t.pumpWidget(app(const RenewalReminder(cafeId: 'A', message: 'Expires in 5 days', child: Text('dash'))));
+      await t.pumpAndSettle();
+      expect(find.textContaining('Ask your manager to renew.'), findsOneWidget);
+      expect(find.byKey(const Key('renew-reminder-pay')), findsNothing);
+    });
+
+    testWidgets('no pop-up when nothing is due or a payment is being verified', (t) async {
+      await t.pumpWidget(app(RenewalReminder(cafeId: 'A', onPay: () {}, child: const Text('dash'))));
+      await settle(t);
+      expect(find.byKey(const Key('renew-reminder')), findsNothing);
+
+      await db.doc('paymentClaims/B').set({'status': 'pending'});
+      await t.pumpWidget(app(RenewalReminder(key: const Key('b'), cafeId: 'B', message: 'Expires', onPay: () {}, child: const Text('dash'))));
+      await settle(t);
+      expect(find.byKey(const Key('renew-reminder')), findsNothing);
+    });
+
+    test('the setting is copied onto every live cafe that differs', () async {
+      await db.doc('cafes/A').set({'name': 'A'});
+      await db.doc('cafes/B').set({'name': 'B', 'reminderDays': 8});
+      await db.doc('cafes/C').set({'name': 'C', 'status': 'deleted'});
+      final cafes = [for (final id in ['A', 'B', 'C']) CafeSummary(id, (await db.doc('cafes/$id').get()).data()!)];
+      await AdminService.instance.publishReminderDays(8, cafes);
+      expect((await db.doc('cafes/A').get()).data()!['reminderDays'], 8);
+      expect((await db.doc('cafes/B').get()).data()!['reminderDays'], 8);
+      expect((await db.doc('cafes/C').get()).data()!.containsKey('reminderDays'), isFalse);
     });
   });
 

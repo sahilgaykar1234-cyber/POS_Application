@@ -9,6 +9,7 @@ import '../../features/admin/super_admin_shell.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/shell/role_shells.dart';
 import '../../features/subscription/pay_now_dialog.dart';
+import '../../features/subscription/renewal_reminder.dart';
 import '../../features/subscription/renewal_service.dart';
 import '../../features/subscription/upi_payment.dart';
 import '../data/firestore_paths.dart';
@@ -207,7 +208,13 @@ class _CafeGate extends StatelessWidget {
           cafeId: user.cafeId!,
           onPay: showBanner && access.canRenew && user.isManager ? pay : null,
           askManager: showBanner && access.canRenew && !user.isManager,
-          child: dashboard,
+          child: RenewalReminder(
+            cafeId: user.cafeId!,
+            message: access.shouldRemindToPay ? access.message : null,
+            expired: access.state == CafeAccessState.grace,
+            onPay: user.isManager ? pay : null,
+            child: dashboard,
+          ),
         );
       },
     );

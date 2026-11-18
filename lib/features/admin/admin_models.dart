@@ -59,7 +59,7 @@ class CafeSummary {
     return SubState.active;
   }
 
-  int? daysLeft(DateTime now) => expiryDate == null ? null : (expiryDate!.difference(now).inHours / 24).ceil();
+  int? daysLeft(DateTime now) => expiryDate == null ? null : calendarDaysLeft(expiryDate!, now);
 
   CafeAccess access(DateTime now) => evaluateCafeAccess(data, now);
 }

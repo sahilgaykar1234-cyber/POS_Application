@@ -45,7 +45,7 @@ enum CafeAccessState {
 }
 
 class CafeAccess {
-  const CafeAccess(this.state, {this.title = '', this.message = '', this.canRenew = false});
+  const CafeAccess(this.state, {this.title = '', this.message = '', this.canRenew = false, this.daysLeft});
 
   final CafeAccessState state;
   final String title;
@@ -55,16 +55,28 @@ class CafeAccess {
   /// expired). False for a suspended / closed cafe: only the admin can help.
   final bool canRenew;
 
+  /// Days until the expiry date, when it is inside the warning period.
+  final int? daysLeft;
+
+  /// The plan is ending or has just ended: remind the cafe to pay.
+  bool get shouldRemindToPay => canRenew && (state == CafeAccessState.grace || daysLeft != null);
+
   bool get canUsePos =>
       state == CafeAccessState.allowed || state == CafeAccessState.allowedWithWarning || state == CafeAccessState.grace;
 }
 
-/// Days before expiry at which staff start seeing a reminder.
+/// Days before expiry at which staff start seeing a reminder, when the Super
+/// Admin's "Warn before expiry" setting has not reached this cafe yet.
 const int kExpiryWarningDays = 7;
 
 /// Days the POS keeps working after the expiry date, so a cafe is never cut
 /// off in the middle of service and has time to pay.
 const int kGraceDays = 3;
+
+/// Whole calendar days from [now] to [expiry]: on 18 Nov, a plan ending any
+/// time on 26 Nov has 8 days left.
+int calendarDaysLeft(DateTime expiry, DateTime now) =>
+    DateTime.utc(expiry.year, expiry.month, expiry.day).difference(DateTime.utc(now.year, now.month, now.day)).inDays;
 
 /// When the grace period ends: the end of the cafe's business day that is
 /// running [kGraceDays] days after [expiry] (e.g. expiry 10 Nov 20:00 with a
@@ -133,12 +145,15 @@ CafeAccess evaluateCafeAccess(Map<String, dynamic> cafe, DateTime now) {
   }
 
   if (expiry != null) {
-    final daysLeft = expiry.difference(now).inHours / 24;
-    if (daysLeft <= kExpiryWarningDays) {
-      final d = daysLeft.ceil();
+    // The Super Admin's "Warn before expiry" days, copied onto each cafe.
+    final setting = cafe['reminderDays'];
+    final warningDays = setting is num && setting >= 1 ? setting.toInt() : kExpiryWarningDays;
+    final d = calendarDaysLeft(expiry, now);
+    if (d <= warningDays) {
       return CafeAccess(CafeAccessState.allowedWithWarning,
           message: tr('Subscription expires {0} ({1}). Please renew to avoid interruption.', [d <= 1 ? tr('within a day') : tr('in {0} days', [d]), Fmt.date(expiry)]),
-          canRenew: true);
+          canRenew: true,
+          daysLeft: d);
     }
   }
   if (subStatus == SubscriptionStatus.cancelled) {
