@@ -84,6 +84,14 @@ class FirestorePaths {
   static CollectionReference<Map<String, dynamic>> menuItems([String? cafeId]) =>
       cafe(_cafeOrActive(cafeId)).collection('menuItems');
 
+  /// Bills sent to the Print Station (deleted a day after printing).
+  static CollectionReference<Map<String, dynamic>> printJobs([String? cafeId]) =>
+      cafe(_cafeOrActive(cafeId)).collection('printJobs');
+
+  /// Which device is the Print Station and when it was last seen.
+  static DocumentReference<Map<String, dynamic>> printStation([String? cafeId]) =>
+      cafe(_cafeOrActive(cafeId)).collection('printStation').doc('main');
+
   // ---------------------------------------------------------------------------
   // Platform collections
   // ---------------------------------------------------------------------------

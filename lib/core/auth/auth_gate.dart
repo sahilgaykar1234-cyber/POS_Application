@@ -9,6 +9,7 @@ import '../../features/admin/super_admin_shell.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/shell/role_shells.dart';
 import '../../features/subscription/pay_now_dialog.dart';
+import '../../features/receipt/print_station_host.dart';
 import '../../features/subscription/renewal_reminder.dart';
 import '../../features/subscription/renewal_service.dart';
 import '../../features/subscription/upi_payment.dart';
@@ -213,7 +214,7 @@ class _CafeGate extends StatelessWidget {
             message: access.shouldRemindToPay ? access.message : null,
             expired: access.state == CafeAccessState.grace,
             onPay: user.isManager ? pay : null,
-            child: dashboard,
+            child: PrintStationHost(cafeId: user.cafeId!, child: dashboard),
           ),
         );
       },

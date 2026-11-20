@@ -5,6 +5,8 @@ class EscPosBluetoothPrinter {
 
   static Future<void> forgetDevice() async {}
 
+  static Future<void> connect() async => throw const PrinterProblem('bt-unsupported');
+
   static Future<void> printReceipt({
     required Map<String, dynamic> order,
     required Map<String, dynamic> settings,

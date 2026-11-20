@@ -42,6 +42,7 @@ String friendlyPrintError(Object? error) {
   debugPrint('Print error: $error');
   final s = '$error'.toLowerCase();
   if (s == 'printer:bt-connect') return tr('Could not connect to the Bluetooth printer. Turn it on, keep it close, and disconnect it from other phones.');
+  if (s == 'printer:station-no-printer') return tr('Choose this device\'s printer: tap Connect printer.');
   if (s == 'printer:bt-write') return tr('The printer is connected but the print did not go through. Turn the printer off and on, then try again.');
   if (s == 'printer:bt-not-printer') return tr('That device is not a supported Bluetooth printer. Tap Print again and choose your printer.');
   if (s.startsWith('printer:bt-unsupported')) {

@@ -111,7 +111,7 @@ void main() {
 
     test('Bluetooth is listed only in the web app (not in tests)', () {
       expect(ReceiptPrinter.available, isNot(contains(ReceiptPrinter.bluetooth)));
-      expect(ReceiptPrinter.values, [ReceiptPrinter.usb, ReceiptPrinter.bluetooth]);
+      expect(ReceiptPrinter.values, [ReceiptPrinter.usb, ReceiptPrinter.bluetooth, ReceiptPrinter.station]);
     });
   });
 }

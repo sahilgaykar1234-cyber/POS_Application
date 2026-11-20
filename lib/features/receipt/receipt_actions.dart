@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,6 +12,7 @@ import '../../escpos_bluetooth_printer_stub.dart' if (dart.library.js_interop) '
 import '../../escpos_usb_printer_stub.dart' if (dart.library.js_interop) '../../escpos_usb_printer_web.dart';
 import '../orders/whatsapp_bill.dart';
 import '../orders/whatsapp_launch.dart';
+import 'print_station.dart';
 import 'receipt_data.dart';
 import 'receipt_pdf.dart';
 import '../../core/utils/friendly_error.dart';
@@ -20,10 +23,12 @@ import 'package:pos_app/core/i18n/tr.dart';
 /// totals or its payment status, and never use the cart being billed.
 
 /// Where a receipt is printed: straight to a thermal printer, by USB cable
-/// or Bluetooth (no browser print dialog).
+/// or Bluetooth (no browser print dialog), or on the Print Station device
+/// (for iPhones, which can't reach a printer from the browser).
 enum ReceiptPrinter {
   usb('USB thermal printer (direct)', Icons.usb_rounded),
-  bluetooth('Bluetooth thermal printer', Icons.bluetooth_rounded);
+  bluetooth('Bluetooth thermal printer', Icons.bluetooth_rounded),
+  station('Print Station (another device)', Icons.devices_rounded);
 
   const ReceiptPrinter(this.englishLabel, this.icon);
   final String englishLabel;
@@ -35,6 +40,7 @@ enum ReceiptPrinter {
     ReceiptPrinter.bluetooth => EscPosBluetoothPrinter.isSupported
         ? tr('58 mm Bluetooth printer · Chrome on Android or a computer')
         : tr('Not available in this browser – tap to see why'),
+    ReceiptPrinter.station => tr('Sends the bill to the device set as Print Station (for iPhone)'),
   };
 
   /// Options this device can use. Bluetooth is always listed in the web app:
@@ -42,6 +48,7 @@ enum ReceiptPrinter {
   static List<ReceiptPrinter> get available => [
     if (EscPosUsbPrinter.isSupported) ReceiptPrinter.usb,
     if (canPrintHtml) ReceiptPrinter.bluetooth,
+    if (canPrintHtml) ReceiptPrinter.station,
   ];
 }
 
@@ -57,7 +64,7 @@ Future<ReceiptPrinter?> savedReceiptPrinter() async {
   }
 }
 
-Future<void> _savePrinter(ReceiptPrinter p) async {
+Future<void> saveReceiptPrinter(ReceiptPrinter p) async {
   try {
     await (await SharedPreferences.getInstance()).setString(_prefKey, p.name);
   } catch (_) {}
@@ -84,7 +91,7 @@ Future<void> printSavedBill(
     if (!context.mounted) return;
     printer = await chooseReceiptPrinter(context);
     if (printer == null) return;
-    await _savePrinter(printer);
+    await saveReceiptPrinter(printer);
     // Picked again on purpose: let them choose the Bluetooth printer again too.
     if (printer == ReceiptPrinter.bluetooth) await EscPosBluetoothPrinter.forgetDevice();
   }
@@ -94,14 +101,36 @@ Future<void> printSavedBill(
         await EscPosUsbPrinter.printReceipt(order: order, orderId: orderId, settings: settings);
       case ReceiptPrinter.bluetooth:
         await EscPosBluetoothPrinter.printReceipt(order: order, orderId: orderId, settings: settings);
+      case ReceiptPrinter.station:
+        await _sendToStation(context, order: order, orderId: orderId);
     }
   } catch (e) {
     if (context.mounted) showError(context, friendlyPrintError(e));
   }
 }
 
-/// Lets the user pick the printer / paper size.
-Future<ReceiptPrinter?> chooseReceiptPrinter(BuildContext context) async {
+/// Queues the bill for the Print Station, then tells whether it printed.
+/// The printing is not waited for: the screen can be closed meanwhile.
+Future<void> _sendToStation(BuildContext context, {required Map<String, dynamic> order, required String orderId}) async {
+  final later = Navigator.of(context, rootNavigator: true).context; // outlives this screen
+  final id = await PrintStationService.instance.send(order: order, orderId: orderId);
+  if (later.mounted) showSuccess(later, tr('Sent to Print Station'));
+  unawaited(PrintStationService.instance.waitForResult(id).then((job) {
+    if (!later.mounted) return;
+    switch (job?.status) {
+      case PrintJobStatus.printed:
+        showSuccess(later, tr('Printed at Print Station'));
+      case PrintJobStatus.failed:
+        showError(later, tr('Print Station could not print it: {0}', [job!.error]));
+      default:
+        showError(later, tr('Not printed yet. Check that the Print Station is open and its printer is connected; the bill prints then.'));
+    }
+  }));
+}
+
+/// Lets the user pick the printer. [forStation]: choosing the Print Station
+/// device's own printer (it can't send bills to itself).
+Future<ReceiptPrinter?> chooseReceiptPrinter(BuildContext context, {bool forStation = false}) async {
   final current = await savedReceiptPrinter();
   if (!context.mounted) return null;
   return showModalBottomSheet<ReceiptPrinter>(
@@ -119,6 +148,7 @@ Future<ReceiptPrinter?> chooseReceiptPrinter(BuildContext context) async {
           Text(tr('Your choice is remembered on this device.'), style: TextStyle(color: ctx.palette.inkSubtle, fontSize: 13)),
           const SizedBox(height: Space.md),
           for (final p in ReceiptPrinter.available)
+            if (!forStation || p != ReceiptPrinter.station)
             ListTile(
               key: Key('printer-${p.name}'),
               leading: Icon(p.icon),

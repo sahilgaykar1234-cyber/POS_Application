@@ -328,6 +328,25 @@ test('pay now: claims are checked and private to the cafe', async () => {
   await assertFails(setDoc(doc(m, 'paymentRefs/111111111111'), { cafeId: 'A' }));
 });
 
+test('print station: cafe logins send and print bills; nobody edits the bill itself', async () => {
+  await seed();
+  const m = ctx.managerA();
+  const job = { order: { totalPrice: 300 }, orderId: 'o1', label: '0042', status: 'pending', createdAt: serverTimestamp(), createdBy: 'mA', createdByName: 'A' };
+  await assertSucceeds(setDoc(doc(m, 'cafes/A/printJobs/j1'), job));
+  await assertFails(setDoc(doc(m, 'cafes/A/printJobs/j2'), { ...job, createdBy: 'someoneElse' }));
+  await assertFails(setDoc(doc(m, 'cafes/A/printJobs/j3'), { ...job, status: 'printed' }));
+  await assertFails(setDoc(doc(ctx.managerB(), 'cafes/A/printJobs/j4'), job));
+  await assertFails(getDoc(doc(ctx.managerB(), 'cafes/A/printJobs/j1')));
+  const station = ctx.captainA();
+  await assertSucceeds(updateDoc(doc(station, 'cafes/A/printJobs/j1'), { status: 'printing', stationId: 's1' }));
+  await assertSucceeds(updateDoc(doc(station, 'cafes/A/printJobs/j1'), { status: 'printed' }));
+  await assertFails(updateDoc(doc(station, 'cafes/A/printJobs/j1'), { order: { totalPrice: 1 } }));
+  await assertFails(updateDoc(doc(station, 'cafes/A/printJobs/j1'), { status: 'hacked' }));
+  await assertSucceeds(setDoc(doc(station, 'cafes/A/printStation/main'), { stationId: 's1' }));
+  await assertFails(setDoc(doc(ctx.managerB(), 'cafes/A/printStation/main'), { stationId: 'x' }));
+  await assertSucceeds(deleteDoc(doc(m, 'cafes/A/printJobs/j1')));
+});
+
 test('platform payee: readable by signed-in users, written by the Super Admin only', async () => {
   await seed();
   await assertSucceeds(setDoc(doc(ctx.superAdmin(), 'platform/payee'), { upiId: 'owner@okaxis' }));

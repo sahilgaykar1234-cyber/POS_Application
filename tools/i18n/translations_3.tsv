@@ -52,3 +52,22 @@ This page is open inside another app. Open suratpos.web.app in the Google Chrome
 Bluetooth works only from https://suratpos.web.app. Open that address in Google Chrome.	ब्लूटूथ सिर्फ़ https://suratpos.web.app से चलता है। यही पता Google Chrome में खोलें।	બ્લૂટૂથ ફક્ત https://suratpos.web.app થી ચાલે છે. આ જ સરનામું Google Chrome માં ખોલો.	ब्लूटूथ फक्त https://suratpos.web.app वरून चालते. हाच पत्ता Google Chrome मध्ये उघडा.
 {0} can't use Bluetooth. Open suratpos.web.app in the Google Chrome app.	{0} ब्लूटूथ इस्तेमाल नहीं कर सकता। suratpos.web.app को Google Chrome ऐप में खोलें।	{0} બ્લૂટૂથ વાપરી શકતું નથી. suratpos.web.app ને Google Chrome ઍપમાં ખોલો.	{0} ब्लूटूथ वापरू शकत नाही. suratpos.web.app हे Google Chrome अॅपमध्ये उघडा.
 Bluetooth is not available in this browser ({0}). Open suratpos.web.app in the Google Chrome app.	इस ब्राउज़र ({0}) में ब्लूटूथ उपलब्ध नहीं है। suratpos.web.app को Google Chrome ऐप में खोलें।	આ બ્રાઉઝર ({0}) માં બ્લૂટૂથ ઉપલબ્ધ નથી. suratpos.web.app ને Google Chrome ઍપમાં ખોલો.	या ब्राउझरमध्ये ({0}) ब्लूटूथ उपलब्ध नाही. suratpos.web.app हे Google Chrome अॅपमध्ये उघडा.
+Print Station (another device)	प्रिंट स्टेशन (दूसरा डिवाइस)	પ્રિન્ટ સ્ટેશન (બીજું ડિવાઇસ)	प्रिंट स्टेशन (दुसरे डिव्हाइस)
+Sends the bill to the device set as Print Station (for iPhone)	बिल को प्रिंट स्टेशन वाले डिवाइस पर भेजता है (iPhone के लिए)	બિલને પ્રિન્ટ સ્ટેશનવાળા ડિવાઇસ પર મોકલે છે (iPhone માટે)	बिल प्रिंट स्टेशन असलेल्या डिव्हाइसवर पाठवते (iPhone साठी)
+Sent to Print Station	प्रिंट स्टेशन पर भेजा	પ્રિન્ટ સ્ટેશન પર મોકલ્યું	प्रिंट स्टेशनवर पाठवले
+Printed at Print Station	प्रिंट स्टेशन पर प्रिंट हो गया	પ્રિન્ટ સ્ટેશન પર પ્રિન્ટ થઈ ગયું	प्रिंट स्टेशनवर प्रिंट झाले
+Print Station could not print it: {0}	प्रिंट स्टेशन प्रिंट नहीं कर सका: {0}	પ્રિન્ટ સ્ટેશન પ્રિન્ટ કરી શક્યું નહીં: {0}	प्रिंट स्टेशन प्रिंट करू शकले नाही: {0}
+Not printed yet. Check that the Print Station is open and its printer is connected; the bill prints then.	अभी प्रिंट नहीं हुआ। देखें कि प्रिंट स्टेशन खुला है और उसका प्रिंटर जुड़ा है; फिर बिल प्रिंट हो जाएगा।	હજી પ્રિન્ટ થયું નથી. પ્રિન્ટ સ્ટેશન ખુલ્લું છે અને તેનું પ્રિન્ટર જોડાયેલું છે તે તપાસો; પછી બિલ પ્રિન્ટ થશે.	अजून प्रिंट झाले नाही. प्रिंट स्टेशन उघडे आहे आणि त्याचा प्रिंटर जोडलेला आहे ते तपासा; मग बिल प्रिंट होईल.
+Choose this device's printer: tap Connect printer.	इस डिवाइस का प्रिंटर चुनें: Connect printer दबाएँ।	આ ડિવાઇસનું પ્રિન્ટર પસંદ કરો: Connect printer દબાવો.	या डिव्हाइसचा प्रिंटर निवडा: Connect printer दाबा.
+Print Station	प्रिंट स्टेशन	પ્રિન્ટ સ્ટેશન	प्रिंट स्टेशन
+Print Station on · {0} printed	प्रिंट स्टेशन चालू · {0} प्रिंट हुए	પ્રિન્ટ સ્ટેશન ચાલુ · {0} પ્રિન્ટ થયા	प्रिंट स्टेशन चालू · {0} प्रिंट झाले
+Print Station: tap Connect printer to start.	प्रिंट स्टेशन: शुरू करने के लिए Connect printer दबाएँ।	પ્રિન્ટ સ્ટેશન: શરૂ કરવા Connect printer દબાવો.	प्रिंट स्टेशन: सुरू करण्यासाठी Connect printer दाबा.
+{0} bills waiting	{0} बिल इंतज़ार में	{0} બિલ રાહમાં	{0} बिले प्रतीक्षेत
+Connecting…	कनेक्ट हो रहा है…	કનેક્ટ થઈ રહ્યું છે…	कनेक्ट होत आहे…
+Connect printer	प्रिंटर जोड़ें	પ્રિન્ટર જોડો	प्रिंटर जोडा
+For iPhones: their bills print on the device that has the printer.	iPhone के लिए: उनके बिल उस डिवाइस पर प्रिंट होते हैं जिससे प्रिंटर जुड़ा है।	iPhone માટે: તેમના બિલ એ ડિવાઇસ પર પ્રિન્ટ થાય છે જેની સાથે પ્રિન્ટર જોડાયેલું છે.	iPhone साठी: त्यांची बिले प्रिंटर जोडलेल्या डिव्हाइसवर प्रिंट होतात.
+This device is the Print Station	यह डिवाइस प्रिंट स्टेशन है	આ ડિવાઇસ પ્રિન્ટ સ્ટેશન છે	हे डिव्हाइस प्रिंट स्टेशन आहे
+Turn on only on the phone or computer that has the printer connected. Keep it on charge with the app open.	सिर्फ़ उसी फ़ोन या कंप्यूटर पर चालू करें जिससे प्रिंटर जुड़ा है। उसे चार्जिंग पर रखें और ऐप खुला रखें।	ફક્ત એ જ ફોન કે કમ્પ્યુટર પર ચાલુ કરો જેની સાથે પ્રિન્ટર જોડાયેલું છે. તેને ચાર્જિંગ પર રાખો અને ઍપ ખુલ્લી રાખો.	फक्त प्रिंटर जोडलेल्या फोन किंवा कॉम्प्युटरवरच चालू करा. तो चार्जिंगवर ठेवा आणि अॅप उघडे ठेवा.
+No Print Station set up yet.	अभी कोई प्रिंट स्टेशन सेट नहीं है।	હજી કોઈ પ્રિન્ટ સ્ટેશન સેટ નથી.	अजून प्रिंट स्टेशन सेट केलेले नाही.
+Print Station is online.	प्रिंट स्टेशन ऑनलाइन है।	પ્રિન્ટ સ્ટેશન ઓનલાઇન છે.	प्रिंट स्टेशन ऑनलाइन आहे.
+Print Station is offline (last seen {0}).	प्रिंट स्टेशन ऑफ़लाइन है (आख़िरी बार {0})।	પ્રિન્ટ સ્ટેશન ઑફલાઇન છે (છેલ્લે {0}).	प्रिंट स्टेशन ऑफलाइन आहे (शेवटचे {0}).

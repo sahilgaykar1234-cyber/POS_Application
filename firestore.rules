@@ -126,6 +126,25 @@ service cloud.firestore {
           || isSuper();
       }
 
+      // Print Station: any login of the cafe may send a bill to be printed;
+      // the station takes it (printing) and reports printed / failed. Only
+      // the bill's own status fields change after it was sent.
+      match /printJobs/{id} {
+        allow read: if canReadCafe(cafeId);
+        allow create: if isStaffOf(cafeId) && cafeOperational(cafeId)
+          && request.resource.data.keys().hasOnly(['order', 'orderId', 'label', 'status', 'createdAt', 'createdBy', 'createdByName'])
+          && request.resource.data.status == 'pending'
+          && request.resource.data.createdBy == request.auth.uid;
+        allow update: if isStaffOf(cafeId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'stationId', 'claimedAt', 'printedAt', 'error'])
+          && request.resource.data.status in ['pending', 'printing', 'printed', 'failed', 'expired'];
+        allow delete: if isStaffOf(cafeId) || isSuper();
+      }
+      match /printStation/{id} {
+        allow read: if canReadCafe(cafeId);
+        allow write: if isStaffOf(cafeId);
+      }
+
       // Anything else under a cafe: Super Admin only.
       match /{other=**} {
         allow read, write: if isSuper();

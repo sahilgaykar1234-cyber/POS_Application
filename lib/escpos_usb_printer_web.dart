@@ -159,6 +159,11 @@ class EscPosUsbPrinter {
     }
   }
 
+  /// Connects now (needs a tap the first time, browser rule).
+  static Future<void> connect() async {
+    await _getDevice();
+  }
+
   // ------------------------------------------------------------ Receipt -----
   static Future<void> printReceipt({
     required Map<String, dynamic> order,

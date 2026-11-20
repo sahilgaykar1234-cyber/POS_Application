@@ -18,6 +18,7 @@ import '../customers/customer_privacy.dart';
 import 'business_settings.dart';
 import 'package:pos_app/core/i18n/tr.dart';
 import 'package:pos_app/core/i18n/language_picker.dart';
+import '../receipt/print_station_settings.dart';
 
 /// Cafe settings (same fields and keys as before) + appearance.
 class SettingsScreen extends StatefulWidget {
@@ -551,6 +552,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: tr('For this login on this device. Bills and WhatsApp messages stay in English.'),
                   child: const Align(alignment: Alignment.centerLeft, child: LanguagePicker()),
                 );
+                final station = SectionCard(
+                  title: tr('Print Station'),
+                  icon: Icons.print_rounded,
+                  subtitle: tr('For iPhones: their bills print on the device that has the printer.'),
+                  child: const PrintStationSettings(),
+                );
                 final appearance = SectionCard(
                   title: tr('Appearance'),
                   icon: Icons.palette_outlined,
@@ -573,7 +580,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 );
                 if (c.maxWidth < 1000) {
-                  return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [language, profile, billing, security, receipt, appearance]);
+                  return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [language, profile, billing, station, security, receipt, appearance]);
                 }
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -583,7 +590,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(width: Space.lg),
                     Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [language, billing, appearance]),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [language, billing, station, appearance]),
                     ),
                   ],
                 );
