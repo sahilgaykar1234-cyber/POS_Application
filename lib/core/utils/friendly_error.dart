@@ -41,6 +41,20 @@ String _reason(Object? e) {
 String friendlyPrintError(Object? error) {
   debugPrint('Print error: $error');
   final s = '$error'.toLowerCase();
+  if (s == 'printer:bt-connect') return tr('Could not connect to the Bluetooth printer. Turn it on, keep it close, and disconnect it from other phones.');
+  if (s == 'printer:bt-write') return tr('The printer is connected but the print did not go through. Turn the printer off and on, then try again.');
+  if (s == 'printer:bt-not-printer') return tr('That device is not a supported Bluetooth printer. Tap Print again and choose your printer.');
+  if (s.startsWith('printer:bt-unsupported')) {
+    final parts = '$error'.replaceFirst('printer:bt-unsupported', '').replaceFirst(':', '').split('|');
+    final browser = parts.length > 1 ? parts[1] : '';
+    return switch (parts.first) {
+      'ios' => tr('iPhone browsers can\'t use Bluetooth. Install the free "Bluefy" browser from the App Store and open suratpos.web.app in it.'),
+      'in-app' => tr('This page is open inside another app. Open suratpos.web.app in the Google Chrome app.'),
+      'insecure' => tr('Bluetooth works only from https://suratpos.web.app. Open that address in Google Chrome.'),
+      'browser' => tr('{0} can\'t use Bluetooth. Open suratpos.web.app in the Google Chrome app.', [browser]),
+      _ => tr('Bluetooth is not available in this browser ({0}). Open suratpos.web.app in the Google Chrome app.', [browser]),
+    };
+  }
   if (s.contains('no device selected') || s.contains('notfounderror')) return tr('No printer was selected.');
   if (s.contains('sirf web') || s.contains('unsupported')) return tr('Printing is available in the web app.');
   if (s.contains('securityerror') || s.contains('access denied')) return tr('The browser did not allow access to the printer.');

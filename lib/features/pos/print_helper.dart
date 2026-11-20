@@ -1,14 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../core/widgets/ui.dart';
-import '../../escpos_usb_printer_stub.dart' if (dart.library.js_interop) '../../escpos_usb_printer_web.dart';
-import '../../core/utils/friendly_error.dart';
+import '../receipt/receipt_actions.dart';
 
-/// Prints a bill on the USB thermal printer (web), showing any error nicely.
-Future<void> printBill(BuildContext context, {required Map<String, dynamic> order, required Map<String, dynamic> settings, String? orderId}) async {
-  try {
-    await EscPosUsbPrinter.printReceipt(order: order, orderId: orderId, settings: settings);
-  } catch (e) {
-    if (context.mounted) showError(context, friendlyPrintError(e));
-  }
-}
+/// Prints a bill (also one not saved yet) on the printer chosen on this
+/// device – USB, Bluetooth or the print dialog – showing any error nicely.
+Future<void> printBill(BuildContext context, {required Map<String, dynamic> order, required Map<String, dynamic> settings, String? orderId}) =>
+    printSavedBill(context, order: order, orderId: orderId ?? '', settings: settings);

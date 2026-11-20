@@ -10,7 +10,6 @@ import '../../core/services/audit_service.dart';
 import 'day_end_report.dart';
 import '../settings/business_settings.dart';
 import '../receipt/receipt_html.dart';
-import '../receipt/receipt_actions.dart';
 import '../../core/web/browser_io.dart';
 import '../../core/utils/friendly_error.dart';
 import '../../core/theme/tokens.dart';
@@ -86,16 +85,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
     showSuccess(context, tr('Downloading {0}', [name]));
   }
 
-  /// Prints the day-end (Z) summary of the selected period on the receipt
-  /// paper chosen for bills (80 mm by default).
+  /// Prints the day-end (Z) summary of the selected period (print window,
+  /// 80 mm page; it can also be saved as a PDF there).
   Future<void> _printDayEnd(List<PosOrder> period) async {
     if (!canPrintHtml) return showError(context, tr('Printing is available in the web app.'));
     var shop = '';
     try {
       shop = (await BusinessSettingsRepository.instance.load()).shopName;
     } catch (_) {}
-    final printer = await savedReceiptPrinter();
-    final paper = printer?.paper ?? PaperSize.thermal80;
+    const paper = PaperSize.thermal80;
     final from = BusinessDay.dateOf(_range.start), to = BusinessDay.dateOf(_range.end);
     final label = from == to ? tr('Business day {0}', [Fmt.date(from)]) : '${Fmt.date(from)} – ${Fmt.date(to)}';
     try {

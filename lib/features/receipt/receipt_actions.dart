@@ -6,11 +6,11 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/web/browser_io.dart';
 import '../../core/widgets/ui.dart';
+import '../../escpos_bluetooth_printer_stub.dart' if (dart.library.js_interop) '../../escpos_bluetooth_printer_web.dart';
 import '../../escpos_usb_printer_stub.dart' if (dart.library.js_interop) '../../escpos_usb_printer_web.dart';
 import '../orders/whatsapp_bill.dart';
 import '../orders/whatsapp_launch.dart';
 import 'receipt_data.dart';
-import 'receipt_html.dart';
 import 'receipt_pdf.dart';
 import '../../core/utils/friendly_error.dart';
 import 'package:pos_app/core/i18n/tr.dart';
@@ -19,12 +19,11 @@ import 'package:pos_app/core/i18n/tr.dart';
 /// order they are given (by its id) – they never change the order, its
 /// totals or its payment status, and never use the cart being billed.
 
-/// Where a receipt is printed.
+/// Where a receipt is printed: straight to a thermal printer, by USB cable
+/// or Bluetooth (no browser print dialog).
 enum ReceiptPrinter {
-  thermal80('80 mm receipt printer', Icons.receipt_long_outlined),
-  thermal58('58 mm receipt printer', Icons.receipt_outlined),
-  a4('A4 / normal printer', Icons.description_outlined),
-  usb('USB thermal printer (direct)', Icons.usb_rounded);
+  usb('USB thermal printer (direct)', Icons.usb_rounded),
+  bluetooth('Bluetooth thermal printer', Icons.bluetooth_rounded);
 
   const ReceiptPrinter(this.englishLabel, this.icon);
   final String englishLabel;
@@ -33,21 +32,16 @@ enum ReceiptPrinter {
 
   String get hint => switch (this) {
     ReceiptPrinter.usb => tr('Prints straight to a USB ESC/POS printer (Chrome / Edge)'),
-    ReceiptPrinter.a4 => tr('Opens the print dialog with an A4 page'),
-    _ => tr('Opens the print dialog sized for receipt paper'),
+    ReceiptPrinter.bluetooth => EscPosBluetoothPrinter.isSupported
+        ? tr('58 mm Bluetooth printer · Chrome on Android or a computer')
+        : tr('Not available in this browser – tap to see why'),
   };
 
-  PaperSize? get paper => switch (this) {
-    ReceiptPrinter.thermal80 => PaperSize.thermal80,
-    ReceiptPrinter.thermal58 => PaperSize.thermal58,
-    ReceiptPrinter.a4 => PaperSize.a4,
-    ReceiptPrinter.usb => null,
-  };
-
-  /// Options this device can use.
+  /// Options this device can use. Bluetooth is always listed in the web app:
+  /// where the browser can't use it, choosing it explains why.
   static List<ReceiptPrinter> get available => [
-    if (canPrintHtml) ...[ReceiptPrinter.thermal80, ReceiptPrinter.thermal58, ReceiptPrinter.a4],
     if (EscPosUsbPrinter.isSupported) ReceiptPrinter.usb,
+    if (canPrintHtml) ReceiptPrinter.bluetooth,
   ];
 }
 
@@ -84,18 +78,22 @@ Future<void> printSavedBill(
     return;
   }
   var printer = choose ? null : await savedReceiptPrinter();
+  // Only one way to print on this device: no need to ask.
+  if (printer == null && options.length == 1 && !choose) printer = options.single;
   if (printer == null) {
     if (!context.mounted) return;
     printer = await chooseReceiptPrinter(context);
     if (printer == null) return;
     await _savePrinter(printer);
+    // Picked again on purpose: let them choose the Bluetooth printer again too.
+    if (printer == ReceiptPrinter.bluetooth) await EscPosBluetoothPrinter.forgetDevice();
   }
   try {
-    final paper = printer.paper;
-    if (paper == null) {
-      await EscPosUsbPrinter.printReceipt(order: order, orderId: orderId, settings: settings);
-    } else {
-      await printHtml(receiptHtml(ReceiptData.from(order, orderId, settings), paper));
+    switch (printer) {
+      case ReceiptPrinter.usb:
+        await EscPosUsbPrinter.printReceipt(order: order, orderId: orderId, settings: settings);
+      case ReceiptPrinter.bluetooth:
+        await EscPosBluetoothPrinter.printReceipt(order: order, orderId: orderId, settings: settings);
     }
   } catch (e) {
     if (context.mounted) showError(context, friendlyPrintError(e));
